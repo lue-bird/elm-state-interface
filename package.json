@@ -1,0 +1,20 @@
+{
+    "type": "module",
+    "name": "elm-jam-6-submission",
+    "version": "1.0.0",
+    "description": "play against a custom chess computer",
+    "main": "public/main.js",
+    "keywords": [
+        "elm",
+        "chess"
+    ],
+    "dependencies": {
+        "elm-codegen": "^0.3.0",
+        "elm-optimize-level-2": "^0.3.4",
+        "elm-tooling": "1.12.0",
+        "elm-watch": "^1.1.2",
+        "esbuild": "0.15.18",
+        "run-pty": "4.0.3",
+        "uglify-js": "3.17.4"
+    }
+}
