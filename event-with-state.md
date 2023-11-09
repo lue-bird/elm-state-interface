@@ -66,6 +66,6 @@ interface : State -> Interface State
 - giving the current state to that update function is unnecessary because `interface`
   makes sure that once an event arrives, it will hold the latest state.
 
-I think it's cute. I tried implementing this exact thing in `src/`
-and I will keep adding more capabilities to that example. Feedback and contributions welcome
+I think it's cute. I tried implementing this exact thing in this project and it works :)
+I will keep adding more capabilities to that example. Feedback and contributions welcome
 as I'm very new to the js world.
