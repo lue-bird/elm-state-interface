@@ -1,0 +1,227 @@
+module BrowserApp exposing (BrowserApp, BrowserInterface(..), BrowserInterfaceId(..), Event(..), State, on, toProgram)
+
+import AssocList
+import Json.Decode
+import Json.Decode.Extra
+import Json.Encode
+
+
+type alias State appState =
+    { interface : AssocList.Dict BrowserInterfaceId (BrowserInterface appState)
+    , appState : appState
+    }
+
+
+type alias BrowserApp state =
+    { initialState : state
+    , interface : state -> List (BrowserInterface state)
+    , ports :
+        { out : Json.Encode.Value -> Cmd Never
+        , in_ : (Json.Encode.Value -> Event state) -> Sub (Event state)
+        }
+    }
+
+
+type BrowserInterface state
+    = Display { config : String, on : () -> state }
+
+
+on : (state -> mappedState) -> (BrowserInterface state -> BrowserInterface mappedState)
+on stateChange =
+    \interface ->
+        case interface of
+            Display display ->
+                { config = display.config, on = \event -> display.on event |> stateChange }
+                    |> Display
+
+
+type BrowserInterfaceId
+    = IdDisplay String
+
+
+type Event appState
+    = InterfaceIdFailedToDecode Json.Decode.Error
+    | InterfaceEventDataFailedToDecode Json.Decode.Error
+    | BrowserInterfaceDesynchronized
+    | AppEventToNewAppState appState
+
+
+toProgram : BrowserApp state -> Program () (State state) (Event state)
+toProgram appConfig =
+    Platform.worker
+        { init =
+            \() ->
+                let
+                    initialInterface =
+                        appConfig.initialState
+                            |> appConfig.interface
+                            |> List.map (\interface -> ( interface |> interfaceToId, interface ))
+                            |> AssocList.fromList
+                in
+                ( { interface = initialInterface
+                  , appState = appConfig.initialState
+                  }
+                , initialInterface
+                    |> AssocList.keys
+                    |> List.map
+                        (\interfaceId ->
+                            appConfig.ports.out
+                                (Json.Encode.object
+                                    [ ( "addedInterface"
+                                      , interfaceId |> interfaceIdToJson
+                                      )
+                                    ]
+                                )
+                        )
+                    |> Cmd.batch
+                    |> Cmd.map never
+                )
+        , update =
+            \event ->
+                case event of
+                    BrowserInterfaceDesynchronized ->
+                        \state ->
+                            let
+                                _ =
+                                    Debug.log "BrowserInterfaceDesynchronized" ()
+                            in
+                            ( state, Cmd.none )
+
+                    InterfaceIdFailedToDecode jsonError ->
+                        \state ->
+                            let
+                                _ =
+                                    Debug.log "InterfaceIdFailedToDecode" (jsonError |> Json.Decode.errorToString)
+                            in
+                            ( state, Cmd.none )
+
+                    InterfaceEventDataFailedToDecode jsonError ->
+                        \state ->
+                            let
+                                _ =
+                                    Debug.log "InterfaceEventDataFailedToDecode" (jsonError |> Json.Decode.errorToString)
+                            in
+                            ( state, Cmd.none )
+
+                    AppEventToNewAppState updatedAppState ->
+                        \oldState ->
+                            let
+                                updatedInterface : AssocList.Dict BrowserInterfaceId (BrowserInterface state)
+                                updatedInterface =
+                                    updatedAppState
+                                        |> appConfig.interface
+                                        |> List.map (\interface -> ( interface |> interfaceToId, interface ))
+                                        |> AssocList.fromList
+                            in
+                            ( { interface = updatedInterface, appState = updatedAppState }
+                            , [ AssocList.diff updatedInterface oldState.interface
+                                    |> AssocList.keys
+                                    |> List.map
+                                        (\interfaceId ->
+                                            appConfig.ports.out
+                                                (Json.Encode.object
+                                                    [ ( "addedInterface"
+                                                      , interfaceId |> interfaceIdToJson
+                                                      )
+                                                    ]
+                                                )
+                                        )
+                              , AssocList.diff oldState.interface updatedInterface
+                                    |> AssocList.keys
+                                    |> List.map
+                                        (\interfaceId ->
+                                            appConfig.ports.out
+                                                (Json.Encode.object
+                                                    [ ( "removedInterface"
+                                                      , interfaceId |> interfaceIdToJson
+                                                      )
+                                                    ]
+                                                )
+                                        )
+                              ]
+                                |> List.concat
+                                |> Cmd.batch
+                                |> Cmd.map never
+                            )
+        , subscriptions =
+            \state ->
+                -- re-associate event based on current interface
+                appConfig.ports.in_
+                    (\interfaceJson ->
+                        case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "interface" interfaceIdJsonDecoder) of
+                            Ok interfaceId ->
+                                case
+                                    state.interface
+                                        |> AssocList.values
+                                        |> listFirstJust
+                                            (\stateInterface ->
+                                                if (stateInterface |> interfaceToId) == interfaceId then
+                                                    stateInterface |> Just
+
+                                                else
+                                                    Nothing
+                                            )
+                                of
+                                    Just reAssociatedInterface ->
+                                        case Json.Decode.decodeValue (Json.Decode.field "eventData" (eventDataAndConstructStateJsonDecoder reAssociatedInterface)) interfaceJson of
+                                            Ok appEvent ->
+                                                appEvent |> AppEventToNewAppState
+
+                                            Err eventDataJsonDecodeError ->
+                                                eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
+
+                                    Nothing ->
+                                        BrowserInterfaceDesynchronized
+
+                            Err interfaceIdJsonDecodeError ->
+                                interfaceIdJsonDecodeError |> InterfaceIdFailedToDecode
+                    )
+        }
+
+
+interfaceToId : BrowserInterface state_ -> BrowserInterfaceId
+interfaceToId =
+    \interface ->
+        case interface of
+            Display display ->
+                IdDisplay display.config
+
+
+eventDataAndConstructStateJsonDecoder : BrowserInterface state -> Json.Decode.Decoder state
+eventDataAndConstructStateJsonDecoder interface =
+    case interface of
+        Display display ->
+            Json.Decode.succeed display.on
+                |> Json.Decode.Extra.andMap (Json.Decode.null ())
+
+
+interfaceIdToJson : BrowserInterfaceId -> Json.Encode.Value
+interfaceIdToJson =
+    \interface ->
+        Json.Encode.object
+            [ case interface of
+                IdDisplay string ->
+                    ( "display", string |> Json.Encode.string )
+            ]
+
+
+interfaceIdJsonDecoder : Json.Decode.Decoder BrowserInterfaceId
+interfaceIdJsonDecoder =
+    Json.Decode.oneOf
+        [ Json.Decode.map IdDisplay (Json.Decode.field "display" Json.Decode.string)
+        ]
+
+
+listFirstJust : (element -> Maybe found) -> List element -> Maybe found
+listFirstJust tryMapToFound list =
+    case list of
+        [] ->
+            Nothing
+
+        head :: tail ->
+            case tryMapToFound head of
+                Just b ->
+                    Just b
+
+                Nothing ->
+                    listFirstJust tryMapToFound tail

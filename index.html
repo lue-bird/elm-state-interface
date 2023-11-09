@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>elm nicer architecture</title>
+</head>
+
+<body>
+    <main>
+        <p id="display">unedited</p>
+        <div id="app"></div>
+    </main>
+    <script src="./build/main.js"></script>
+    <script>
+        const app = Elm.Main.init({ node: document.getElementById("app") });
+
+        app.ports.portOut.subscribe(function (fromElm) {
+            console.log(fromElm)
+            if (fromElm?.addedInterface) {
+                function trySpecificInterface(toSpecific, run) {
+                    const maybeSpecific = toSpecific(fromElm.addedInterface);
+                    if (maybeSpecific) {
+                        run(maybeSpecific)
+                            .then(eventData => {
+                                app.ports.portIn.send({ interface: fromElm.addedInterface, eventData: eventData })
+                            });
+                    }
+                }
+                trySpecificInterface(
+                    event => event?.display,
+                    async function (initialSpecificInterfaceConfig) {
+                        document.getElementById("display").textContent = initialSpecificInterfaceConfig;
+                        return null;
+                    }
+                );
+            } else if (fromElm?.removedInterface) {
+                // you can stop that process here. Currently not needed
+            }
+        });
+    </script>
+</body>
+
+</html>
