@@ -3,6 +3,8 @@
 The idea: Instead of the update casing on the relevant state+event combination,
 the event itself holds all the relevant state.
 
+All knobs turned to 11, we get "state-interface", a simpler, safer take on TEA/model-view-update/MVU.
+
 ```elm
 module Game exposing (main)
 
@@ -62,6 +64,7 @@ interface : State -> Interface State
 - cmds (and tasks) are part of `interface`
 - subs are part of `interface`
 - view is part of `interface`
+- a msg is part of an event which now also contains the state and only exists as an intermediate type
 - update is part of `interface` via `...Interface.on`
 - giving the current state to that update function is unnecessary because `interface`
   makes sure that once an event arrives, it will hold the latest state.
