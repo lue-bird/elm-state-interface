@@ -10,6 +10,7 @@
 <body>
     <main>
         <p id="display">unedited</p>
+        <canvas id="canvas" width="600" height="360"></canvas>
         <div id="app"></div>
     </main>
     <script src="./build/main.js"></script>
@@ -41,6 +42,26 @@
                         return Date.now();
                     }
                 );
+                trySpecificInterface(
+                    event => event?.draw,
+                    async function (config) {
+                        const canvas = document.getElementById("canvas");
+                        const canvasContext = canvas.getContext("2d");
+                        const pixelData = [];
+                        for (let y = 0; y < canvas.clientHeight; y++) {
+                            for (let x = 0; x < canvas.clientWidth; x++) {
+                                const color = config[y][x];
+                                pixelData.push(color.red);
+                                pixelData.push(color.green);
+                                pixelData.push(color.blue);
+                                pixelData.push(color.alpha);
+                            }
+                        }
+                        const imageData = new ImageData(new Uint8ClampedArray(pixelData), 600, 360);
+                        canvasContext.putImageData(imageData, 0, 0);
+                        return null;
+                    }
+                )
             } else if (fromElm?.removedInterface) {
                 // you can stop that process here. Currently not needed
             }

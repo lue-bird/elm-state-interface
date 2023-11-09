@@ -1,6 +1,8 @@
 module BrowserApp exposing (BrowserApp, Event(..), Interface(..), InterfaceId(..), State, on, toProgram)
 
+import Array exposing (Array)
 import AssocList
+import Color exposing (Color)
 import Json.Decode
 import Json.Decode.Extra
 import Json.Encode
@@ -26,11 +28,13 @@ type alias BrowserApp state =
 type Interface state
     = Display { config : String, on : () -> state }
     | RequestTimeNow { on : Time.Posix -> state }
+    | Draw { config : Array (Array Color), on : () -> state }
 
 
 type InterfaceId
     = IdDisplay String
     | IdRequestTimeNow
+    | IdDraw (Array (Array Color))
 
 
 on : (state -> mappedState) -> (Interface state -> Interface mappedState)
@@ -44,6 +48,10 @@ on stateChange =
             RequestTimeNow requestTimeNow ->
                 { on = \event -> requestTimeNow.on event |> stateChange }
                     |> RequestTimeNow
+
+            Draw draw ->
+                { config = draw.config, on = \event -> draw.on event |> stateChange }
+                    |> Draw
 
 
 type Event appState
@@ -196,6 +204,9 @@ interfaceToId =
             RequestTimeNow _ ->
                 IdRequestTimeNow
 
+            Draw draw ->
+                IdDraw draw.config
+
 
 eventDataAndConstructStateJsonDecoder : Interface state -> Json.Decode.Decoder state
 eventDataAndConstructStateJsonDecoder interface =
@@ -208,6 +219,46 @@ eventDataAndConstructStateJsonDecoder interface =
             Json.Decode.succeed requestTimeNow.on
                 |> Json.Decode.Extra.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
 
+        Draw draw ->
+            Json.Decode.succeed draw.on
+                |> Json.Decode.Extra.andMap (Json.Decode.null ())
+
+
+colorJsonDecoder : Json.Decode.Decoder Color
+colorJsonDecoder =
+    Json.Decode.succeed Color.rgba
+        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
+        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
+        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
+        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
+
+
+colorToJson : Color -> Json.Encode.Value
+colorToJson =
+    \color ->
+        let
+            components =
+                color |> Color.toRgba
+        in
+        Json.Encode.object
+            [ ( "red", components.red |> percentageTo0To255 |> Json.Encode.int )
+            , ( "green", components.green |> percentageTo0To255 |> Json.Encode.int )
+            , ( "blue", components.blue |> percentageTo0To255 |> Json.Encode.int )
+            , ( "alpha", components.alpha |> percentageTo0To255 |> Json.Encode.int )
+            ]
+
+
+percentageTo0To255 : Float -> Int
+percentageTo0To255 =
+    \percentage ->
+        percentage * 255 |> Basics.round
+
+
+n0To255ToPercentage : Int -> Float
+n0To255ToPercentage =
+    \n0To255 ->
+        (n0To255 |> Basics.toFloat) / 255
+
 
 interfaceIdToJson : InterfaceId -> Json.Encode.Value
 interfaceIdToJson =
@@ -219,6 +270,9 @@ interfaceIdToJson =
 
                 IdRequestTimeNow ->
                     ( "requestTimeNow", Json.Encode.null )
+
+                IdDraw pixels ->
+                    ( "draw", Json.Encode.array (Json.Encode.array colorToJson) pixels )
             ]
 
 
