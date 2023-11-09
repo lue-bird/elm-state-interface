@@ -16,10 +16,10 @@ interface : State -> Interface State
 interface state =
     case state of
         MenuState menuState ->
-            App.Menu.interface menuState
+            Interface.on MenuState (App.Menu.interface menuState)
         
         GameState gameState ->
-            Game.Playing.interface gameState
+            Interface.on GameState (Game.Playing.interface gameState)
 ```
 ```elm
 module Game.Menu exposing (interface, State)
