@@ -21,4 +21,4 @@ The core ideas for reform:
 - ["event with state"](event-with-state.md)
 
 Summaries of existing patterns
-- ["event to super"](event-to-super.md)
+- ["event to super" (not public, yet)](event-to-super.md)
