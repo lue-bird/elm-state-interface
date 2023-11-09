@@ -13,4 +13,5 @@ Many patterns evolved to adapt "the elm architecture" (TEA) for different needs.
 - nesting
 - only top-level
 
-- ["event to super" (not public, yet)](event-to-super.md)
+read
+  - ["event to super" (not public, yet)](event-to-super.md)
