@@ -1,4 +1,4 @@
-## from model-view-update-sub-cmd to state-interface
+## from model-view-msg-update-sub-cmd to state-interface
 
 We'll explore a nicer alternative to make the traditional model-view-update simpler and safer
 
