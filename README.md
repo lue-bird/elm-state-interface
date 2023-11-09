@@ -1,6 +1,7 @@
 ## from model-view-msg-update-sub-cmd to state-interface
 
-We'll explore a nicer alternative to make the traditional model-view-update simpler and safer
+We'll explore an architecture similar to the traditional model-view-update
+which is simpler and safer.
 
 → ["event with state"](event-with-state.md)
 
