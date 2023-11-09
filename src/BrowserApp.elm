@@ -1,9 +1,10 @@
-module BrowserApp exposing (BrowserApp, Interface(..), InterfaceId(..), Event(..), State, on, toProgram)
+module BrowserApp exposing (BrowserApp, Event(..), Interface(..), InterfaceId(..), State, on, toProgram)
 
 import AssocList
 import Json.Decode
 import Json.Decode.Extra
 import Json.Encode
+import Time
 
 
 type alias State appState =
@@ -24,6 +25,12 @@ type alias BrowserApp state =
 
 type Interface state
     = Display { config : String, on : () -> state }
+    | RequestTimeNow { on : Time.Posix -> state }
+
+
+type InterfaceId
+    = IdDisplay String
+    | IdRequestTimeNow
 
 
 on : (state -> mappedState) -> (Interface state -> Interface mappedState)
@@ -34,9 +41,9 @@ on stateChange =
                 { config = display.config, on = \event -> display.on event |> stateChange }
                     |> Display
 
-
-type InterfaceId
-    = IdDisplay String
+            RequestTimeNow requestTimeNow ->
+                { on = \event -> requestTimeNow.on event |> stateChange }
+                    |> RequestTimeNow
 
 
 type Event appState
@@ -186,6 +193,9 @@ interfaceToId =
             Display display ->
                 IdDisplay display.config
 
+            RequestTimeNow _ ->
+                IdRequestTimeNow
+
 
 eventDataAndConstructStateJsonDecoder : Interface state -> Json.Decode.Decoder state
 eventDataAndConstructStateJsonDecoder interface =
@@ -193,6 +203,10 @@ eventDataAndConstructStateJsonDecoder interface =
         Display display ->
             Json.Decode.succeed display.on
                 |> Json.Decode.Extra.andMap (Json.Decode.null ())
+
+        RequestTimeNow requestTimeNow ->
+            Json.Decode.succeed requestTimeNow.on
+                |> Json.Decode.Extra.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
 
 
 interfaceIdToJson : InterfaceId -> Json.Encode.Value
@@ -202,13 +216,19 @@ interfaceIdToJson =
             [ case interface of
                 IdDisplay string ->
                     ( "display", string |> Json.Encode.string )
+
+                IdRequestTimeNow ->
+                    ( "requestTimeNow", Json.Encode.null )
             ]
 
 
 interfaceIdJsonDecoder : Json.Decode.Decoder InterfaceId
 interfaceIdJsonDecoder =
     Json.Decode.oneOf
-        [ Json.Decode.map IdDisplay (Json.Decode.field "display" Json.Decode.string)
+        [ Json.Decode.map IdDisplay
+            (Json.Decode.field "display" Json.Decode.string)
+        , Json.Decode.map (\() -> IdRequestTimeNow)
+            (Json.Decode.field "requestTimeNow" (Json.Decode.null ()))
         ]
 
 

@@ -17,7 +17,7 @@
         const app = Elm.Main.init({ node: document.getElementById("app") });
 
         app.ports.portOut.subscribe(function (fromElm) {
-            console.log(fromElm)
+            console.log("elm → js: " + fromElm)
             if (fromElm?.addedInterface) {
                 function trySpecificInterface(toSpecific, run) {
                     const maybeSpecific = toSpecific(fromElm.addedInterface);
@@ -30,9 +30,15 @@
                 }
                 trySpecificInterface(
                     event => event?.display,
-                    async function (initialSpecificInterfaceConfig) {
-                        document.getElementById("display").textContent = initialSpecificInterfaceConfig;
+                    async function (config) {
+                        document.getElementById("display").textContent = config;
                         return null;
+                    }
+                );
+                trySpecificInterface(
+                    event => event?.requestTimeNow,
+                    async function (config) {
+                        return Date.now();
                     }
                 );
             } else if (fromElm?.removedInterface) {
