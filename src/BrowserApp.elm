@@ -1,4 +1,4 @@
-module BrowserApp exposing (BrowserApp, BrowserInterface(..), BrowserInterfaceId(..), Event(..), State, on, toProgram)
+module BrowserApp exposing (BrowserApp, Interface(..), InterfaceId(..), Event(..), State, on, toProgram)
 
 import AssocList
 import Json.Decode
@@ -7,14 +7,14 @@ import Json.Encode
 
 
 type alias State appState =
-    { interface : AssocList.Dict BrowserInterfaceId (BrowserInterface appState)
+    { interface : AssocList.Dict InterfaceId (Interface appState)
     , appState : appState
     }
 
 
 type alias BrowserApp state =
     { initialState : state
-    , interface : state -> List (BrowserInterface state)
+    , interface : state -> List (Interface state)
     , ports :
         { out : Json.Encode.Value -> Cmd Never
         , in_ : (Json.Encode.Value -> Event state) -> Sub (Event state)
@@ -22,11 +22,11 @@ type alias BrowserApp state =
     }
 
 
-type BrowserInterface state
+type Interface state
     = Display { config : String, on : () -> state }
 
 
-on : (state -> mappedState) -> (BrowserInterface state -> BrowserInterface mappedState)
+on : (state -> mappedState) -> (Interface state -> Interface mappedState)
 on stateChange =
     \interface ->
         case interface of
@@ -35,7 +35,7 @@ on stateChange =
                     |> Display
 
 
-type BrowserInterfaceId
+type InterfaceId
     = IdDisplay String
 
 
@@ -106,7 +106,7 @@ toProgram appConfig =
                     AppEventToNewAppState updatedAppState ->
                         \oldState ->
                             let
-                                updatedInterface : AssocList.Dict BrowserInterfaceId (BrowserInterface state)
+                                updatedInterface : AssocList.Dict InterfaceId (Interface state)
                                 updatedInterface =
                                     updatedAppState
                                         |> appConfig.interface
@@ -179,7 +179,7 @@ toProgram appConfig =
         }
 
 
-interfaceToId : BrowserInterface state_ -> BrowserInterfaceId
+interfaceToId : Interface state_ -> InterfaceId
 interfaceToId =
     \interface ->
         case interface of
@@ -187,7 +187,7 @@ interfaceToId =
                 IdDisplay display.config
 
 
-eventDataAndConstructStateJsonDecoder : BrowserInterface state -> Json.Decode.Decoder state
+eventDataAndConstructStateJsonDecoder : Interface state -> Json.Decode.Decoder state
 eventDataAndConstructStateJsonDecoder interface =
     case interface of
         Display display ->
@@ -195,7 +195,7 @@ eventDataAndConstructStateJsonDecoder interface =
                 |> Json.Decode.Extra.andMap (Json.Decode.null ())
 
 
-interfaceIdToJson : BrowserInterfaceId -> Json.Encode.Value
+interfaceIdToJson : InterfaceId -> Json.Encode.Value
 interfaceIdToJson =
     \interface ->
         Json.Encode.object
@@ -205,7 +205,7 @@ interfaceIdToJson =
             ]
 
 
-interfaceIdJsonDecoder : Json.Decode.Decoder BrowserInterfaceId
+interfaceIdJsonDecoder : Json.Decode.Decoder InterfaceId
 interfaceIdJsonDecoder =
     Json.Decode.oneOf
         [ Json.Decode.map IdDisplay (Json.Decode.field "display" Json.Decode.string)
