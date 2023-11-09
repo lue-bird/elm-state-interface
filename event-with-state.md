@@ -10,10 +10,6 @@ type State
     = MenuState Game.Menu.State
     | PlayingState Game.Playing.State
 
-type Event
-    = MenuEvent Menu.Event
-    | PlayingEvent Game.Playing.Event
-
 interface : State -> Interface State
 interface state =
     case state of
