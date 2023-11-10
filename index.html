@@ -9,23 +9,29 @@
 
 <body>
     <main>
-        <p id="display">unedited</p>
         <canvas id="canvas" width="600" height="360"></canvas>
+        <p id="display">unedited</p>
         <div id="app"></div>
     </main>
     <script src="./build/main.js"></script>
     <script>
-        const app = Elm.Main.init({ node: document.getElementById("app") });
+        const elmApp = Elm.Main.init({ node: document.getElementById("app") });
+        let htmlEventListenerAbortControllers = {}
 
-        app.ports.portOut.subscribe(function (fromElm) {
-            console.log("elm → js: " + fromElm)
+        elmApp.ports.portOut.subscribe(function (fromElm) {
+            console.log("elm → js: ", fromElm)
             if (fromElm?.addedInterface) {
+                function sendToElm(eventData) {
+                    const toElm = { interface: fromElm.addedInterface, eventData: eventData }
+                    elmApp.ports.portIn.send(toElm)
+                    console.log("js → elm: ", toElm)
+                }
+
                 function trySpecificInterface(toSpecific, run) {
-                    const maybeSpecific = toSpecific(fromElm.addedInterface);
-                    if (maybeSpecific) {
-                        run(maybeSpecific)
+                    if (toSpecific(fromElm.addedInterface)) {
+                        run(toSpecific(fromElm.addedInterface))
                             .then(eventData => {
-                                app.ports.portIn.send({ interface: fromElm.addedInterface, eventData: eventData })
+                                sendToElm(eventData)
                             });
                     }
                 }
@@ -62,25 +68,26 @@
                         return null;
                     }
                 )
-                trySpecificInterface(
-                    event => event?.listenToHtmlEvent,
-                    async function (config) {
-                        const canvas = document.getElementById("canvas")
-                        const triggeredEvent =
-                            await new Promise(async function (resolve, reject) {
-                                canvas.addEventListener(
-                                    config,
-                                    (event) => {
-                                        resolve(event)
-                                    }
-                                )
-                            })
-                        canvas.removeEventListener(config)
-                        return triggeredEvent;
-                    }
-                );
+                if (fromElm.addedInterface?.listenToHtmlEvent) {
+                    const canvas = document.getElementById("canvas")
+                    const abortController = new AbortController()
+                    htmlEventListenerAbortControllers[fromElm.addedInterface.listenToHtmlEvent] = abortController;
+                    canvas.addEventListener(
+                        fromElm.addedInterface.listenToHtmlEvent,
+                        (triggeredEvent) => {
+                            sendToElm(triggeredEvent)
+                        },
+                        { signal: abortController.signal }
+                    )
+                }
             } else if (fromElm?.removedInterface) {
-                // you can stop that process here. Currently not needed
+                if (event?.listenToHtmlEvent) {
+                    let maybeAbortController = htmlEventListenerAbortControllers[event.listenToHtmlEvent]
+                    if (maybeAbortController) {
+                        maybeAbortController.abort()
+                        delete htmlEventListenerAbortControllers[event.listenToHtmlEvent]
+                    }
+                }
             }
         });
     </script>

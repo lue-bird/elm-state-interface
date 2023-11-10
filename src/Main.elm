@@ -29,16 +29,16 @@ app =
     , interface =
         \(State state) ->
             [ BrowserApp.ListenToHtmlEvent
-                { config = "onmousemove"
+                { config = "mousemove"
                 , on =
                     \mouseEvent ->
                         mouseEvent
                             |> Json.Decode.decodeValue
                                 (Json.Decode.succeed (\x y -> { x = x, y = y })
-                                    |> Json.Decode.Extra.andMap (Json.Decode.field "offsetX" Json.Decode.int)
-                                    |> Json.Decode.Extra.andMap (Json.Decode.field "offsetY" Json.Decode.int)
+                                    |> Json.Decode.Extra.andMap (Json.Decode.field "clientX" Json.Decode.int)
+                                    |> Json.Decode.Extra.andMap (Json.Decode.field "clientY" Json.Decode.int)
                                 )
-                            |> Result.withDefault { x = 0, y = 0 }
+                            |> Result.withDefault { x = 300, y = 180 }
                             |> MouseMovedTo
                 }
             , BrowserApp.Display { config = "hello world", on = \() -> Displayed }

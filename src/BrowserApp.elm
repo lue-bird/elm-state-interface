@@ -6,6 +6,7 @@ import Color exposing (Color)
 import Json.Decode
 import Json.Decode.Extra
 import Json.Encode
+import N0To255 exposing (N0To255)
 import Time
 
 
@@ -25,6 +26,10 @@ type alias BrowserApp state =
     }
 
 
+type alias Color0To255 =
+    { red : N0To255, green : N0To255, blue : N0To255, alpha : N0To255 }
+
+
 type Interface state
     = Display { config : String, on : () -> state }
     | RequestTimeNow { on : Time.Posix -> state }
@@ -35,7 +40,7 @@ type Interface state
 type InterfaceId
     = IdDisplay String
     | IdRequestTimeNow
-    | IdDraw (Array (Array Color))
+    | IdDraw (Array (Array Color0To255))
     | IdListenToHtmlEvent String
 
 
@@ -173,10 +178,10 @@ toProgram appConfig =
                             Ok interfaceId ->
                                 case
                                     state.interface
-                                        |> AssocList.values
+                                        |> AssocList.toList
                                         |> listFirstJust
-                                            (\stateInterface ->
-                                                if (stateInterface |> interfaceToId) == interfaceId then
+                                            (\( stateInterfaceId, stateInterface ) ->
+                                                if stateInterfaceId == interfaceId then
                                                     stateInterface |> Just
 
                                                 else
@@ -211,7 +216,7 @@ interfaceToId =
                 IdRequestTimeNow
 
             Draw draw ->
-                IdDraw draw.config
+                IdDraw (draw.config |> Array.map (Array.map colorTo0To255))
 
             ListenToHtmlEvent listenToHtmlEvent ->
                 IdListenToHtmlEvent listenToHtmlEvent.config
@@ -237,40 +242,38 @@ eventDataAndConstructStateJsonDecoder interface =
                 |> Json.Decode.Extra.andMap Json.Decode.value
 
 
-colorJsonDecoder : Json.Decode.Decoder Color
-colorJsonDecoder =
-    Json.Decode.succeed Color.rgba
-        |> Json.Decode.Extra.andMap (Json.Decode.field "red" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
-        |> Json.Decode.Extra.andMap (Json.Decode.field "green" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
-        |> Json.Decode.Extra.andMap (Json.Decode.field "blue" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
-        |> Json.Decode.Extra.andMap (Json.Decode.field "alpha" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
+color0To255JsonDecoder : Json.Decode.Decoder Color0To255
+color0To255JsonDecoder =
+    Json.Decode.succeed (\r g b a -> { red = r, green = g, blue = b, alpha = a })
+        |> Json.Decode.Extra.andMap (Json.Decode.field "red" N0To255.jsonDecoder)
+        |> Json.Decode.Extra.andMap (Json.Decode.field "green" N0To255.jsonDecoder)
+        |> Json.Decode.Extra.andMap (Json.Decode.field "blue" N0To255.jsonDecoder)
+        |> Json.Decode.Extra.andMap (Json.Decode.field "alpha" N0To255.jsonDecoder)
 
 
-colorToJson : Color -> Json.Encode.Value
-colorToJson =
+color0To255ToJson : Color0To255 -> Json.Encode.Value
+color0To255ToJson =
+    \color ->
+        Json.Encode.object
+            [ ( "red", color.red |> N0To255.toJson )
+            , ( "green", color.green |> N0To255.toJson )
+            , ( "blue", color.blue |> N0To255.toJson )
+            , ( "alpha", color.alpha |> N0To255.toJson )
+            ]
+
+
+colorTo0To255 : Color -> Color0To255
+colorTo0To255 =
     \color ->
         let
             components =
                 color |> Color.toRgba
         in
-        Json.Encode.object
-            [ ( "red", components.red |> percentageTo0To255 |> Json.Encode.int )
-            , ( "green", components.green |> percentageTo0To255 |> Json.Encode.int )
-            , ( "blue", components.blue |> percentageTo0To255 |> Json.Encode.int )
-            , ( "alpha", components.alpha |> percentageTo0To255 |> Json.Encode.int )
-            ]
-
-
-percentageTo0To255 : Float -> Int
-percentageTo0To255 =
-    \percentage ->
-        percentage * 255 |> Basics.round
-
-
-n0To255ToPercentage : Int -> Float
-n0To255ToPercentage =
-    \n0To255 ->
-        (n0To255 |> Basics.toFloat) / 255
+        { red = components.red |> N0To255.fromPercentage
+        , green = components.green |> N0To255.fromPercentage
+        , blue = components.blue |> N0To255.fromPercentage
+        , alpha = components.alpha |> N0To255.fromPercentage
+        }
 
 
 interfaceIdToJson : InterfaceId -> Json.Encode.Value
@@ -285,7 +288,7 @@ interfaceIdToJson =
                     ( "requestTimeNow", Json.Encode.null )
 
                 IdDraw pixels ->
-                    ( "draw", pixels |> Json.Encode.array (Json.Encode.array colorToJson) )
+                    ( "draw", pixels |> Json.Encode.array (Json.Encode.array color0To255ToJson) )
 
                 IdListenToHtmlEvent eventName ->
                     ( "listenToHtmlEvent", eventName |> Json.Encode.string )
@@ -300,7 +303,7 @@ interfaceIdJsonDecoder =
         , Json.Decode.map (\() -> IdRequestTimeNow)
             (Json.Decode.field "requestTimeNow" (Json.Decode.null ()))
         , Json.Decode.map IdDraw
-            (Json.Decode.field "draw" (Json.Decode.array (Json.Decode.array colorJsonDecoder)))
+            (Json.Decode.field "draw" (Json.Decode.array (Json.Decode.array color0To255JsonDecoder)))
         , Json.Decode.map IdListenToHtmlEvent
             (Json.Decode.field "listenToHtmlEvent" Json.Decode.string)
         ]
