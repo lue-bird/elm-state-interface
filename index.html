@@ -62,6 +62,23 @@
                         return null;
                     }
                 )
+                trySpecificInterface(
+                    event => event?.listenToHtmlEvent,
+                    async function (config) {
+                        const canvas = document.getElementById("canvas")
+                        const triggeredEvent =
+                            await new Promise(async function (resolve, reject) {
+                                canvas.addEventListener(
+                                    config,
+                                    (event) => {
+                                        resolve(event)
+                                    }
+                                )
+                            })
+                        canvas.removeEventListener(config)
+                        return triggeredEvent;
+                    }
+                );
             } else if (fromElm?.removedInterface) {
                 // you can stop that process here. Currently not needed
             }
