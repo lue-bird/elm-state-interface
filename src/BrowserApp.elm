@@ -29,12 +29,14 @@ type Interface state
     = Display { config : String, on : () -> state }
     | RequestTimeNow { on : Time.Posix -> state }
     | Draw { config : Array (Array Color), on : () -> state }
+    | ListenToHtmlEvent { config : String, on : Json.Decode.Value -> state }
 
 
 type InterfaceId
     = IdDisplay String
     | IdRequestTimeNow
     | IdDraw (Array (Array Color))
+    | IdListenToHtmlEvent String
 
 
 on : (state -> mappedState) -> (Interface state -> Interface mappedState)
@@ -52,6 +54,10 @@ on stateChange =
             Draw draw ->
                 { config = draw.config, on = \event -> draw.on event |> stateChange }
                     |> Draw
+
+            ListenToHtmlEvent listenToHtmlEvent ->
+                { config = listenToHtmlEvent.config, on = \event -> listenToHtmlEvent.on event |> stateChange }
+                    |> ListenToHtmlEvent
 
 
 type Event appState
@@ -207,6 +213,9 @@ interfaceToId =
             Draw draw ->
                 IdDraw draw.config
 
+            ListenToHtmlEvent listenToHtmlEvent ->
+                IdListenToHtmlEvent listenToHtmlEvent.config
+
 
 eventDataAndConstructStateJsonDecoder : Interface state -> Json.Decode.Decoder state
 eventDataAndConstructStateJsonDecoder interface =
@@ -223,14 +232,18 @@ eventDataAndConstructStateJsonDecoder interface =
             Json.Decode.succeed draw.on
                 |> Json.Decode.Extra.andMap (Json.Decode.null ())
 
+        ListenToHtmlEvent listenToHtmlEvent ->
+            Json.Decode.succeed listenToHtmlEvent.on
+                |> Json.Decode.Extra.andMap Json.Decode.value
+
 
 colorJsonDecoder : Json.Decode.Decoder Color
 colorJsonDecoder =
     Json.Decode.succeed Color.rgba
-        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
-        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
-        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
-        |> Json.Decode.Extra.andMap (Json.Decode.map n0To255ToPercentage Json.Decode.int)
+        |> Json.Decode.Extra.andMap (Json.Decode.field "red" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
+        |> Json.Decode.Extra.andMap (Json.Decode.field "green" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
+        |> Json.Decode.Extra.andMap (Json.Decode.field "blue" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
+        |> Json.Decode.Extra.andMap (Json.Decode.field "alpha" (Json.Decode.map n0To255ToPercentage Json.Decode.int))
 
 
 colorToJson : Color -> Json.Encode.Value
@@ -272,7 +285,10 @@ interfaceIdToJson =
                     ( "requestTimeNow", Json.Encode.null )
 
                 IdDraw pixels ->
-                    ( "draw", Json.Encode.array (Json.Encode.array colorToJson) pixels )
+                    ( "draw", pixels |> Json.Encode.array (Json.Encode.array colorToJson) )
+
+                IdListenToHtmlEvent eventName ->
+                    ( "listenToHtmlEvent", eventName |> Json.Encode.string )
             ]
 
 
@@ -283,6 +299,10 @@ interfaceIdJsonDecoder =
             (Json.Decode.field "display" Json.Decode.string)
         , Json.Decode.map (\() -> IdRequestTimeNow)
             (Json.Decode.field "requestTimeNow" (Json.Decode.null ()))
+        , Json.Decode.map IdDraw
+            (Json.Decode.field "draw" (Json.Decode.array (Json.Decode.array colorJsonDecoder)))
+        , Json.Decode.map IdListenToHtmlEvent
+            (Json.Decode.field "listenToHtmlEvent" Json.Decode.string)
         ]
 
 
