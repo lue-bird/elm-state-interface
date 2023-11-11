@@ -17,6 +17,7 @@
     <script>
         const elmApp = Elm.Main.init({ node: document.getElementById("app") });
         let htmlEventListenerAbortControllers = {}
+        const imageData = new ImageData(600, 360);
 
         elmApp.ports.portOut.subscribe(function (fromElm) {
             console.log("elm → js: ", fromElm)
@@ -53,17 +54,16 @@
                     async function (config) {
                         const canvas = document.getElementById("canvas");
                         const canvasContext = canvas.getContext("2d");
-                        const pixelData = [];
                         for (let y = 0; y < canvas.clientHeight; y++) {
                             for (let x = 0; x < canvas.clientWidth; x++) {
+                                const pixelIndex = (y * canvas.clientWidth + x) * 4
                                 const color = config[y][x];
-                                pixelData.push(color.red);
-                                pixelData.push(color.green);
-                                pixelData.push(color.blue);
-                                pixelData.push(color.alpha);
+                                imageData.data[pixelIndex] = color.red;
+                                imageData.data[pixelIndex + 1] = color.green
+                                imageData.data[pixelIndex + 2] = color.blue
+                                imageData.data[pixelIndex + 3] = color.alpha
                             }
                         }
-                        const imageData = new ImageData(new Uint8ClampedArray(pixelData), 600, 360);
                         canvasContext.putImageData(imageData, 0, 0);
                         return null;
                     }
