@@ -72,3 +72,79 @@ interface : State -> Interface State
 I think it's cute. I tried implementing this exact thing in this project and it works :)
 I will keep adding more capabilities to that example. Feedback and contributions welcome
 as I'm very new to the js world.
+
+### alternative to tasks
+
+Simplified examples:
+
+with [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/):
+```elm
+type alias State =
+    Result
+        Http.NonSuccessStatus
+        { icon : Image
+        , content : String
+        }
+
+type Event  
+  = IconAndContentArrived (Result Http.Error { icon : Image, content : String })
+
+{ init =
+    \() ->
+        ( Err Http.NotAsked
+        , ConcurrentTask.succeed (\icon content -> { icon = icon, content = content })
+            |> ConcurrentTask.andMap
+                (Http.request { url = "...", decoder = Image.jsonDecoder })
+            |> ConcurrentTask.andMap
+                (Http.request { url = "...", decoder = Json.Decode.string })
+            |> ConcurrentTask.attempt { onComplete = IconAndContentArrived }
+        )
+, update =
+    \event state ->
+        case event of
+            IconAndContentArrived iconAndContent ->
+                ( iconAndContent |> Result.mapError Http.Error
+                , Cmd.none
+                )
+, view =
+    \state ->
+        case state of
+            Ok iconAndContent ->
+                ..your ui.. iconAndContent
+            
+            Err ... ->
+                ..error ui..
+, subscriptions = ...
+}
+```
+with state-interface:
+```elm
+type alias State =
+    { icon : Result Http.NonSuccessStatus Image
+    , content : Result Http.NonSuccessStatus String
+    }
+
+{ initialState = { icon = Err Http.NotAsked, content = Err Http.NotAsked }
+, interface =
+    \state ->
+        case ( state.icon, state.content ) of
+            ( Ok icon, Ok content ) ->
+                ..your ui.. { icon = icon, content = content }
+            
+            _ ->
+                [ state.icon
+                    |> Result.withDefault
+                        (Http.request { url = "...", decoder = Image.jsonDecoder }
+                            |> Interface.on (\content -> { state | content = Ok content })
+                        )
+                , state.content
+                    |> Result.withDefault
+                        (Http.request { url = "...", decoder = Json.Decode.string }
+                            |> Interface.on (\content -> { state | content = Ok content })
+                        )
+                , ..error ui..
+                ]
+                    |> List.filterMap identity
+}
+```
+which feels more explicit, declarative and less wiring-heavy at least.
