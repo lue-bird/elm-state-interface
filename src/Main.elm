@@ -13,16 +13,6 @@ main =
     app |> BrowserApp.toProgram
 
 
-type State
-    = State { mousePoint : { x : Int, y : Int } }
-
-
-type Event
-    = MouseMovedTo { x : Int, y : Int }
-    | Displayed
-    | Drawn
-
-
 app : BrowserApp State
 app =
     { initialState = State { mousePoint = { x = 0, y = 0 } }
@@ -87,11 +77,21 @@ app =
                                     State { state | mousePoint = newMousePoint }
                         )
                     )
-    , ports = { in_ = portIn, out = portOut }
+    , ports = { fromJs = fromJs, toJs = toJs }
     }
 
 
-port portOut : Json.Encode.Value -> Cmd event_
+type State
+    = State { mousePoint : { x : Int, y : Int } }
 
 
-port portIn : (Json.Encode.Value -> event) -> Sub event
+type Event
+    = MouseMovedTo { x : Int, y : Int }
+    | Displayed
+    | Drawn
+
+
+port toJs : Json.Encode.Value -> Cmd event_
+
+
+port fromJs : (Json.Encode.Value -> event) -> Sub event

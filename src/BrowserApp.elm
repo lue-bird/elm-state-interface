@@ -2,6 +2,7 @@ module BrowserApp exposing (BrowserApp, Event(..), Interface(..), InterfaceId(..
 
 import Array exposing (Array)
 import AssocList
+import Bitwise
 import Color exposing (Color)
 import Json.Decode
 import Json.Decode.Extra
@@ -20,8 +21,8 @@ type alias BrowserApp state =
     { initialState : state
     , interface : state -> List (Interface state)
     , ports :
-        { out : Json.Encode.Value -> Cmd Never
-        , in_ : (Json.Encode.Value -> Event state) -> Sub (Event state)
+        { toJs : Json.Encode.Value -> Cmd Never
+        , fromJs : (Json.Encode.Value -> Event state) -> Sub (Event state)
         }
     }
 
@@ -68,7 +69,7 @@ on stateChange =
 type Event appState
     = InterfaceIdFailedToDecode Json.Decode.Error
     | InterfaceEventDataFailedToDecode Json.Decode.Error
-    | BrowserInterfaceDesynchronized
+    | InterfaceEventIgnored InterfaceId
     | AppEventToNewAppState appState
 
 
@@ -91,11 +92,10 @@ toProgram appConfig =
                     |> AssocList.keys
                     |> List.map
                         (\interfaceId ->
-                            appConfig.ports.out
+                            appConfig.ports.toJs
                                 (Json.Encode.object
-                                    [ ( "addedInterface"
-                                      , interfaceId |> interfaceIdToJson
-                                      )
+                                    [ ( "changeAction", "add" |> Json.Encode.string )
+                                    , ( "interface", interfaceId |> interfaceIdToJson )
                                     ]
                                 )
                         )
@@ -105,11 +105,11 @@ toProgram appConfig =
         , update =
             \event ->
                 case event of
-                    BrowserInterfaceDesynchronized ->
+                    InterfaceEventIgnored interfaceId ->
                         \state ->
                             let
                                 _ =
-                                    Debug.log "BrowserInterfaceDesynchronized" ()
+                                    Debug.log "info: ignored event from this interface" interfaceId
                             in
                             ( state, Cmd.none )
 
@@ -144,11 +144,10 @@ toProgram appConfig =
                                     |> AssocList.keys
                                     |> List.map
                                         (\interfaceId ->
-                                            appConfig.ports.out
+                                            appConfig.ports.toJs
                                                 (Json.Encode.object
-                                                    [ ( "addedInterface"
-                                                      , interfaceId |> interfaceIdToJson
-                                                      )
+                                                    [ ( "changeAction", "add" |> Json.Encode.string )
+                                                    , ( "interface", interfaceId |> interfaceIdToJson )
                                                     ]
                                                 )
                                         )
@@ -156,11 +155,10 @@ toProgram appConfig =
                                     |> AssocList.keys
                                     |> List.map
                                         (\interfaceId ->
-                                            appConfig.ports.out
+                                            appConfig.ports.toJs
                                                 (Json.Encode.object
-                                                    [ ( "removedInterface"
-                                                      , interfaceId |> interfaceIdToJson
-                                                      )
+                                                    [ ( "changeAction", "add" |> Json.Encode.string )
+                                                    , ( "interface", interfaceId |> interfaceIdToJson )
                                                     ]
                                                 )
                                         )
@@ -172,7 +170,7 @@ toProgram appConfig =
         , subscriptions =
             \state ->
                 -- re-associate event based on current interface
-                appConfig.ports.in_
+                appConfig.ports.fromJs
                     (\interfaceJson ->
                         case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "interface" interfaceIdJsonDecoder) of
                             Ok interfaceId ->
@@ -197,7 +195,7 @@ toProgram appConfig =
                                                 eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
 
                                     Nothing ->
-                                        BrowserInterfaceDesynchronized
+                                        InterfaceEventIgnored interfaceId
 
                             Err interfaceIdJsonDecodeError ->
                                 interfaceIdJsonDecodeError |> InterfaceIdFailedToDecode
@@ -266,6 +264,7 @@ colorTo0To255 : Color -> Color0To255
 colorTo0To255 =
     \color ->
         let
+            components : { red : Float, green : Float, blue : Float, alpha : Float }
             components =
                 color |> Color.toRgba
         in

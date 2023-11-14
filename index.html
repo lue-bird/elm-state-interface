@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>elm nicer architecture</title>
+    <title>state-interface</title>
 </head>
 
 <body>
@@ -19,69 +19,56 @@
         let htmlEventListenerAbortControllers = {}
         const imageData = new ImageData(600, 360);
 
-        elmApp.ports.portOut.subscribe(function (fromElm) {
-            console.log("elm → js: ", fromElm)
-            if (fromElm?.addedInterface) {
-                function sendToElm(eventData) {
-                    const toElm = { interface: fromElm.addedInterface, eventData: eventData }
-                    elmApp.ports.portIn.send(toElm)
-                    console.log("js → elm: ", toElm)
-                }
-
-                function trySpecificInterface(toSpecific, run) {
-                    if (toSpecific(fromElm.addedInterface)) {
-                        run(toSpecific(fromElm.addedInterface))
-                            .then(eventData => {
-                                sendToElm(eventData)
-                            });
-                    }
-                }
-                trySpecificInterface(
-                    event => event?.display,
-                    async function (config) {
-                        document.getElementById("display").textContent = config;
-                        return null;
-                    }
-                );
-                trySpecificInterface(
-                    event => event?.requestTimeNow,
-                    async function (config) {
-                        return Date.now();
-                    }
-                );
-                trySpecificInterface(
-                    event => event?.draw,
-                    async function (config) {
-                        const canvas = document.getElementById("canvas");
-                        const canvasContext = canvas.getContext("2d");
+        const interfaceImplementations = [
+            {
+                detect: event => event?.display,
+                onAdd: (config, sendToElm) => {
+                    document.getElementById("display").textContent = config
+                    sendToElm(null)
+                },
+            },
+            {
+                detect: event => event?.requestTimeNow,
+                onAdd: (config, sendToElm) => {
+                    sendToElm(Date.now())
+                },
+            },
+            {
+                detect: event => event?.draw,
+                onAdd: (config, sendToElm) => {
+                    (async function () {
+                        const canvas = document.getElementById("canvas")
+                        const canvasContext = canvas.getContext("2d")
                         for (let y = 0; y < canvas.clientHeight; y++) {
                             for (let x = 0; x < canvas.clientWidth; x++) {
                                 const pixelIndex = (y * canvas.clientWidth + x) * 4
-                                const color = config[y][x];
-                                imageData.data[pixelIndex] = color.red;
+                                const color = config[y][x]
+                                imageData.data[pixelIndex] = color.red
                                 imageData.data[pixelIndex + 1] = color.green
                                 imageData.data[pixelIndex + 2] = color.blue
                                 imageData.data[pixelIndex + 3] = color.alpha
                             }
                         }
-                        canvasContext.putImageData(imageData, 0, 0);
-                        return null;
-                    }
-                )
-                if (fromElm.addedInterface?.listenToHtmlEvent) {
+                        canvasContext.putImageData(imageData, 0, 0)
+                        return null
+                    })().then(sendToElm)
+                },
+            },
+            {
+                detect: event => event?.listenToHtmlEvent,
+                onAdd: function (config, sendToElm) {
                     const canvas = document.getElementById("canvas")
                     const abortController = new AbortController()
-                    htmlEventListenerAbortControllers[fromElm.addedInterface.listenToHtmlEvent] = abortController;
+                    htmlEventListenerAbortControllers[config] = abortController;
                     canvas.addEventListener(
-                        fromElm.addedInterface.listenToHtmlEvent,
+                        config,
                         (triggeredEvent) => {
                             sendToElm(triggeredEvent)
                         },
                         { signal: abortController.signal }
                     )
-                }
-            } else if (fromElm?.removedInterface) {
-                if (event?.listenToHtmlEvent) {
+                },
+                onRemove: config => {
                     let maybeAbortController = htmlEventListenerAbortControllers[event.listenToHtmlEvent]
                     if (maybeAbortController) {
                         maybeAbortController.abort()
@@ -89,6 +76,28 @@
                     }
                 }
             }
+        ]
+
+        elmApp.ports.toJs.subscribe(function (fromElm) {
+            // console.log("elm → js: ", fromElm)
+            function sendToElm(eventData) {
+                const toElm = { interface: fromElm.interface, eventData: eventData }
+                elmApp.ports.fromJs.send(toElm)
+                // console.log("js → elm: ", toElm)
+            }
+
+            interfaceImplementations.forEach(interfaceImplementation => {
+                if (interfaceImplementation.detect(fromElm.interface)) {
+                    const specific = interfaceImplementation.detect(fromElm.interface)
+                    if (fromElm.changeAction == "add") {
+                        interfaceImplementation.onAdd(specific, sendToElm)
+                    } else {
+                        if (interfaceImplementation?.remove) {
+                            interfaceImplementation.onRemove(specific)
+                        }
+                    }
+                }
+            })
         });
     </script>
 </body>
