@@ -108,6 +108,8 @@ type alias Config state =
 -}
 type Interface state
     = RequestTimeNow { on : Time.Posix -> state }
+    | RequestTimezone { on : Time.Zone -> state }
+    | RequestTimezoneName { on : Time.ZoneName -> state }
     | ConsoleLog String
     | RenderDomNode (DomNode state)
 
@@ -136,6 +138,8 @@ type alias DomElement state =
 -}
 type InterfaceId
     = IdRequestTimeNow
+    | IdRequestTimezone
+    | IdRequestTimezoneName
     | ConsoleLogId String
     | IdRenderDomNode
 
@@ -270,6 +274,14 @@ on stateChange =
                 { on = \event -> requestTimeNow.on event |> stateChange }
                     |> RequestTimeNow
 
+            RequestTimezone requestTimezone ->
+                { on = \event -> requestTimezone.on event |> stateChange }
+                    |> RequestTimezone
+
+            RequestTimezoneName requestTimezoneName ->
+                { on = \event -> requestTimezoneName.on event |> stateChange }
+                    |> RequestTimezoneName
+
             ConsoleLog string ->
                 ConsoleLog string
 
@@ -368,6 +380,12 @@ interfaceToId =
             RequestTimeNow _ ->
                 IdRequestTimeNow
 
+            RequestTimezone _ ->
+                IdRequestTimezone
+
+            RequestTimezoneName _ ->
+                IdRequestTimezoneName
+
             ConsoleLog string ->
                 ConsoleLogId string
 
@@ -435,6 +453,12 @@ interfaceDiffToCmds =
                         RequestTimeNow _ ->
                             Nothing
 
+                        RequestTimezone _ ->
+                            Nothing
+
+                        RequestTimezoneName _ ->
+                            Nothing
+
                         ConsoleLog _ ->
                             Nothing
 
@@ -452,6 +476,12 @@ interfaceDiffToCmds =
                             case interface of
                                 RequestTimeNow _ ->
                                     AddRequestTimeNow |> Just
+
+                                RequestTimezone _ ->
+                                    AddRequestTimezone |> Just
+
+                                RequestTimezoneName _ ->
+                                    AddRequestTimezoneName |> Just
 
                                 ConsoleLog string ->
                                     AddConsoleLog string |> Just
@@ -509,6 +539,12 @@ interfaceDiffToJson =
         case interfaceDiff of
             AddRequestTimeNow ->
                 Json.Encode.object [ ( "addRequestTimeNow", Json.Encode.null ) ]
+
+            AddRequestTimezone ->
+                Json.Encode.object [ ( "addRequestTimezoneOffset", Json.Encode.null ) ]
+
+            AddRequestTimezoneName ->
+                Json.Encode.object [ ( "addRequestTimezoneName", Json.Encode.null ) ]
 
             AddConsoleLog string ->
                 Json.Encode.object [ ( "addConsoleLog", string |> Json.Encode.string ) ]
@@ -620,6 +656,32 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 AddRequestTimeNow ->
                     Json.Decode.succeed requestTimeNow.on
                         |> Json.Decode.Extra.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
+                        |> Just
+
+                _ ->
+                    Nothing
+
+        RequestTimezone requestTimezone ->
+            case interfaceDiff of
+                AddRequestTimezone ->
+                    Json.Decode.succeed requestTimezone.on
+                        |> Json.Decode.Extra.andMap
+                            (Json.Decode.map (\offset -> Time.customZone offset []) Json.Decode.int)
+                        |> Just
+
+                _ ->
+                    Nothing
+
+        RequestTimezoneName requestTimezoneName ->
+            case interfaceDiff of
+                AddRequestTimezoneName ->
+                    Json.Decode.succeed requestTimezoneName.on
+                        |> Json.Decode.Extra.andMap
+                            (Json.Decode.oneOf
+                                [ Json.Decode.map Time.Offset Json.Decode.int
+                                , Json.Decode.map Time.Name Json.Decode.string
+                                ]
+                            )
                         |> Just
 
                 _ ->
@@ -795,6 +857,8 @@ domElementIdToJson =
 -}
 type InterfaceDiff
     = AddRequestTimeNow
+    | AddRequestTimezone
+    | AddRequestTimezoneName
     | AddConsoleLog String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
     | RemoveDom

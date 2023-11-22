@@ -4,6 +4,8 @@ which is simpler, safer and more declarative.
 Elm has concepts of model, view, msg, update, sub, cmd, task.
 We'll reduce this to just state and interface!
 
+First: Props to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) for the js-related stuff in combination with [the elm-radio episode](https://elm-radio.com/episode/elm-concurrent-task) for the inspiration to pursue this.
+
 ## TODO before release
 
 mirror elm commands & tasks listed in
