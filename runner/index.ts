@@ -1,4 +1,4 @@
-import * as fetchAdapter from "./http/fetch";
+import * as fetchAdapter from "./http/fetch.js";
 /*
 import {
     DomError,
@@ -9,8 +9,8 @@ import {
 } from "./browser";
 import * as dom from "./browser/dom"; */
 
-export * from "./http";
-export * from "./browser";
+export * from "./http/index.js";
+export * from "./browser/index.js";
 
 export interface ElmPorts {
     toJs: {

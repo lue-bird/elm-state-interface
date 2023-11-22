@@ -4,7 +4,7 @@ import {
     DomError,
     SetViewportOptions,
     SetViewportOfOptions,
-} from "browser";
+} from "./index.js";
 
 export function focus(id: string): void | DomError {
     return withDomNode(id, (el) => el.focus());
