@@ -39,6 +39,12 @@
                 },
             },
             {
+                on: event => event?.addConsoleLog,
+                run: (config, sendToElm) => {
+                    console.log(config)
+                },
+            },
+            {
                 on: event => event?.replaceDomNode,
                 run: (config, sendToElm) => {
                     // console.log("replace dom node ", config.path)

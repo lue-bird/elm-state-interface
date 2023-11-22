@@ -108,6 +108,7 @@ type alias Config state =
 -}
 type Interface state
     = RequestTimeNow { on : Time.Posix -> state }
+    | ConsoleLog String
     | RenderDomNode (DomNode state)
 
 
@@ -135,6 +136,7 @@ type alias DomElement state =
 -}
 type InterfaceId
     = IdRequestTimeNow
+    | ConsoleLogId String
     | IdRenderDomNode
 
 
@@ -268,6 +270,9 @@ on stateChange =
                 { on = \event -> requestTimeNow.on event |> stateChange }
                     |> RequestTimeNow
 
+            ConsoleLog string ->
+                ConsoleLog string
+
             RenderDomNode domElementToRender ->
                 domElementToRender |> domNodeOn stateChange |> RenderDomNode
 
@@ -294,7 +299,7 @@ domElementOn stateChange =
 
 -}
 type Event appState
-    = InterfaceIdFailedToDecode Json.Decode.Error
+    = InterfaceDiffFailedToDecode Json.Decode.Error
     | InterfaceEventDataFailedToDecode Json.Decode.Error
     | InterfaceEventIgnored InterfaceDiff
     | AppEventToNewAppState appState
@@ -363,6 +368,9 @@ interfaceToId =
             RequestTimeNow _ ->
                 IdRequestTimeNow
 
+            ConsoleLog string ->
+                ConsoleLogId string
+
             RenderDomNode _ ->
                 IdRenderDomNode
 
@@ -427,6 +435,9 @@ interfaceDiffToCmds =
                         RequestTimeNow _ ->
                             Nothing
 
+                        ConsoleLog _ ->
+                            Nothing
+
                         RenderDomNode _ ->
                             RemoveDom |> Just
                 )
@@ -441,6 +452,9 @@ interfaceDiffToCmds =
                             case interface of
                                 RequestTimeNow _ ->
                                     AddRequestTimeNow |> Just
+
+                                ConsoleLog string ->
+                                    AddConsoleLog string |> Just
 
                                 RenderDomNode _ ->
                                     Nothing
@@ -494,7 +508,10 @@ interfaceDiffToJson =
     \interfaceDiff ->
         case interfaceDiff of
             AddRequestTimeNow ->
-                Json.Encode.object [ ( "requestTimeNow", Json.Encode.null ) ]
+                Json.Encode.object [ ( "addRequestTimeNow", Json.Encode.null ) ]
+
+            AddConsoleLog string ->
+                Json.Encode.object [ ( "addConsoleLog", string |> Json.Encode.string ) ]
 
             ReplaceDomNode domElementToAdd ->
                 Json.Encode.object
@@ -562,8 +579,8 @@ subscriptions appConfig =
                             Nothing ->
                                 InterfaceEventIgnored interfaceDiff
 
-                    Err interfaceIdJsonDecodeError ->
-                        interfaceIdJsonDecodeError |> InterfaceIdFailedToDecode
+                    Err interfaceDiffJsonDecodeError ->
+                        interfaceDiffJsonDecodeError |> InterfaceDiffFailedToDecode
             )
 
 
@@ -608,6 +625,9 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 _ ->
                     Nothing
 
+        ConsoleLog _ ->
+            Nothing
+
         RenderDomNode domElementToRender ->
             case interfaceDiff of
                 ReplaceDomNode domNodeReplacement ->
@@ -650,19 +670,11 @@ domElementAtReversePath path =
             subIndex :: parentsOfSub ->
                 case domNode of
                     DomText _ ->
-                        let
-                            _ =
-                                Debug.log "unexpected text with path" (subIndex :: parentsOfSub)
-                        in
                         Nothing
 
                     DomElement domElement_ ->
                         case domElement_.subs |> Array.get subIndex of
                             Nothing ->
-                                let
-                                    _ =
-                                        Debug.log "bad subs index" (subIndex :: parentsOfSub)
-                                in
                                 Nothing
 
                             Just subNodeAtIndex ->
@@ -720,11 +732,11 @@ update appConfig =
                     in
                     ( state, Cmd.none )
 
-            InterfaceIdFailedToDecode jsonError ->
+            InterfaceDiffFailedToDecode jsonError ->
                 \state ->
                     let
                         _ =
-                            Debug.log "InterfaceIdFailedToDecode" (jsonError |> Json.Decode.errorToString)
+                            Debug.log "interface diff failed to decode" (jsonError |> Json.Decode.errorToString)
                     in
                     ( state, Cmd.none )
 
@@ -783,6 +795,7 @@ domElementIdToJson =
 -}
 type InterfaceDiff
     = AddRequestTimeNow
+    | AddConsoleLog String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
     | RemoveDom
 
