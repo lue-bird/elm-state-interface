@@ -9,7 +9,6 @@ We'll reduce this to just state and interface!
 mirror elm commands & tasks listed in
   - https://github.com/andrewMacmurray/elm-concurrent-task/blob/1.0.0/runner/index.ts
   - https://github.com/lamdera/program-test/blob/b64f089d7ef846b58bda73dd1780819e7b5e5d82/src/Effect/Internal.elm#L80
-  - + Debug.log as an interface
 
 ## the ideas
 - cmds, tasks, subs and view are combined into one big view/subscriptions-like function
