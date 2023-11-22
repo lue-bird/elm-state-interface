@@ -125,7 +125,7 @@ type Event
     \state ->
         case state of
             Ok iconAndContent ->
-                ..your ui.. iconAndContent
+                ..your ui using iconAndContent..
             
             Err ... ->
                 ..error ui..
@@ -144,18 +144,18 @@ type alias State =
     \state ->
         case ( state.icon, state.content ) of
             ( Ok icon, Ok content ) ->
-                ..your ui.. { icon = icon, content = content }
+                ..your ui using icon and content..
             
             _ ->
                 [ state.icon
                     |> Result.withDefault
                         (Http.request { url = "...", decoder = Image.jsonDecoder }
-                            |> Interface.on (\content -> { state | content = Ok content })
+                            |> Interface.on (\result -> { state | icon = result })
                         )
                 , state.content
                     |> Result.withDefault
                         (Http.request { url = "...", decoder = Json.Decode.string }
-                            |> Interface.on (\content -> { state | content = Ok content })
+                            |> Interface.on (\result -> { state | content = result })
                         )
                 , ..error ui..
                 ]
@@ -163,3 +163,39 @@ type alias State =
 }
 ```
 which feels more explicit, declarative and less wiring-heavy at least.
+
+## setup
+```bash
+npm install @lue-bird/elm-state-interface
+```
+in js
+```js
+import * as BrowserApp from "@lue-bird/elm-state-interface"
+
+const elmApp = Elm.Main.init({});
+BrowserApp.start(elmApp.ports, document.getElementById("app")) // with your main element
+```
+(if the state-interface is embedded in a larger elm app,
+the given argument should be the inner app's element.)
+
+in elm
+```elm
+port module Main exposing (main)
+
+import BrowserApp
+import Json.Encode
+
+main : Program () (BrowserApp.State ..State..) (BrowserApp.Event ..State..)
+main =
+    app |> BrowserApp.toProgram
+
+app : BrowserApp.Config ..State..
+app =
+    { initialState = ...
+    , interface = ...
+    , ports = { fromJs = fromJs, toJs = toJs }
+    }
+
+port toJs : Json.Encode.Value -> Cmd event_
+port fromJs : (Json.Encode.Value -> event) -> Sub event
+```

@@ -1,13 +1,15 @@
 {
     "type": "module",
-    "name": "elm-jam-6-submission",
+    "name": "elm-state-interface",
     "version": "1.0.0",
-    "description": "play against a custom chess computer",
-    "main": "public/main.js",
+    "description": "TEA but simpler, safer and more declarative",
+    "main": "index.js",
     "keywords": [
-        "elm",
-        "chess"
+        "elm"
     ],
+    "scripts": {
+        "start": "elm-watch hot"
+    },
     "dependencies": {
         "elm-codegen": "^0.3.0",
         "elm-optimize-level-2": "^0.3.4",

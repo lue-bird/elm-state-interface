@@ -3,6 +3,7 @@ module BrowserApp exposing
     , on
     , DomNodeId(..), DomElementId
     , DomNode(..), DomElement, domElement, domElementAddSubs, domOnEvent
+    , HttpBody(..), HttpExpect(..), HttpHeader, HttpRequest, HttpError(..), HttpMetadata
     , toProgram, Event(..), State
     , init, subscriptions, update
     , InterfaceKeys, InterfaceIdOrder, InterfaceId(..), InterfaceToIdTag, InterfaceIdToRenderDomElement, InterfaceIdToRequestTimeNow, InterfaceDiff(..)
@@ -18,6 +19,11 @@ module BrowserApp exposing
 
 @docs DomNodeId, DomElementId
 @docs DomNode, DomElement, domElement, domElementAddSubs, domOnEvent
+
+
+## HTTP
+
+@docs HttpBody, HttpExpect, HttpHeader, HttpRequest, HttpError, HttpMetadata
 
 
 ## Program
@@ -105,13 +111,80 @@ type alias Config state =
 
 
 {-| Incoming and outgoing effects
+
+  - `HttpRequest`: Send an [Http request](#HttpRequest) - similar to `elm/http`'s [`Http.Task`](https://package.elm-lang.org/packages/elm/http/latest/Http#task)
+
 -}
 type Interface state
-    = RequestTimeNow { on : Time.Posix -> state }
-    | RequestTimezone { on : Time.Zone -> state }
-    | RequestTimezoneName { on : Time.ZoneName -> state }
+    = RequestTimeNow (Time.Posix -> state)
+    | RequestTimezone (Time.Zone -> state)
+    | RequestTimezoneName (Time.ZoneName -> state)
     | ConsoleLog String
     | RenderDomNode (DomNode state)
+    | HttpRequest (HttpRequest state)
+
+
+type alias HttpRequest state =
+    RecordWithoutConstructorFunction
+        { url : String
+        , method : String
+        , headers : List HttpHeader
+        , body : HttpBody
+        , expect : HttpExpect state
+        , timeout : Maybe Int
+        }
+
+
+{-| An Http header for configuring a request. TODO switch to named
+-}
+type alias HttpHeader =
+    ( String, String )
+
+
+{-| Describe what you expect to be returned in an http response body.
+-}
+type HttpExpect state
+    = HttpExpectJson (Result HttpError Json.Decode.Value -> state)
+    | HttpExpectString (Result HttpError String -> state)
+    | HttpExpectWhatever (Result HttpError () -> state)
+
+
+{-| Data send in your http request.
+
+  - `HttpEmptyBody`: Create an empty body for your request.
+    This is useful for `GET` requests and `POST` requests where you are not sending any data.
+
+  - `HttpStringBody`: Put a `String` in the body of your request. Defining `BrowserApp.Http.jsonBody` looks like this:
+
+        import Json.Encode
+
+        jsonBody : Json.Encode.Value -> BrowserApp.HttpBody
+        jsonBody value =
+            BrowserApp.HttpStringBody "application/json" (Json.Encode.encode 0 value)
+
+    The first argument is a [MIME type](https://en.wikipedia.org/wiki/Media_type) of the body.
+
+-}
+type HttpBody
+    = HttpEmptyBody
+    | HttpStringBody { mimeType : String, content : String }
+
+
+type alias HttpRequestId =
+    RecordWithoutConstructorFunction
+        { url : String
+        , method : String
+        , headers : List HttpHeader
+        , body : HttpBody
+        , expect : HttpExpectId
+        , timeout : Maybe Int
+        }
+
+
+type HttpExpectId
+    = IdHttpExpectJson
+    | IdHttpExpectString
+    | IdHttpExpectWhatever
 
 
 {-| Plain text or a [`DomElement`](#DomElement)
@@ -140,8 +213,9 @@ type InterfaceId
     = IdRequestTimeNow
     | IdRequestTimezone
     | IdRequestTimezoneName
-    | ConsoleLogId String
+    | IdConsoleLog String
     | IdRenderDomNode
+    | IdHttpRequest HttpRequestId
 
 
 {-| Identifier for a [`DomElement`](#DomElement)
@@ -271,15 +345,15 @@ on stateChange =
     \interface ->
         case interface of
             RequestTimeNow requestTimeNow ->
-                { on = \event -> requestTimeNow.on event |> stateChange }
+                (\event -> requestTimeNow event |> stateChange)
                     |> RequestTimeNow
 
             RequestTimezone requestTimezone ->
-                { on = \event -> requestTimezone.on event |> stateChange }
+                (\event -> requestTimezone event |> stateChange)
                     |> RequestTimezone
 
             RequestTimezoneName requestTimezoneName ->
-                { on = \event -> requestTimezoneName.on event |> stateChange }
+                (\event -> requestTimezoneName event |> stateChange)
                     |> RequestTimezoneName
 
             ConsoleLog string ->
@@ -287,6 +361,25 @@ on stateChange =
 
             RenderDomNode domElementToRender ->
                 domElementToRender |> domNodeOn stateChange |> RenderDomNode
+
+            HttpRequest httpRequest ->
+                { url = httpRequest.url
+                , method = httpRequest.method
+                , headers = httpRequest.headers
+                , body = httpRequest.body
+                , timeout = httpRequest.timeout
+                , expect =
+                    case httpRequest.expect of
+                        HttpExpectWhatever expectWhatever ->
+                            (\unit -> expectWhatever unit |> stateChange) |> HttpExpectWhatever
+
+                        HttpExpectString expectString ->
+                            (\string -> expectString string |> stateChange) |> HttpExpectString
+
+                        HttpExpectJson expectJson ->
+                            (\json -> expectJson json |> stateChange) |> HttpExpectJson
+                }
+                    |> HttpRequest
 
 
 domElementOn : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
@@ -387,10 +480,13 @@ interfaceToId =
                 IdRequestTimezoneName
 
             ConsoleLog string ->
-                ConsoleLogId string
+                IdConsoleLog string
 
             RenderDomNode _ ->
                 IdRenderDomNode
+
+            HttpRequest httpRequest ->
+                httpRequest |> httpRequestToId |> IdHttpRequest
 
 
 interfaceIdOrder : Ordering InterfaceId InterfaceIdOrder
@@ -462,6 +558,10 @@ interfaceDiffToCmds =
                         ConsoleLog _ ->
                             Nothing
 
+                        HttpRequest _ ->
+                            -- cancel request? Help appreciated!
+                            Nothing
+
                         RenderDomNode _ ->
                             RemoveDom |> Just
                 )
@@ -488,6 +588,9 @@ interfaceDiffToCmds =
 
                                 RenderDomNode _ ->
                                     Nothing
+
+                                HttpRequest httpRequest ->
+                                    AddHttpRequest (httpRequest |> httpRequestToId) |> Just
                         )
                )
             ++ (case ( interfaces.old |> KeysSet.element interfaceKeys IdRenderDomNode, interfaces.updated |> KeysSet.element interfaceKeys IdRenderDomNode ) of
@@ -562,6 +665,10 @@ interfaceDiffToJson =
             RemoveDom ->
                 Json.Encode.object
                     [ ( "removeDom", Json.Encode.null ) ]
+
+            AddHttpRequest httpRequestId ->
+                Json.Encode.object
+                    [ ( "addHttpRequest", httpRequestId |> httpRequestIdToJson ) ]
 
 
 {-| The "init" part for an embedded program
@@ -654,7 +761,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
         RequestTimeNow requestTimeNow ->
             case interfaceDiff of
                 AddRequestTimeNow ->
-                    Json.Decode.succeed requestTimeNow.on
+                    Json.Decode.succeed requestTimeNow
                         |> Json.Decode.Extra.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
                         |> Just
 
@@ -664,7 +771,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
         RequestTimezone requestTimezone ->
             case interfaceDiff of
                 AddRequestTimezone ->
-                    Json.Decode.succeed requestTimezone.on
+                    Json.Decode.succeed requestTimezone
                         |> Json.Decode.Extra.andMap
                             (Json.Decode.map (\offset -> Time.customZone offset []) Json.Decode.int)
                         |> Just
@@ -675,7 +782,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
         RequestTimezoneName requestTimezoneName ->
             case interfaceDiff of
                 AddRequestTimezoneName ->
-                    Json.Decode.succeed requestTimezoneName.on
+                    Json.Decode.succeed requestTimezoneName
                         |> Json.Decode.Extra.andMap
                             (Json.Decode.oneOf
                                 [ Json.Decode.map Time.Offset Json.Decode.int
@@ -717,6 +824,18 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                             )
                     )
                         |> Just
+
+                _ ->
+                    Nothing
+
+        HttpRequest httpRequest ->
+            case interfaceDiff of
+                AddHttpRequest addedHttpRequestId ->
+                    if (httpRequest |> httpRequestToId) == addedHttpRequestId then
+                        httpExpectJsonDecoder httpRequest.expect |> Just
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
@@ -853,6 +972,227 @@ domElementIdToJson =
             ]
 
 
+httpRequestToId : HttpRequest state -> HttpRequestId
+httpRequestToId =
+    \httpRequest ->
+        { url = httpRequest.url
+        , method = httpRequest.method |> String.toUpper
+        , headers = httpRequest.headers
+        , body = httpRequest.body
+        , expect = httpRequest.expect |> httpExpectToId
+        , timeout = httpRequest.timeout
+        }
+
+
+httpExpectToId : HttpExpect state -> HttpExpectId
+httpExpectToId =
+    \httpExpect ->
+        case httpExpect of
+            HttpExpectWhatever _ ->
+                IdHttpExpectWhatever
+
+            HttpExpectString _ ->
+                IdHttpExpectString
+
+            HttpExpectJson _ ->
+                IdHttpExpectJson
+
+
+{-| A Request can fail in a couple ways:
+
+  - `BadUrl` means you did not provide a valid URL.
+  - `Timeout` means it took too long to get a response.
+  - `NetworkError` means the user turned off their wifi, went in a cave, etc.
+  - `BadStatus` means you got a response back, but the status code indicates failure. Contains:
+      - The response `Metadata`.
+      - The raw response body as a `Json.Decode.Value`.
+  - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected. Contains:
+      - The response `Metadata`.
+      - The raw response body as a `Json.Decode.Value`.
+      - The `Json.Decode.Error` that caused the error.
+
+-}
+type HttpError
+    = HttpBadUrl String
+    | HttpTimeout
+    | HttpNetworkError
+    | HttpBadStatus { metadata : HttpMetadata, body : Json.Decode.Value }
+
+
+{-| Extra information about the response:
+
+  - url of the server that actually responded (so you can detect redirects)
+  - statusCode like 200 or 404
+  - statusText describing what the statusCode means a little
+  - headers like Content-Length and Expires
+
+**Note:**
+
+It is possible for a response to have the same header multiple times.
+In that case, all the values end up in a single entry in the headers dictionary.
+The values are separated by commas, following the rules outlined [here](https://stackoverflow.com/questions/4371328/are-duplicate-http-response-headers-acceptable).
+
+-}
+type alias HttpMetadata =
+    RecordWithoutConstructorFunction
+        { url : String
+        , statusCode : Int
+        , statusText : String
+        , headers : Dict String String
+        }
+
+
+httpErrorJsonDecoder : HttpRequest state_ -> Json.Decode.Decoder HttpError
+httpErrorJsonDecoder r =
+    Json.Decode.field "reason" Json.Decode.string
+        |> Json.Decode.andThen
+            (\code ->
+                case code of
+                    "TIMEOUT" ->
+                        Json.Decode.succeed HttpTimeout
+
+                    "NETWORK_ERROR" ->
+                        Json.Decode.succeed HttpNetworkError
+
+                    "BAD_URL" ->
+                        Json.Decode.succeed (HttpBadUrl r.url)
+
+                    _ ->
+                        Json.Decode.fail ("Unknown error code: " ++ code)
+            )
+
+
+httpExpectJsonDecoder : HttpExpect state -> Json.Decode.Decoder state
+httpExpectJsonDecoder expect =
+    httpMetadataJsonDecoder
+        |> Json.Decode.andThen
+            (\meta ->
+                let
+                    isOk : Bool
+                    isOk =
+                        meta.statusCode >= 200 && meta.statusCode < 300
+                in
+                Json.Decode.field "body"
+                    (case expect of
+                        HttpExpectJson toState ->
+                            Json.Decode.map toState
+                                (if isOk then
+                                    Json.Decode.map Ok Json.Decode.value
+
+                                 else
+                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                )
+
+                        HttpExpectString toState ->
+                            Json.Decode.map toState
+                                (if isOk then
+                                    Json.Decode.map Ok Json.Decode.string
+
+                                 else
+                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                )
+
+                        HttpExpectWhatever toState ->
+                            Json.Decode.map toState
+                                (if isOk then
+                                    Json.Decode.map Ok (Json.Decode.succeed ())
+
+                                 else
+                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                )
+                    )
+            )
+
+
+httpMetadataJsonDecoder : Json.Decode.Decoder HttpMetadata
+httpMetadataJsonDecoder =
+    Json.Decode.succeed
+        (\url statusCode statusText headers ->
+            { url = url
+            , statusCode = statusCode
+            , statusText = statusText
+            , headers = headers
+            }
+        )
+        |> Json.Decode.Extra.andMap (Json.Decode.field "url" Json.Decode.string)
+        |> Json.Decode.Extra.andMap (Json.Decode.field "statusCode" Json.Decode.int)
+        |> Json.Decode.Extra.andMap (Json.Decode.field "statusText" Json.Decode.string)
+        |> Json.Decode.Extra.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
+
+
+httpRequestIdToJson : HttpRequestId -> Json.Encode.Value
+httpRequestIdToJson =
+    \httpRequestId ->
+        Json.Encode.object
+            [ ( "url", httpRequestId.url |> Json.Encode.string )
+            , ( "method", httpRequestId.method |> Json.Encode.string )
+            , ( "headers", encodeHeaders httpRequestId.body httpRequestId.headers )
+            , ( "expect", httpRequestId.expect |> httpExpectIdToJson )
+            , ( "body", httpRequestId.body |> httpBodyToJson )
+            , ( "timeout", httpRequestId.timeout |> httpTimeoutToJson )
+            ]
+
+
+httpTimeoutToJson : Maybe Int -> Json.Encode.Value
+httpTimeoutToJson =
+    \maybeTimeout ->
+        case maybeTimeout of
+            Nothing ->
+                Json.Encode.null
+
+            Just timeout ->
+                timeout |> Json.Encode.int
+
+
+httpExpectIdToJson : HttpExpectId -> Json.Encode.Value
+httpExpectIdToJson =
+    \httpExpectId ->
+        case httpExpectId of
+            IdHttpExpectString ->
+                Json.Encode.string "STRING"
+
+            IdHttpExpectJson ->
+                Json.Encode.string "JSON"
+
+            IdHttpExpectWhatever ->
+                Json.Encode.string "WHATEVER"
+
+
+encodeHeaders : HttpBody -> List HttpHeader -> Json.Encode.Value
+encodeHeaders body headers =
+    headers
+        |> addContentTypeForBody body
+        |> Json.Encode.list encodeHeader
+
+
+addContentTypeForBody : HttpBody -> List HttpHeader -> List HttpHeader
+addContentTypeForBody body headers =
+    case body of
+        HttpEmptyBody ->
+            headers
+
+        HttpStringBody stringBodyInfo ->
+            ( "Content-Type", stringBodyInfo.mimeType ) :: headers
+
+
+encodeHeader : HttpHeader -> Json.Encode.Value
+encodeHeader ( name, value ) =
+    Json.Encode.list identity
+        [ Json.Encode.string name
+        , Json.Encode.string value
+        ]
+
+
+httpBodyToJson : HttpBody -> Json.Encode.Value
+httpBodyToJson body =
+    case body of
+        HttpStringBody stringBodyInfo ->
+            stringBodyInfo.content |> Json.Encode.string
+
+        HttpEmptyBody ->
+            Json.Encode.null
+
+
 {-| Individual messages to js. Also used to identify responses with the same part in the interface
 -}
 type InterfaceDiff
@@ -861,6 +1201,7 @@ type InterfaceDiff
     | AddRequestTimezoneName
     | AddConsoleLog String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
+    | AddHttpRequest HttpRequestId
     | RemoveDom
 
 
