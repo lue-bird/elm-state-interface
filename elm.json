@@ -5,7 +5,11 @@
     "license": "MIT",
     "version": "1.0.0",
     "exposed-modules": [
-        "BrowserApp"
+        "BrowserApp",
+        "BrowserApp.Http",
+        "BrowserApp.Dom",
+        "BrowserApp.Time",
+        "BrowserApp.Console"
     ],
     "elm-version": "0.19.1 <= v < 20.0.0",
     "dependencies": {

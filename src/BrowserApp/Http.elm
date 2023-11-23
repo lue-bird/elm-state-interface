@@ -1,6 +1,17 @@
-module BrowserApp.Http exposing (expectJson, expectString, expectWhatever, get, jsonBody, post)
+module BrowserApp.Http exposing
+    ( expectJson, expectString, expectWhatever
+    , jsonBody
+    , get, post
+    )
 
-{-| Helpers for [HttpBody](), [HttpExpect](..), [HttpHeader](), [HttpRequest](BrowserApp#HttpRequest)
+{-| Helpers for [HTTP primitives](BrowserApp#Http) as part of an [`Interface`](BrowserApp#Interface)
+
+@docs expectJson, expectString, expectWhatever
+@docs jsonBody
+@docs get, post
+
+@docs request
+
 -}
 
 import BrowserApp exposing (HttpBody, HttpError, HttpExpect, HttpHeader, HttpRequest)
@@ -43,10 +54,10 @@ expectWhatever =
 
 
 
--- Send Request
+-- request
 
 
-{-| Send an Http `GET` request
+{-| Create a `GET` [`HttpRequest`](BrowserApp#HttpRequest)
 -}
 get :
     { url : String
@@ -54,19 +65,18 @@ get :
     , expect : HttpExpect state
     , timeout : Maybe Int
     }
-    -> BrowserApp.Interface state
+    -> HttpRequest state
 get options =
-    BrowserApp.HttpRequest
-        { url = options.url
-        , method = "GET"
-        , headers = options.headers
-        , body = BrowserApp.HttpEmptyBody
-        , expect = options.expect
-        , timeout = options.timeout
-        }
+    { url = options.url
+    , method = "GET"
+    , headers = options.headers
+    , body = BrowserApp.HttpEmptyBody
+    , expect = options.expect
+    , timeout = options.timeout
+    }
 
 
-{-| Send an Http `POST` request
+{-| Create a `POST` [`HttpRequest`](BrowserApp#HttpRequest)
 -}
 post :
     { url : String
@@ -75,13 +85,19 @@ post :
     , expect : HttpExpect state
     , timeout : Maybe Int
     }
-    -> BrowserApp.Interface state
+    -> HttpRequest state
 post options =
+    { url = options.url
+    , method = "POST"
+    , headers = options.headers
+    , body = options.body
+    , expect = options.expect
+    , timeout = options.timeout
+    }
+
+
+{-| An [`Interface`](BrowserApp#Interface) for handling an [`HttpRequest`](BrowserApp#HttpRequest)
+-}
+request : HttpRequest state -> BrowserApp.Interface state
+request =
     BrowserApp.HttpRequest
-        { url = options.url
-        , method = "POST"
-        , headers = options.headers
-        , body = options.body
-        , expect = options.expect
-        , timeout = options.timeout
-        }

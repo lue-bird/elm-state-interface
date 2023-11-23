@@ -1,29 +1,18 @@
 module BrowserApp exposing
-    ( Config, Interface(..)
-    , on
-    , DomNodeId(..), DomElementId
-    , DomNode(..), DomElement, domElement, domElementAddSubs, domOnEvent
-    , HttpBody(..), HttpExpect(..), HttpHeader, HttpRequest, HttpError(..), HttpMetadata
+    ( Config
     , toProgram, Event(..), State
     , init, subscriptions, update
-    , InterfaceKeys, InterfaceIdOrder, InterfaceId(..), InterfaceToIdTag, InterfaceIdToRenderDomElement, InterfaceIdToRequestTimeNow, InterfaceDiff(..)
+    , Interface(..), on
+    , DomNode(..), DomElement
+    , HttpBody(..), HttpExpect(..), HttpHeader, HttpRequest, HttpError(..), HttpMetadata
+    , InterfaceKeys, InterfaceIdOrder
+    , InterfaceId(..), InterfaceToIdTag, InterfaceIdToRenderDomElement, InterfaceIdToRequestTimeNow, DomElementId, DomNodeId(..)
+    , InterfaceDiff(..)
     )
 
 {-| A state-interface program running in the browser as the platform
 
-@docs Config, Interface
-@docs on
-
-
-## DOM
-
-@docs DomNodeId, DomElementId
-@docs DomNode, DomElement, domElement, domElementAddSubs, domOnEvent
-
-
-## HTTP
-
-@docs HttpBody, HttpExpect, HttpHeader, HttpRequest, HttpError, HttpMetadata
+@docs Config
 
 
 ## Program
@@ -38,9 +27,26 @@ Replace just one part of your elm app with this architecture. Make sure to wire 
 @docs init, subscriptions, update
 
 
+# interface types
+
+@docs Interface, on
+
+
+## DOM
+
+@docs DomNode, DomElement
+
+
+## HTTP
+
+@docs HttpBody, HttpExpect, HttpHeader, HttpRequest, HttpError, HttpMetadata
+
+
 ## internals, safe to ignore
 
-@docs InterfaceKeys, InterfaceIdOrder, InterfaceId, InterfaceToIdTag, InterfaceIdToRenderDomElement, InterfaceIdToRequestTimeNow, InterfaceDiff
+@docs InterfaceKeys, InterfaceIdOrder
+@docs InterfaceId, InterfaceToIdTag, InterfaceIdToRenderDomElement, InterfaceIdToRequestTimeNow, DomElementId, DomNodeId
+@docs InterfaceDiff
 
 -}
 
@@ -110,17 +116,18 @@ type alias Config state =
     }
 
 
-{-| Incoming and outgoing effects
+{-| Incoming and outgoing effects.
+To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
 
   - `HttpRequest`: Send an [Http request](#HttpRequest) - similar to `elm/http`'s [`Http.Task`](https://package.elm-lang.org/packages/elm/http/latest/Http#task)
 
 -}
 type Interface state
-    = RequestTimeNow (Time.Posix -> state)
-    | RequestTimezone (Time.Zone -> state)
-    | RequestTimezoneName (Time.ZoneName -> state)
+    = TimeCurrentRequest (Time.Posix -> state)
+    | TimezoneRequest (Time.Zone -> state)
+    | TimezoneNameRequest (Time.ZoneName -> state)
     | ConsoleLog String
-    | RenderDomNode (DomNode state)
+    | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
 
 
@@ -344,23 +351,23 @@ on : (state -> mappedState) -> (Interface state -> Interface mappedState)
 on stateChange =
     \interface ->
         case interface of
-            RequestTimeNow requestTimeNow ->
+            TimeCurrentRequest requestTimeNow ->
                 (\event -> requestTimeNow event |> stateChange)
-                    |> RequestTimeNow
+                    |> TimeCurrentRequest
 
-            RequestTimezone requestTimezone ->
+            TimezoneRequest requestTimezone ->
                 (\event -> requestTimezone event |> stateChange)
-                    |> RequestTimezone
+                    |> TimezoneRequest
 
-            RequestTimezoneName requestTimezoneName ->
+            TimezoneNameRequest requestTimezoneName ->
                 (\event -> requestTimezoneName event |> stateChange)
-                    |> RequestTimezoneName
+                    |> TimezoneNameRequest
 
             ConsoleLog string ->
                 ConsoleLog string
 
-            RenderDomNode domElementToRender ->
-                domElementToRender |> domNodeOn stateChange |> RenderDomNode
+            DomNodeRender domElementToRender ->
+                domElementToRender |> domNodeOn stateChange |> DomNodeRender
 
             HttpRequest httpRequest ->
                 { url = httpRequest.url
@@ -470,19 +477,19 @@ interfaceToId : Interface state_ -> InterfaceId
 interfaceToId =
     \interface ->
         case interface of
-            RequestTimeNow _ ->
+            TimeCurrentRequest _ ->
                 IdRequestTimeNow
 
-            RequestTimezone _ ->
+            TimezoneRequest _ ->
                 IdRequestTimezone
 
-            RequestTimezoneName _ ->
+            TimezoneNameRequest _ ->
                 IdRequestTimezoneName
 
             ConsoleLog string ->
                 IdConsoleLog string
 
-            RenderDomNode _ ->
+            DomNodeRender _ ->
                 IdRenderDomNode
 
             HttpRequest httpRequest ->
@@ -546,13 +553,13 @@ interfaceDiffToCmds =
             |> List.filterMap
                 (\interface ->
                     case interface of
-                        RequestTimeNow _ ->
+                        TimeCurrentRequest _ ->
                             Nothing
 
-                        RequestTimezone _ ->
+                        TimezoneRequest _ ->
                             Nothing
 
-                        RequestTimezoneName _ ->
+                        TimezoneNameRequest _ ->
                             Nothing
 
                         ConsoleLog _ ->
@@ -562,7 +569,7 @@ interfaceDiffToCmds =
                             -- cancel request? Help appreciated!
                             Nothing
 
-                        RenderDomNode _ ->
+                        DomNodeRender _ ->
                             RemoveDom |> Just
                 )
         )
@@ -574,19 +581,19 @@ interfaceDiffToCmds =
                     |> List.filterMap
                         (\interface ->
                             case interface of
-                                RequestTimeNow _ ->
+                                TimeCurrentRequest _ ->
                                     AddRequestTimeNow |> Just
 
-                                RequestTimezone _ ->
+                                TimezoneRequest _ ->
                                     AddRequestTimezone |> Just
 
-                                RequestTimezoneName _ ->
+                                TimezoneNameRequest _ ->
                                     AddRequestTimezoneName |> Just
 
                                 ConsoleLog string ->
                                     AddConsoleLog string |> Just
 
-                                RenderDomNode _ ->
+                                DomNodeRender _ ->
                                     Nothing
 
                                 HttpRequest httpRequest ->
@@ -594,7 +601,7 @@ interfaceDiffToCmds =
                         )
                )
             ++ (case ( interfaces.old |> KeysSet.element interfaceKeys IdRenderDomNode, interfaces.updated |> KeysSet.element interfaceKeys IdRenderDomNode ) of
-                    ( Emptiable.Filled (RenderDomNode domElementPreviouslyRendered), Emptiable.Filled (RenderDomNode domElementToRender) ) ->
+                    ( Emptiable.Filled (DomNodeRender domElementPreviouslyRendered), Emptiable.Filled (DomNodeRender domElementToRender) ) ->
                         ( domElementPreviouslyRendered, domElementToRender )
                             |> domNodeDiff []
                             |> List.map
@@ -605,14 +612,14 @@ interfaceDiffToCmds =
                                         }
                                 )
 
-                    ( Emptiable.Empty _, Emptiable.Filled (RenderDomNode replacementDomNode) ) ->
+                    ( Emptiable.Empty _, Emptiable.Filled (DomNodeRender replacementDomNode) ) ->
                         [ ReplaceDomNode
                             { path = []
                             , domNode = replacementDomNode |> domNodeToId
                             }
                         ]
 
-                    ( Emptiable.Filled (RenderDomNode _), _ ) ->
+                    ( Emptiable.Filled (DomNodeRender _), _ ) ->
                         -- already handles earlier
                         []
 
@@ -758,7 +765,7 @@ interfaceDiffJsonDecoder =
 eventDataAndConstructStateJsonDecoder : InterfaceDiff -> Interface state -> Maybe (Json.Decode.Decoder state)
 eventDataAndConstructStateJsonDecoder interfaceDiff interface =
     case interface of
-        RequestTimeNow requestTimeNow ->
+        TimeCurrentRequest requestTimeNow ->
             case interfaceDiff of
                 AddRequestTimeNow ->
                     Json.Decode.succeed requestTimeNow
@@ -768,7 +775,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 _ ->
                     Nothing
 
-        RequestTimezone requestTimezone ->
+        TimezoneRequest requestTimezone ->
             case interfaceDiff of
                 AddRequestTimezone ->
                     Json.Decode.succeed requestTimezone
@@ -779,7 +786,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 _ ->
                     Nothing
 
-        RequestTimezoneName requestTimezoneName ->
+        TimezoneNameRequest requestTimezoneName ->
             case interfaceDiff of
                 AddRequestTimezoneName ->
                     Json.Decode.succeed requestTimezoneName
@@ -797,7 +804,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
         ConsoleLog _ ->
             Nothing
 
-        RenderDomNode domElementToRender ->
+        DomNodeRender domElementToRender ->
             case interfaceDiff of
                 ReplaceDomNode domNodeReplacement ->
                     (Json.Decode.succeed (\innerPath name event -> { innerPath = innerPath, name = name, event = event })
@@ -1233,39 +1240,3 @@ type InterfaceIdToRenderDomElement
 -}
 type InterfaceIdToRequestTimeNow
     = InterfaceIdToRequestTimeNow
-
-
-{-| Create a DOM element with a given tag.
-For example for <p>text</p>
-
-    BrowserApp.domElement "p"
-        |> BrowserApp.domElementAddSubs [ BrowserApp.Text "text" ]
-
--}
-domElement : String -> DomElement state_
-domElement tag =
-    { tag = tag
-    , eventListeners = Dict.empty
-    , styles = Dict.empty
-    , attributes = Dict.empty
-    , subs = Array.empty
-    }
-
-
-{-| Append child-[`DomNode`](#DomNode)s
--}
-domElementAddSubs : List (DomNode state) -> (DomElement state -> DomElement state)
-domElementAddSubs subs =
-    \domElement_ ->
-        { domElement_ | subs = Array.append domElement_.subs (Array.fromList subs) }
-
-
-{-| Listen for a specific html event.
--}
-domOnEvent : String -> (Json.Decode.Value -> state) -> (DomElement state -> DomElement state)
-domOnEvent eventName eventToState =
-    \domElement_ ->
-        { domElement_
-            | eventListeners =
-                domElement_.eventListeners |> Dict.insert eventName eventToState
-        }
