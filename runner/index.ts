@@ -30,6 +30,7 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
         {
             on: event => event?.addRequestTimezoneOffset,
             run: (_config, sendToElm) => {
+                // // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
                 sendToElm(-new Date().getTimezoneOffset())
             }
         },
@@ -107,6 +108,7 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
     }
 }
 
+// Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L27-L35
 function getTimezoneName(): string | number {
     try {
         return Intl.DateTimeFormat().resolvedOptions().timeZone;
