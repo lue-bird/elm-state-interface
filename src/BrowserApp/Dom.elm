@@ -49,7 +49,7 @@ For example for <p>text</p>
 element : String -> DomElement state_
 element tag =
     { tag = tag
-    , eventListeners = Dict.empty
+    , eventListens = Dict.empty
     , styles = Dict.empty
     , attributes = Dict.empty
     , subs = Array.empty
@@ -70,8 +70,8 @@ elementOnEvent : String -> (Json.Decode.Value -> state) -> (DomElement state -> 
 elementOnEvent eventName eventToState =
     \domElement ->
         { domElement
-            | eventListeners =
-                domElement.eventListeners |> Dict.insert eventName eventToState
+            | eventListens =
+                domElement.eventListens |> Dict.insert eventName eventToState
         }
 
 

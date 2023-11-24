@@ -70,26 +70,34 @@ export function start(config: { ports: ElmPorts, domElement: HTMLElement }) {
             on: event => event?.removeHttpRequest,
             run: (config, _sendToElm) => {
                 const maybeAbortController = httpRequestAbortControllers[config]
-                if (maybeAbortController != undefined) {
+                if (maybeAbortController) {
                     maybeAbortController.abort()
                 }
             }
         },
         {
-            on: event => event?.addWindowEventListener,
-            run: windowEventListenerAdd
+            on: event => event?.addWindowEventListen,
+            run: windowEventListenAdd
         },
         {
-            on: event => event?.removeWindowEventListener,
-            run: windowEventListenerRemove
+            on: event => event?.removeWindowEventListen,
+            run: windowEventListenRemove
         },
         {
-            on: event => event?.addDocumentEventListener,
-            run: documentEventListenerAdd
+            on: event => event?.addWindowAnimationFrameListen,
+            run: (_config, sendToElm) => { addAnimationFrameListen(sendToElm) }
         },
         {
-            on: event => event?.removeDocumentEventListener,
-            run: documentEventListenerRemove
+            on: event => event?.removeAnimationFrameListen,
+            run: (_config, _sendToElm) => { removeAnimationFrameListen() }
+        },
+        {
+            on: event => event?.addDocumentEventListen,
+            run: documentEventListenAdd
+        },
+        {
+            on: event => event?.removeDocumentEventListen,
+            run: documentEventListenRemove
         },
         {
             on: event => event?.addNavigationGo,
@@ -176,11 +184,11 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => an
         for (let [styleKey, styleValue] of Object.entries(node.element.styles)) {
             createdDomElement.style.setProperty(styleKey, styleValue as string)
         }
-        node.element.eventListeners.forEach((eventListenerName: string) => {
+        node.element.eventListeners.forEach((eventListenName: string) => {
             createdDomElement.addEventListener(
-                eventListenerName,
+                eventListenName,
                 (triggeredEvent) => {
-                    sendToElm({ innerPath: innerPath, name: eventListenerName, event: triggeredEvent })
+                    sendToElm({ innerPath: innerPath, name: eventListenName, event: triggeredEvent })
                 }
             )
         })
@@ -211,17 +219,17 @@ function noScript(tag: string) {
     return RE_script.test(tag) ? 'p' : tag
 }
 
-function windowEventListenerAdd(eventName: string, sendToElm: (v: any) => any) {
+function windowEventListenAdd(eventName: string, sendToElm: (v: any) => any) {
     (window as { [key: string]: any })["on" + eventName] = sendToElm;
 }
-function windowEventListenerRemove(eventName: string) {
+function windowEventListenRemove(eventName: string) {
     (window as { [key: string]: any })["on" + eventName] = null
 }
 
-function documentEventListenerAdd(eventName: string, sendToElm: (v: any) => any) {
+function documentEventListenAdd(eventName: string, sendToElm: (v: any) => any) {
     (window as { [key: string]: any })["on" + eventName] = sendToElm;
 }
-function documentEventListenerRemove(eventName: string) {
+function documentEventListenRemove(eventName: string) {
     (window as { [key: string]: any })["on" + eventName] = null
 }
 
@@ -253,3 +261,19 @@ function load(url: string) {
     }
 }
 
+let runningAnimationFrameLoopId: number | undefined = undefined;
+function addAnimationFrameListen(sendToElm: (v: any) => any) {
+    runningAnimationFrameLoopId =
+        window.requestAnimationFrame(_timestamp => {
+            if (runningAnimationFrameLoopId) {
+                sendToElm(Date.now())
+                addAnimationFrameListen(sendToElm)
+            }
+        })
+}
+function removeAnimationFrameListen() {
+    if (runningAnimationFrameLoopId) {
+        window.cancelAnimationFrame(runningAnimationFrameLoopId)
+        runningAnimationFrameLoopId = undefined
+    }
+}

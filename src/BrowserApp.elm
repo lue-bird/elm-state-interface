@@ -239,7 +239,7 @@ type alias DomElement state =
         { tag : String
         , styles : Dict String String
         , attributes : Dict String String
-        , eventListeners : Dict String (Json.Decode.Value -> state)
+        , eventListens : Dict String (Json.Decode.Value -> state)
         , subs : Array (DomNode state)
         }
 
@@ -270,7 +270,7 @@ type alias DomElementId =
         { tag : String
         , styles : Dict String String
         , attributes : Dict String String
-        , eventListeners : Set String
+        , eventListens : Set String
         , subs : Array DomNodeId
         }
 
@@ -304,7 +304,7 @@ domElementIdOrder =
                     (dictOrderEarlier (String.Order.earlier Char.Order.unicode))
                 )
             |> Order.onTie
-                (Order.by (Map.tag () .eventListeners)
+                (Order.by (Map.tag () .eventListens)
                     (setOrderEarlier (String.Order.earlier Char.Order.unicode))
                 )
             |> Order.onTie
@@ -501,15 +501,15 @@ interfaceSingleOn stateChange =
                 }
                     |> HttpRequest
 
-            WindowEventListen listener ->
-                { eventName = listener.eventName, on = \value -> listener.on value |> stateChange }
+            WindowEventListen listen ->
+                { eventName = listen.eventName, on = \value -> listen.on value |> stateChange }
                     |> WindowEventListen
 
             WindowAnimationFrameListen toState ->
                 (\event -> toState event |> stateChange) |> WindowAnimationFrameListen
 
-            DocumentEventListen listener ->
-                { eventName = listener.eventName, on = \value -> listener.on value |> stateChange }
+            DocumentEventListen listen ->
+                { eventName = listen.eventName, on = \value -> listen.on value |> stateChange }
                     |> DocumentEventListen
 
             NavigationReplaceUrl url ->
@@ -534,9 +534,9 @@ domElementOn stateChange =
         { tag = domElementToMap.tag
         , styles = domElementToMap.styles
         , attributes = domElementToMap.attributes
-        , eventListeners =
-            domElementToMap.eventListeners
-                |> Dict.map (\_ listener -> \event -> listener event |> stateChange)
+        , eventListens =
+            domElementToMap.eventListens
+                |> Dict.map (\_ listen -> \event -> listen event |> stateChange)
         , subs =
             domElementToMap.subs |> Array.map (domNodeOn stateChange)
         }
@@ -590,7 +590,7 @@ domElementDiff path =
             (aElement.tag == bElement.tag)
                 && (aElement.styles == bElement.styles)
                 && (aElement.attributes == bElement.attributes)
-                && ((aElement.eventListeners |> Dict.keys) == (bElement.eventListeners |> Dict.keys))
+                && ((aElement.eventListens |> Dict.keys) == (bElement.eventListens |> Dict.keys))
                 && ((aElement.subs |> Array.length) == (bElement.subs |> Array.length))
         then
             List.map2 (\( subIndex, aSub ) bSub -> domNodeDiff (subIndex :: path) ( aSub, bSub ))
@@ -634,14 +634,14 @@ interfaceSingleToId =
             HttpRequest httpRequest ->
                 httpRequest |> httpRequestToId |> IdHttpRequest
 
-            WindowEventListen listener ->
-                IdWindowEventListen listener.eventName
+            WindowEventListen listen ->
+                IdWindowEventListen listen.eventName
 
             WindowAnimationFrameListen _ ->
                 IdWindowAnimationFrameListen
 
-            DocumentEventListen listener ->
-                IdDocumentEventListen listener.eventName
+            DocumentEventListen listen ->
+                IdDocumentEventListen listen.eventName
 
             NavigationReplaceUrl url ->
                 url |> IdNavigationReplaceUrl
@@ -1050,14 +1050,14 @@ interfaceDiffToCmds =
                         DomNodeRender _ ->
                             RemoveDom |> Just
 
-                        WindowEventListen listener ->
-                            RemoveWindowEventListener listener.eventName |> Just
+                        WindowEventListen listen ->
+                            RemoveWindowEventListen listen.eventName |> Just
 
                         WindowAnimationFrameListen toState ->
                             RemoveWindowAnimationFrameListen |> Just
 
-                        DocumentEventListen listener ->
-                            RemoveDocumentEventListener listener.eventName |> Just
+                        DocumentEventListen listen ->
+                            RemoveDocumentEventListen listen.eventName |> Just
 
                         NavigationReplaceUrl _ ->
                             Nothing
@@ -1101,14 +1101,14 @@ interfaceDiffToCmds =
                                 HttpRequest httpRequest ->
                                     AddHttpRequest (httpRequest |> httpRequestToId) |> Just
 
-                                WindowEventListen listener ->
-                                    AddWindowEventListener listener.eventName |> Just
+                                WindowEventListen listen ->
+                                    AddWindowEventListen listen.eventName |> Just
 
                                 WindowAnimationFrameListen toState ->
                                     AddWindowAnimationFrameListen |> Just
 
-                                DocumentEventListen listener ->
-                                    AddDocumentEventListener listener.eventName |> Just
+                                DocumentEventListen listen ->
+                                    AddDocumentEventListen listen.eventName |> Just
 
                                 NavigationReplaceUrl url ->
                                     AddNavigationReplaceUrl url |> Just
@@ -1203,11 +1203,11 @@ interfaceDiffToJson =
                 RemoveHttpRequest httpRequestId ->
                     ( "removeHttpRequest", httpRequestId |> httpRequestIdToJson )
 
-                AddWindowEventListener eventName ->
-                    ( "addWindowEventListener", eventName |> Json.Encode.string )
+                AddWindowEventListen eventName ->
+                    ( "addWindowEventListen", eventName |> Json.Encode.string )
 
-                RemoveWindowEventListener eventName ->
-                    ( "removeWindowEventListener", eventName |> Json.Encode.string )
+                RemoveWindowEventListen eventName ->
+                    ( "removeWindowEventListen", eventName |> Json.Encode.string )
 
                 AddWindowAnimationFrameListen ->
                     ( "addWindowAnimationFrameListen", Json.Encode.null )
@@ -1215,11 +1215,11 @@ interfaceDiffToJson =
                 RemoveWindowAnimationFrameListen ->
                     ( "removeWindowAnimationFrameListen", Json.Encode.null )
 
-                AddDocumentEventListener eventName ->
-                    ( "addDocumentEventListener", eventName |> Json.Encode.string )
+                AddDocumentEventListen eventName ->
+                    ( "addDocumentEventListen", eventName |> Json.Encode.string )
 
-                RemoveDocumentEventListener eventName ->
-                    ( "removeDocumentEventListener", eventName |> Json.Encode.string )
+                RemoveDocumentEventListen eventName ->
+                    ( "removeDocumentEventListen", eventName |> Json.Encode.string )
 
                 AddNavigationPushUrl url ->
                     ( "addNavigationPushUrl", url |> Json.Encode.string )
@@ -1395,9 +1395,9 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                                         Json.Decode.fail "origin element of event leads to text, not element"
 
                                     Just (DomElement foundDomElement) ->
-                                        case foundDomElement.eventListeners |> Dict.get specificEvent.name of
+                                        case foundDomElement.eventListens |> Dict.get specificEvent.name of
                                             Nothing ->
-                                                Json.Decode.fail "received event for element without listener"
+                                                Json.Decode.fail "received event for element without listen"
 
                                             Just listenToEvent ->
                                                 listenToEvent specificEvent.event |> Json.Decode.succeed
@@ -1420,11 +1420,11 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 _ ->
                     Nothing
 
-        WindowEventListen listener ->
+        WindowEventListen listen ->
             case interfaceDiff of
-                AddWindowEventListener addedEventName ->
-                    if addedEventName == listener.eventName then
-                        Json.Decode.value |> Json.Decode.map listener.on |> Just
+                AddWindowEventListen addedEventName ->
+                    if addedEventName == listen.eventName then
+                        Json.Decode.value |> Json.Decode.map listen.on |> Just
 
                     else
                         Nothing
@@ -1442,11 +1442,11 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 _ ->
                     Nothing
 
-        DocumentEventListen listener ->
+        DocumentEventListen listen ->
             case interfaceDiff of
-                AddDocumentEventListener addedEventName ->
-                    if addedEventName == listener.eventName then
-                        Json.Decode.value |> Json.Decode.map listener.on |> Just
+                AddDocumentEventListen addedEventName ->
+                    if addedEventName == listen.eventName then
+                        Json.Decode.value |> Json.Decode.map listen.on |> Just
 
                     else
                         Nothing
@@ -1509,11 +1509,11 @@ listFirstJust tryMapToFound list =
 domElementIdJsonDecoder : Json.Decode.Decoder DomElementId
 domElementIdJsonDecoder =
     Json.Decode.succeed
-        (\tag styles attributes eventListeners subs ->
+        (\tag styles attributes eventListens subs ->
             { tag = tag
             , styles = styles
             , attributes = attributes
-            , eventListeners = eventListeners
+            , eventListens = eventListens
             , subs = subs
             }
         )
@@ -1521,7 +1521,7 @@ domElementIdJsonDecoder =
         |> Json.Decode.Local.andMap (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
         |> Json.Decode.Local.andMap (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
         |> Json.Decode.Local.andMap
-            (Json.Decode.field "eventListeners"
+            (Json.Decode.field "eventListens"
                 (Json.Decode.map Set.fromList (Json.Decode.list Json.Decode.string))
             )
         |> Json.Decode.Local.andMap
@@ -1583,8 +1583,8 @@ domElementToId =
         { tag = domElement_.tag
         , styles = domElement_.styles
         , attributes = domElement_.attributes
-        , eventListeners =
-            domElement_.eventListeners |> Dict.foldl (\k _ -> Set.insert k) Set.empty
+        , eventListens =
+            domElement_.eventListens |> Dict.foldl (\k _ -> Set.insert k) Set.empty
         , subs =
             domElement_.subs |> Array.map domNodeToId
         }
@@ -1597,7 +1597,7 @@ domElementIdToJson =
             [ ( "tag", domElementId.tag |> Json.Encode.string )
             , ( "styles", domElementId.styles |> Json.Encode.dict identity Json.Encode.string )
             , ( "attributes", domElementId.attributes |> Json.Encode.dict identity Json.Encode.string )
-            , ( "eventListeners", domElementId.eventListeners |> Json.Encode.set Json.Encode.string )
+            , ( "eventListens", domElementId.eventListens |> Json.Encode.set Json.Encode.string )
             , ( "subs", domElementId.subs |> Json.Encode.array domNodeIdToJson )
             ]
 
@@ -1834,12 +1834,12 @@ type InterfaceDiff
     | AddHttpRequest HttpRequestId
     | RemoveHttpRequest HttpRequestId
     | RemoveDom
-    | AddWindowEventListener String
-    | RemoveWindowEventListener String
+    | AddWindowEventListen String
+    | RemoveWindowEventListen String
     | AddWindowAnimationFrameListen
     | RemoveWindowAnimationFrameListen
-    | AddDocumentEventListener String
-    | RemoveDocumentEventListener String
+    | AddDocumentEventListen String
+    | RemoveDocumentEventListen String
     | AddNavigationReplaceUrl String
     | AddNavigationPushUrl String
     | AddNavigationGo Int
