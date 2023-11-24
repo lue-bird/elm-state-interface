@@ -129,6 +129,8 @@ type Interface state
     | ConsoleLog String
     | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
+    | WindowEventListen { eventName : String, on : Json.Decode.Value -> state }
+    | DocumentEventListen { eventName : String, on : Json.Decode.Value -> state }
 
 
 type alias HttpRequest state =
@@ -223,6 +225,8 @@ type InterfaceId
     | IdConsoleLog String
     | IdRenderDomNode
     | IdHttpRequest HttpRequestId
+    | IdWindowEventListen String
+    | IdDocumentEventListen String
 
 
 {-| Identifier for a [`DomElement`](#DomElement)
@@ -388,6 +392,14 @@ on stateChange =
                 }
                     |> HttpRequest
 
+            WindowEventListen listener ->
+                { eventName = listener.eventName, on = \value -> listener.on value |> stateChange }
+                    |> WindowEventListen
+
+            DocumentEventListen listener ->
+                { eventName = listener.eventName, on = \value -> listener.on value |> stateChange }
+                    |> DocumentEventListen
+
 
 domElementOn : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
 domElementOn stateChange =
@@ -495,6 +507,12 @@ interfaceToId =
             HttpRequest httpRequest ->
                 httpRequest |> httpRequestToId |> IdHttpRequest
 
+            WindowEventListen listener ->
+                IdWindowEventListen listener.eventName
+
+            DocumentEventListen listener ->
+                IdDocumentEventListen listener.eventName
+
 
 interfaceIdOrder : Ordering InterfaceId InterfaceIdOrder
 interfaceIdOrder =
@@ -571,6 +589,12 @@ interfaceDiffToCmds =
 
                         DomNodeRender _ ->
                             RemoveDom |> Just
+
+                        WindowEventListen listener ->
+                            RemoveWindowEventListener listener.eventName |> Just
+
+                        DocumentEventListen listener ->
+                            RemoveDocumentEventListener listener.eventName |> Just
                 )
         )
             ++ (interfaces.updated
@@ -582,13 +606,13 @@ interfaceDiffToCmds =
                         (\interface ->
                             case interface of
                                 TimeCurrentRequest _ ->
-                                    AddRequestTimeNow |> Just
+                                    AddTimeCurrentRequest |> Just
 
                                 TimezoneRequest _ ->
-                                    AddRequestTimezone |> Just
+                                    AddTimezoneRequest |> Just
 
                                 TimezoneNameRequest _ ->
-                                    AddRequestTimezoneName |> Just
+                                    AddTimezoneNameRequest |> Just
 
                                 ConsoleLog string ->
                                     AddConsoleLog string |> Just
@@ -598,6 +622,12 @@ interfaceDiffToCmds =
 
                                 HttpRequest httpRequest ->
                                     AddHttpRequest (httpRequest |> httpRequestToId) |> Just
+
+                                WindowEventListen listener ->
+                                    AddWindowEventListener listener.eventName |> Just
+
+                                DocumentEventListen listener ->
+                                    AddDocumentEventListener listener.eventName |> Just
                         )
                )
             ++ (case ( interfaces.old |> KeysSet.element interfaceKeys IdRenderDomNode, interfaces.updated |> KeysSet.element interfaceKeys IdRenderDomNode ) of
@@ -646,36 +676,46 @@ domNodeIdToJson =
 interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
 interfaceDiffToJson =
     \interfaceDiff ->
-        case interfaceDiff of
-            AddRequestTimeNow ->
-                Json.Encode.object [ ( "addRequestTimeNow", Json.Encode.null ) ]
+        Json.Encode.object
+            [ case interfaceDiff of
+                AddTimeCurrentRequest ->
+                    ( "addRequestTimeNow", Json.Encode.null )
 
-            AddRequestTimezone ->
-                Json.Encode.object [ ( "addRequestTimezoneOffset", Json.Encode.null ) ]
+                AddTimezoneRequest ->
+                    ( "addRequestTimezoneOffset", Json.Encode.null )
 
-            AddRequestTimezoneName ->
-                Json.Encode.object [ ( "addRequestTimezoneName", Json.Encode.null ) ]
+                AddTimezoneNameRequest ->
+                    ( "addRequestTimezoneName", Json.Encode.null )
 
-            AddConsoleLog string ->
-                Json.Encode.object [ ( "addConsoleLog", string |> Json.Encode.string ) ]
+                AddConsoleLog string ->
+                    ( "addConsoleLog", string |> Json.Encode.string )
 
-            ReplaceDomNode domElementToAdd ->
-                Json.Encode.object
-                    [ ( "replaceDomNode"
-                      , Json.Encode.object
-                            [ ( "path", domElementToAdd.path |> Json.Encode.list Json.Encode.int )
-                            , ( "domNode", domElementToAdd.domNode |> domNodeIdToJson )
-                            ]
-                      )
-                    ]
+                ReplaceDomNode domElementToAdd ->
+                    ( "replaceDomNode"
+                    , Json.Encode.object
+                        [ ( "path", domElementToAdd.path |> Json.Encode.list Json.Encode.int )
+                        , ( "domNode", domElementToAdd.domNode |> domNodeIdToJson )
+                        ]
+                    )
 
-            RemoveDom ->
-                Json.Encode.object
-                    [ ( "removeDom", Json.Encode.null ) ]
+                RemoveDom ->
+                    ( "removeDom", Json.Encode.null )
 
-            AddHttpRequest httpRequestId ->
-                Json.Encode.object
-                    [ ( "addHttpRequest", httpRequestId |> httpRequestIdToJson ) ]
+                AddHttpRequest httpRequestId ->
+                    ( "addHttpRequest", httpRequestId |> httpRequestIdToJson )
+
+                AddWindowEventListener eventName ->
+                    ( "addWindowEventListener", eventName |> Json.Encode.string )
+
+                RemoveWindowEventListener eventName ->
+                    ( "removeWindowEventListener", eventName |> Json.Encode.string )
+
+                AddDocumentEventListener eventName ->
+                    ( "addDocumentEventListener", eventName |> Json.Encode.string )
+
+                RemoveDocumentEventListener eventName ->
+                    ( "removeDocumentEventListener", eventName |> Json.Encode.string )
+            ]
 
 
 {-| The "init" part for an embedded program
@@ -748,7 +788,7 @@ domNodeIdJsonDecoder =
 interfaceDiffJsonDecoder : Json.Decode.Decoder InterfaceDiff
 interfaceDiffJsonDecoder =
     Json.Decode.oneOf
-        [ Json.Decode.map (\() -> AddRequestTimeNow)
+        [ Json.Decode.map (\() -> AddTimeCurrentRequest)
             (Json.Decode.field "requestTimeNow" (Json.Decode.null ()))
         , Json.Decode.map ReplaceDomNode
             (Json.Decode.field "replaceDomNode"
@@ -767,7 +807,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
     case interface of
         TimeCurrentRequest requestTimeNow ->
             case interfaceDiff of
-                AddRequestTimeNow ->
+                AddTimeCurrentRequest ->
                     Json.Decode.succeed requestTimeNow
                         |> Json.Decode.Extra.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
                         |> Just
@@ -777,7 +817,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
 
         TimezoneRequest requestTimezone ->
             case interfaceDiff of
-                AddRequestTimezone ->
+                AddTimezoneRequest ->
                     Json.Decode.succeed requestTimezone
                         |> Json.Decode.Extra.andMap
                             (Json.Decode.map (\offset -> Time.customZone offset []) Json.Decode.int)
@@ -788,7 +828,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
 
         TimezoneNameRequest requestTimezoneName ->
             case interfaceDiff of
-                AddRequestTimezoneName ->
+                AddTimezoneNameRequest ->
                     Json.Decode.succeed requestTimezoneName
                         |> Json.Decode.Extra.andMap
                             (Json.Decode.oneOf
@@ -840,6 +880,30 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 AddHttpRequest addedHttpRequestId ->
                     if (httpRequest |> httpRequestToId) == addedHttpRequestId then
                         httpExpectJsonDecoder httpRequest.expect |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        WindowEventListen listener ->
+            case interfaceDiff of
+                AddWindowEventListener addedEventName ->
+                    if addedEventName == listener.eventName then
+                        Json.Decode.value |> Json.Decode.map listener.on |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        DocumentEventListen listener ->
+            case interfaceDiff of
+                AddDocumentEventListener addedEventName ->
+                    if addedEventName == listener.eventName then
+                        Json.Decode.value |> Json.Decode.map listener.on |> Just
 
                     else
                         Nothing
@@ -1203,13 +1267,17 @@ httpBodyToJson body =
 {-| Individual messages to js. Also used to identify responses with the same part in the interface
 -}
 type InterfaceDiff
-    = AddRequestTimeNow
-    | AddRequestTimezone
-    | AddRequestTimezoneName
+    = AddTimeCurrentRequest
+    | AddTimezoneRequest
+    | AddTimezoneNameRequest
     | AddConsoleLog String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
     | AddHttpRequest HttpRequestId
     | RemoveDom
+    | AddWindowEventListener String
+    | RemoveWindowEventListener String
+    | AddDocumentEventListener String
+    | RemoveDocumentEventListener String
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program). Short for

@@ -9,7 +9,9 @@
         "BrowserApp.Http",
         "BrowserApp.Dom",
         "BrowserApp.Time",
-        "BrowserApp.Console"
+        "BrowserApp.Console",
+        "BrowserApp.Window",
+        "BrowserApp.Document"
     ],
     "elm-version": "0.19.1 <= v < 20.0.0",
     "dependencies": {

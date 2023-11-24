@@ -6,8 +6,8 @@ import {
     Viewport,
     SetViewportOptions,
     SetViewportOfOptions,
-} from "./browser";
-import * as dom from "./browser/dom"; */
+} from "./browser/index.js";
+import * as dom from "./browser/dom.js"; */
 
 export * from "./http/index.js";
 export * from "./browser/index.js";
@@ -60,10 +60,26 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
             }
         },
         {
-            on: event => event?.http,
+            on: event => event?.addHttpRequest,
             run: (config, sendToElm) => {
                 fetchAdapter.http(config).then(response => { sendToElm(response) })
             }
+        },
+        {
+            on: event => event?.addWindowEventListener,
+            run: windowEventListenerAdd
+        },
+        {
+            on: event => event?.removeWindowEventListener,
+            run: windowEventListenerRemove
+        },
+        {
+            on: event => event?.addDocumentEventListener,
+            run: documentEventListenerAdd
+        },
+        {
+            on: event => event?.removeDocumentEventListener,
+            run: documentEventListenerRemove
         }
     ]
 
@@ -161,4 +177,18 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => an
 const RE_script = /^script$/i;
 function noScript(tag: string) {
     return RE_script.test(tag) ? 'p' : tag
+}
+
+function windowEventListenerAdd(eventName: string, sendToElm: (v: any) => any) {
+    (window as { [key: string]: any })["on" + eventName] = sendToElm;
+}
+function windowEventListenerRemove(eventName: string) {
+    (window as { [key: string]: any })["on" + eventName] = null
+}
+
+function documentEventListenerAdd(eventName: string, sendToElm: (v: any) => any) {
+    (window as { [key: string]: any })["on" + eventName] = sendToElm;
+}
+function documentEventListenerRemove(eventName: string) {
+    (window as { [key: string]: any })["on" + eventName] = null
 }
