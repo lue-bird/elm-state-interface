@@ -1,7 +1,7 @@
 The Elm Architecture with its model, view, msg, update, sub, cmd, task
 can be reduced down to state and interface, making it simpler, safer and more declarative.
 
-First: Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) for many js implementations stuff and the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make this package.
+First: Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) for many of the js implementations in this package and the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make this package.
 
 ## the ideas
 - cmds, tasks, subs and view are combined into one big view/subscriptions-like function
