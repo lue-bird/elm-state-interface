@@ -1,6 +1,6 @@
 module BrowserApp exposing
     ( Config
-    , toProgram, Event(..), State(..)
+    , toProgram, State(..), Event(..)
     , init, subscriptions, update
     , Interface(..), InterfaceSingle(..), none, batch, on
     , DomNode(..), DomElement
@@ -17,7 +17,7 @@ module BrowserApp exposing
 
 ## Program
 
-@docs toProgram, Event, State
+@docs toProgram, State, Event
 
 
 ## embed
@@ -76,7 +76,7 @@ import Time
 import Typed
 
 
-{-| To annotate a state-interface program state. E.g.
+{-| Ignore the specific fields, this is just exposed so can annotate a program state like in
 
     main : Program () (BrowserApp.State YourState) (BrowserApp.Event YourState)
     main =
@@ -127,6 +127,9 @@ type alias Config state =
 
 {-| Incoming and outgoing effects.
 To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
+
+To combine multiple, use [`BrowserApp.batch`](#batch) and [`BrowserApp.none`](#none)
+
 -}
 type Interface state
     = InterfaceBatch (List (Interface state))
@@ -144,6 +147,7 @@ type InterfaceSingle state
     | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
     | WindowEventListen { eventName : String, on : Json.Decode.Value -> state }
+    | WindowAnimationFrameListen (Time.Posix -> state)
     | DocumentEventListen { eventName : String, on : Json.Decode.Value -> state }
     | NavigationReplaceUrl String
     | NavigationPushUrl String
@@ -250,6 +254,7 @@ type InterfaceSingleId
     | IdRenderDomNode
     | IdHttpRequest HttpRequestId
     | IdWindowEventListen String
+    | IdWindowAnimationFrameListen
     | IdDocumentEventListen String
     | IdNavigationReplaceUrl String
     | IdNavigationPushUrl String
@@ -500,6 +505,9 @@ interfaceSingleOn stateChange =
                 { eventName = listener.eventName, on = \value -> listener.on value |> stateChange }
                     |> WindowEventListen
 
+            WindowAnimationFrameListen toState ->
+                (\event -> toState event |> stateChange) |> WindowAnimationFrameListen
+
             DocumentEventListen listener ->
                 { eventName = listener.eventName, on = \value -> listener.on value |> stateChange }
                     |> DocumentEventListen
@@ -534,7 +542,7 @@ domElementOn stateChange =
         }
 
 
-{-| To annotate a program event. E.g.
+{-| Ignore the specific variants, this is just exposed so can annotate a program event like in
 
     main : Program () (BrowserApp.State YourState) (BrowserApp.Event YourState)
     main =
@@ -629,6 +637,9 @@ interfaceSingleToId =
             WindowEventListen listener ->
                 IdWindowEventListen listener.eventName
 
+            WindowAnimationFrameListen _ ->
+                IdWindowAnimationFrameListen
+
             DocumentEventListen listener ->
                 IdDocumentEventListen listener.eventName
 
@@ -673,6 +684,9 @@ interfaceIdOrder =
                     dontForgetToAddAllVariants interfaceId
 
                 IdWindowEventListen _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdWindowAnimationFrameListen ->
                     dontForgetToAddAllVariants interfaceId
 
                 IdDocumentEventListen _ ->
@@ -789,6 +803,20 @@ interfaceIdOrder =
                         )
                     )
                     (String.Order.earlier Char.Order.unicode)
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdWindowAnimationFrameListen ->
+                                    () |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    Order.tie
                 )
             |> Order.onTie
                 (Order.on
@@ -1025,6 +1053,9 @@ interfaceDiffToCmds =
                         WindowEventListen listener ->
                             RemoveWindowEventListener listener.eventName |> Just
 
+                        WindowAnimationFrameListen toState ->
+                            RemoveWindowAnimationFrameListen |> Just
+
                         DocumentEventListen listener ->
                             RemoveDocumentEventListener listener.eventName |> Just
 
@@ -1072,6 +1103,9 @@ interfaceDiffToCmds =
 
                                 WindowEventListen listener ->
                                     AddWindowEventListener listener.eventName |> Just
+
+                                WindowAnimationFrameListen toState ->
+                                    AddWindowAnimationFrameListen |> Just
 
                                 DocumentEventListen listener ->
                                     AddDocumentEventListener listener.eventName |> Just
@@ -1174,6 +1208,12 @@ interfaceDiffToJson =
 
                 RemoveWindowEventListener eventName ->
                     ( "removeWindowEventListener", eventName |> Json.Encode.string )
+
+                AddWindowAnimationFrameListen ->
+                    ( "addWindowAnimationFrameListen", Json.Encode.null )
+
+                RemoveWindowAnimationFrameListen ->
+                    ( "removeWindowAnimationFrameListen", Json.Encode.null )
 
                 AddDocumentEventListener eventName ->
                     ( "addDocumentEventListener", eventName |> Json.Encode.string )
@@ -1388,6 +1428,16 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
 
                     else
                         Nothing
+
+                _ ->
+                    Nothing
+
+        WindowAnimationFrameListen toState ->
+            case interfaceDiff of
+                AddWindowAnimationFrameListen ->
+                    Json.Decode.map Time.millisToPosix Json.Decode.int
+                        |> Json.Decode.map toState
+                        |> Just
 
                 _ ->
                     Nothing
@@ -1786,6 +1836,8 @@ type InterfaceDiff
     | RemoveDom
     | AddWindowEventListener String
     | RemoveWindowEventListener String
+    | AddWindowAnimationFrameListen
+    | RemoveWindowAnimationFrameListen
     | AddDocumentEventListener String
     | RemoveDocumentEventListener String
     | AddNavigationReplaceUrl String
@@ -1795,7 +1847,8 @@ type InterfaceDiff
     | AddNavigationReload
 
 
-{-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program). Short for
+{-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
+with a given [`BrowserApp.Config`](#Config). Short for
 
     Platform.worker
         { init = \() -> BrowserApp.init yourAppConfig

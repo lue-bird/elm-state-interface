@@ -1,18 +1,19 @@
 module BrowserApp.Window exposing
-    ( listenToEvent
-    , listenToResize
+    ( animationFrameListen
+    , listenToEvent, listenToResize
     )
 
 {-| Helpers for `window` interaction as part of an [`Interface`](BrowserApp#Interface)
 
-@docs listenToEvent
-@docs listenToResize
+@docs animationFrameListen
+@docs listenToEvent, listenToResize
 
 -}
 
 import BrowserApp
 import Json.Decode
 import Json.Decode.Local
+import Time
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for a specific `window` event
@@ -23,7 +24,7 @@ listenToEvent eventName =
         |> BrowserApp.InterfaceSingle
 
 
-{-| An [`Interface`](BrowserApp#Interface) that listens changes to the inner window width and height.
+{-| An [`Interface`](BrowserApp#Interface) that listens for changes to the inner window width and height.
 -}
 listenToResize : BrowserApp.Interface (Result Json.Decode.Error { width : Int, height : Int })
 listenToResize =
@@ -39,3 +40,23 @@ listenToResize =
                             )
                         )
             )
+
+
+{-| An [`Interface`](BrowserApp#Interface) that continuously listens for an animation frame.
+This will be about 60 times per second, though 75, 120, and 144 are also widely used.
+To balance this out in your animation, the [current time](https://dark.elm.dmy.fr/packages/elm/time/latest/Time#Posix) is provided each frame.
+
+To get a delta, you could use [`BrowserApp.Time.posixRequest`](BrowserApp-Time#posixRequest)
+to get a start time and check with e.g. [`Duration.from`](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/Duration#from) how far you've progressed in the timeline.
+
+Note: To improve performance and battery life, most browsers pause these notifications when the app is running in a background tab or a hidden <iframe>.
+
+Replacement for [`Browser.Events.onAnimationFrame`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Events#onAnimationFrame)
+
+Note: uses [`window.requestAnimationFrame`](https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame).
+
+-}
+animationFrameListen : BrowserApp.Interface Time.Posix
+animationFrameListen =
+    BrowserApp.WindowAnimationFrameListen identity
+        |> BrowserApp.InterfaceSingle
