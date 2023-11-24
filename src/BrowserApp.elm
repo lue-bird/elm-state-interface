@@ -136,7 +136,7 @@ type Interface state
 To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
 -}
 type InterfaceSingle state
-    = TimeCurrentRequest (Time.Posix -> state)
+    = TimePosixRequest (Time.Posix -> state)
     | TimezoneRequest (Time.Zone -> state)
     | TimezoneNameRequest (Time.ZoneName -> state)
     | ConsoleLog String
@@ -242,7 +242,7 @@ type alias DomElement state =
 {-| Safe to ignore. Identifier for an [`Interface`](#Interface)
 -}
 type InterfaceSingleId
-    = IdTimeCurrentRequest
+    = IdTimePosixRequest
     | IdRequestTimezone
     | IdRequestTimezoneName
     | IdConsoleLog String
@@ -458,9 +458,9 @@ interfaceSingleOn : (state -> mappedState) -> (InterfaceSingle state -> Interfac
 interfaceSingleOn stateChange =
     \interface ->
         case interface of
-            TimeCurrentRequest requestTimeNow ->
+            TimePosixRequest requestTimeNow ->
                 (\event -> requestTimeNow event |> stateChange)
-                    |> TimeCurrentRequest
+                    |> TimePosixRequest
 
             TimezoneRequest requestTimezone ->
                 (\event -> requestTimezone event |> stateChange)
@@ -607,8 +607,8 @@ interfaceSingleToId : InterfaceSingle state_ -> InterfaceSingleId
 interfaceSingleToId =
     \interface ->
         case interface of
-            TimeCurrentRequest _ ->
-                IdTimeCurrentRequest
+            TimePosixRequest _ ->
+                IdTimePosixRequest
 
             TimezoneRequest _ ->
                 IdRequestTimezone
@@ -653,7 +653,7 @@ interfaceIdOrder =
         dontForgetToAddAllVariants : InterfaceSingleId -> Never
         dontForgetToAddAllVariants interfaceId =
             case interfaceId of
-                IdTimeCurrentRequest ->
+                IdTimePosixRequest ->
                     dontForgetToAddAllVariants interfaceId
 
                 IdRequestTimezone ->
@@ -697,7 +697,7 @@ interfaceIdOrder =
             (Map.tag ()
                 (\interfaceId ->
                     case interfaceId of
-                        IdTimeCurrentRequest ->
+                        IdTimePosixRequest ->
                             () |> Just
 
                         _ ->
@@ -1003,7 +1003,7 @@ interfaceDiffToCmds =
             |> List.filterMap
                 (\interface ->
                     case interface of
-                        TimeCurrentRequest _ ->
+                        TimePosixRequest _ ->
                             Nothing
 
                         TimezoneRequest _ ->
@@ -1051,8 +1051,8 @@ interfaceDiffToCmds =
                     |> List.filterMap
                         (\interface ->
                             case interface of
-                                TimeCurrentRequest _ ->
-                                    AddTimeCurrentRequest |> Just
+                                TimePosixRequest _ ->
+                                    AddTimePosixRequest |> Just
 
                                 TimezoneRequest _ ->
                                     AddTimezoneRequest |> Just
@@ -1139,7 +1139,7 @@ interfaceDiffToJson =
     \interfaceDiff ->
         Json.Encode.object
             [ case interfaceDiff of
-                AddTimeCurrentRequest ->
+                AddTimePosixRequest ->
                     ( "addRequestTimeNow", Json.Encode.null )
 
                 AddTimezoneRequest ->
@@ -1280,7 +1280,7 @@ domNodeIdJsonDecoder =
 interfaceDiffJsonDecoder : Json.Decode.Decoder InterfaceDiff
 interfaceDiffJsonDecoder =
     Json.Decode.oneOf
-        [ Json.Decode.map (\() -> AddTimeCurrentRequest)
+        [ Json.Decode.map (\() -> AddTimePosixRequest)
             (Json.Decode.field "requestTimeNow" (Json.Decode.null ()))
         , Json.Decode.map ReplaceDomNode
             (Json.Decode.field "replaceDomNode"
@@ -1297,9 +1297,9 @@ interfaceDiffJsonDecoder =
 eventDataAndConstructStateJsonDecoder : InterfaceDiff -> InterfaceSingle state -> Maybe (Json.Decode.Decoder state)
 eventDataAndConstructStateJsonDecoder interfaceDiff interface =
     case interface of
-        TimeCurrentRequest requestTimeNow ->
+        TimePosixRequest requestTimeNow ->
             case interfaceDiff of
-                AddTimeCurrentRequest ->
+                AddTimePosixRequest ->
                     Json.Decode.succeed requestTimeNow
                         |> Json.Decode.Local.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
                         |> Just
@@ -1775,7 +1775,7 @@ httpBodyToJson body =
 {-| Individual messages to js. Also used to identify responses with the same part in the interface
 -}
 type InterfaceDiff
-    = AddTimeCurrentRequest
+    = AddTimePosixRequest
     | AddTimezoneRequest
     | AddTimezoneNameRequest
     | AddConsoleLog String

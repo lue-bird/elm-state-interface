@@ -1,8 +1,8 @@
-module BrowserApp.Time exposing (currentRequest, zoneRequest, zoneNameRequest)
+module BrowserApp.Time exposing (posixRequest, zoneRequest, zoneNameRequest)
 
 {-| Helpers for [`elm/time`](https://dark.elm.dmy.fr/packages/elm/time/latest/Time) primitives as part of an [`Interface`](BrowserApp#Interface)
 
-@docs currentRequest, zoneRequest, zoneNameRequest
+@docs posixRequest, zoneRequest, zoneNameRequest
 
 -}
 
@@ -15,9 +15,9 @@ import Time
 Replacement for `elm/time`'s [`Time.now`](https://package.elm-lang.org/packages/elm/time/latest/Time#now).
 
 -}
-currentRequest : BrowserApp.Interface Time.Posix
-currentRequest =
-    BrowserApp.TimeCurrentRequest identity
+posixRequest : BrowserApp.Interface Time.Posix
+posixRequest =
+    BrowserApp.TimePosixRequest identity
         |> BrowserApp.InterfaceSingle
 
 
