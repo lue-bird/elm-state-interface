@@ -13,14 +13,21 @@ First: Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dm
 
 ## the extras
 - an event type only exists as an optional intermediate type (still highly recommended, though most of the time)
-- update is part of `interface` via `BrowserApp.on`
+- update is part of `interface` via [`BrowserApp.on`](BrowserApp#on)
 
 The classic counter example:
 
 ```elm
 import BrowserApp
-import Json.Encode
 import BrowserApp.Dom as Ui
+import Json.Encode
+
+type alias State =
+    Int
+
+type Event
+    = CounterDecreaseClicked
+    | CounterIncreaseClicked
 
 app : BrowserApp.Config State
 app =
@@ -58,21 +65,27 @@ app =
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
-type alias State =
-    Int
-
-
-type Event
-    = CounterDecreaseClicked
-    | CounterIncreaseClicked
-
-
 main : Program () (BrowserApp.State State) (BrowserApp.Event State)
 main =
     app |> BrowserApp.toProgram
 
 port toJs : Json.Encode.Value -> Cmd event_
 port fromJs : (Json.Encode.Value -> event) -> Sub event
+```
+
+## setup
+```bash
+npm install @lue-bird/elm-state-interface
+```
+in js
+```js
+import * as BrowserApp from "@lue-bird/elm-state-interface"
+
+const elmApp = Elm.Main.init({});
+BrowserApp.start({
+    elmPorts : elmApp.ports,
+    domElement : document.getElementById("your-app-element")
+})
 ```
 
 ## state-interface as an alternative to tasks
@@ -153,19 +166,7 @@ type alias State =
 ```
 which feels a bit more explicit, declarative and less wiring-heavy at least.
 
-# setup
-```bash
-npm install @lue-bird/elm-state-interface
-```
-in js
-```js
-import * as BrowserApp from "@lue-bird/elm-state-interface"
-
-const elmApp = Elm.Main.init({});
-BrowserApp.start({
-    elmPorts : elmApp.ports,
-    domElement : document.getElementById("your-app-element")
-})
-```
-
-I'm a noob in the js world, so feedback and contributions are welcome ❀
+Note: This example is supposed to show differences in architecture.
+This package is (currently) not a replacement
+for [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) which allows custom tasks.
+A goal is to publish those APIs in this elm package instead of users doing the work only for their own project. I'm a noob in the js world, so feedback and contributions are welcome ❀
