@@ -169,4 +169,4 @@ which feels a bit more explicit, declarative and less wiring-heavy at least.
 Note: This example is supposed to show differences in architecture.
 This package is (currently) not a replacement
 for [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) which allows custom tasks.
-A goal is to publish those APIs in this elm package instead of users doing the work only for their own project. I'm a noob in the js world, so feedback and contributions are welcome ❀
+A goal is to publish those APIs in this elm package instead of users doing the work only for their own projects. I'm a noob in the js world, so feedback and contributions are welcome ❀
