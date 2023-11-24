@@ -4,7 +4,7 @@ import Array
 import BrowserApp
 import Color
 import Json.Decode
-import Json.Decode.Extra
+import Json.Decode.Local
 import Json.Encode
 import BrowserApp.Dom
 
@@ -54,8 +54,8 @@ app =
                         mouseEvent
                             |> Json.Decode.decodeValue
                                 (Json.Decode.succeed (\x y -> { x = x, y = y })
-                                    |> Json.Decode.Extra.andMap (Json.Decode.field "clientX" Json.Decode.int)
-                                    |> Json.Decode.Extra.andMap (Json.Decode.field "clientY" Json.Decode.int)
+                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientX" Json.Decode.int)
+                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientY" Json.Decode.int)
                                 )
                             |> Result.withDefault { x = -1, y = -1 }
                             |> MouseMovedTo

@@ -3,13 +3,12 @@ module BrowserApp.Document exposing (listenToEvent)
 {-| Helpers for `document` interaction as part of an [`Interface`](BrowserApp#Interface)
 
 @docs listenToEvent
-@docs resizeEventJsonDecoder
 
 -}
 
 import BrowserApp
 import Json.Decode
-import Json.Decode.Extra
+import Json.Decode.Local
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for a specific `document` event

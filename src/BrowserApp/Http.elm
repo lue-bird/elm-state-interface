@@ -2,6 +2,7 @@ module BrowserApp.Http exposing
     ( expectJson, expectString, expectWhatever
     , jsonBody
     , get, post
+    , request
     )
 
 {-| Helpers for [HTTP primitives](BrowserApp#Http) as part of an [`Interface`](BrowserApp#Interface)
@@ -17,7 +18,7 @@ module BrowserApp.Http exposing
 import BrowserApp exposing (HttpBody, HttpError, HttpExpect, HttpHeader, HttpRequest)
 import Dict exposing (Dict)
 import Json.Decode
-import Json.Decode.Extra
+import Json.Decode.Local
 import Json.Encode
 
 
@@ -96,7 +97,10 @@ post options =
     }
 
 
-{-| An [`Interface`](BrowserApp#Interface) for handling an [`HttpRequest`](BrowserApp#HttpRequest)
+{-| An [`Interface`](BrowserApp#Interface) for handling an [`HttpRequest`](BrowserApp#HttpRequest).
+
+Uses the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
+
 -}
 request : HttpRequest state -> BrowserApp.Interface state
 request =

@@ -6,13 +6,13 @@ module BrowserApp.Window exposing
 {-| Helpers for `window` interaction as part of an [`Interface`](BrowserApp#Interface)
 
 @docs listenToEvent
-@docs resizeEventJsonDecoder
+@docs listenToResize
 
 -}
 
 import BrowserApp
 import Json.Decode
-import Json.Decode.Extra
+import Json.Decode.Local
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for a specific `window` event
@@ -33,8 +33,8 @@ listenToResize =
                     |> Json.Decode.decodeValue
                         (Json.Decode.field "target"
                             (Json.Decode.succeed (\width height -> { width = width, height = height })
-                                |> Json.Decode.Extra.andMap (Json.Decode.field "innerWidth" Json.Decode.int)
-                                |> Json.Decode.Extra.andMap (Json.Decode.field "innerHeight" Json.Decode.int)
+                                |> Json.Decode.Local.andMap (Json.Decode.field "innerWidth" Json.Decode.int)
+                                |> Json.Decode.Local.andMap (Json.Decode.field "innerHeight" Json.Decode.int)
                             )
                         )
             )

@@ -56,7 +56,7 @@ import Dict exposing (Dict)
 import Emptiable exposing (Emptiable)
 import Int.Order
 import Json.Decode
-import Json.Decode.Extra
+import Json.Decode.Local
 import Json.Encode
 import Keys exposing (Key, Keys)
 import KeysSet exposing (KeysSet)
@@ -137,6 +137,12 @@ type Interface state
     | NavigationReload
 
 
+{-| An HTTP request for use in an [`Interface`](#Interface).
+
+You can set custom headers as needed.
+The `timeout` can be set to a number of milliseconds you are willing to wait before giving up
+
+-}
 type alias HttpRequest state =
     RecordWithoutConstructorFunction
         { url : String
@@ -1178,8 +1184,8 @@ interfaceDiffJsonDecoder =
         , Json.Decode.map ReplaceDomNode
             (Json.Decode.field "replaceDomNode"
                 (Json.Decode.succeed (\path domNode -> { path = path, domNode = domNode })
-                    |> Json.Decode.Extra.andMap (Json.Decode.field "path" (Json.Decode.list Json.Decode.int))
-                    |> Json.Decode.Extra.andMap (Json.Decode.field "domNode" domNodeIdJsonDecoder)
+                    |> Json.Decode.Local.andMap (Json.Decode.field "path" (Json.Decode.list Json.Decode.int))
+                    |> Json.Decode.Local.andMap (Json.Decode.field "domNode" domNodeIdJsonDecoder)
                 )
             )
         , Json.Decode.map (\() -> RemoveDom)
@@ -1194,7 +1200,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             case interfaceDiff of
                 AddTimeCurrentRequest ->
                     Json.Decode.succeed requestTimeNow
-                        |> Json.Decode.Extra.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
+                        |> Json.Decode.Local.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
                         |> Just
 
                 _ ->
@@ -1204,7 +1210,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             case interfaceDiff of
                 AddTimezoneRequest ->
                     Json.Decode.succeed requestTimezone
-                        |> Json.Decode.Extra.andMap
+                        |> Json.Decode.Local.andMap
                             (Json.Decode.map (\offset -> Time.customZone offset []) Json.Decode.int)
                         |> Just
 
@@ -1215,7 +1221,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             case interfaceDiff of
                 AddTimezoneNameRequest ->
                     Json.Decode.succeed requestTimezoneName
-                        |> Json.Decode.Extra.andMap
+                        |> Json.Decode.Local.andMap
                             (Json.Decode.oneOf
                                 [ Json.Decode.map Time.Offset Json.Decode.int
                                 , Json.Decode.map Time.Name Json.Decode.string
@@ -1233,9 +1239,9 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             case interfaceDiff of
                 ReplaceDomNode domNodeReplacement ->
                     (Json.Decode.succeed (\innerPath name event -> { innerPath = innerPath, name = name, event = event })
-                        |> Json.Decode.Extra.andMap (Json.Decode.field "innerPath" (Json.Decode.list Json.Decode.int))
-                        |> Json.Decode.Extra.andMap (Json.Decode.field "name" Json.Decode.string)
-                        |> Json.Decode.Extra.andMap
+                        |> Json.Decode.Local.andMap (Json.Decode.field "innerPath" (Json.Decode.list Json.Decode.int))
+                        |> Json.Decode.Local.andMap (Json.Decode.field "name" Json.Decode.string)
+                        |> Json.Decode.Local.andMap
                             (Json.Decode.field "event" Json.Decode.value)
                         |> Json.Decode.andThen
                             (\specificEvent ->
@@ -1359,14 +1365,14 @@ domElementIdJsonDecoder =
             , subs = subs
             }
         )
-        |> Json.Decode.Extra.andMap (Json.Decode.field "tag" Json.Decode.string)
-        |> Json.Decode.Extra.andMap (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
-        |> Json.Decode.Extra.andMap (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
-        |> Json.Decode.Extra.andMap
+        |> Json.Decode.Local.andMap (Json.Decode.field "tag" Json.Decode.string)
+        |> Json.Decode.Local.andMap (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
+        |> Json.Decode.Local.andMap (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
+        |> Json.Decode.Local.andMap
             (Json.Decode.field "eventListeners"
                 (Json.Decode.map Set.fromList (Json.Decode.list Json.Decode.string))
             )
-        |> Json.Decode.Extra.andMap
+        |> Json.Decode.Local.andMap
             (Json.Decode.field "subs" (Json.Decode.array domNodeIdJsonDecoder))
 
 
@@ -1585,10 +1591,10 @@ httpMetadataJsonDecoder =
             , headers = headers
             }
         )
-        |> Json.Decode.Extra.andMap (Json.Decode.field "url" Json.Decode.string)
-        |> Json.Decode.Extra.andMap (Json.Decode.field "statusCode" Json.Decode.int)
-        |> Json.Decode.Extra.andMap (Json.Decode.field "statusText" Json.Decode.string)
-        |> Json.Decode.Extra.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
+        |> Json.Decode.Local.andMap (Json.Decode.field "url" Json.Decode.string)
+        |> Json.Decode.Local.andMap (Json.Decode.field "statusCode" Json.Decode.int)
+        |> Json.Decode.Local.andMap (Json.Decode.field "statusText" Json.Decode.string)
+        |> Json.Decode.Local.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
 
 
 httpRequestIdToJson : HttpRequestId -> Json.Encode.Value

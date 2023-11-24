@@ -2,7 +2,7 @@ module BrowserApp.Console exposing (log)
 
 {-| Helpers for console interactions as part of an [`Interface`](BrowserApp#Interface)
 
-@docs currentRequest, zoneRequest, zoneNameRequest
+@docs log
 
 -}
 
