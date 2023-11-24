@@ -1,12 +1,12 @@
 module BrowserApp.Window exposing
     ( animationFrameListen
-    , listenToEvent, listenToResize
+    , eventListen, resizeListen
     )
 
 {-| Helpers for `window` interaction as part of an [`Interface`](BrowserApp#Interface)
 
 @docs animationFrameListen
-@docs listenToEvent, listenToResize
+@docs eventListen, resizeListen
 
 -}
 
@@ -18,17 +18,17 @@ import Time
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for a specific `window` event
 -}
-listenToEvent : String -> BrowserApp.Interface Json.Decode.Value
-listenToEvent eventName =
+eventListen : String -> BrowserApp.Interface Json.Decode.Value
+eventListen eventName =
     BrowserApp.WindowEventListen { eventName = eventName, on = identity }
         |> BrowserApp.InterfaceSingle
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for changes to the inner window width and height.
 -}
-listenToResize : BrowserApp.Interface (Result Json.Decode.Error { width : Int, height : Int })
-listenToResize =
-    listenToEvent "resize"
+resizeListen : BrowserApp.Interface (Result Json.Decode.Error { width : Int, height : Int })
+resizeListen =
+    eventListen "resize"
         |> BrowserApp.on
             (\value ->
                 value

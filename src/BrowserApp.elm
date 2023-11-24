@@ -1399,8 +1399,8 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                                             Nothing ->
                                                 Json.Decode.fail "received event for element without listen"
 
-                                            Just listenToEvent ->
-                                                listenToEvent specificEvent.event |> Json.Decode.succeed
+                                            Just eventListen ->
+                                                eventListen specificEvent.event |> Json.Decode.succeed
                             )
                     )
                         |> Just
