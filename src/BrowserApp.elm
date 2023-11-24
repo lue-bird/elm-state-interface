@@ -54,6 +54,7 @@ import Array exposing (Array)
 import Char.Order
 import Dict exposing (Dict)
 import Emptiable exposing (Emptiable)
+import Int.Order
 import Json.Decode
 import Json.Decode.Extra
 import Json.Encode
@@ -92,10 +93,8 @@ type alias InterfaceKeys state =
 
 {-| Safely ignore. Tag for the ordering of an [`Interface`](#Interface)
 -}
-type alias InterfaceIdOrder =
-    Order.OnTieNext
-        (Order.On InterfaceIdToRenderDomElement Order.Tie)
-        (Order.On InterfaceIdToRequestTimeNow Order.Tie)
+type InterfaceIdOrder
+    = InterfaceIdOrder
 
 
 {-| Safely ignore. Tag for the identification mapping of an [`Interface`](#Interface) → [`InterfaceId`](#InterfaceId)
@@ -224,7 +223,7 @@ type alias DomElement state =
 {-| Identifier for an [`Interface`](#Interface)
 -}
 type InterfaceId
-    = IdRequestTimeNow
+    = IdTimeCurrentRequest
     | IdRequestTimezone
     | IdRequestTimezoneName
     | IdConsoleLog String
@@ -515,7 +514,7 @@ interfaceToId =
     \interface ->
         case interface of
             TimeCurrentRequest _ ->
-                IdRequestTimeNow
+                IdTimeCurrentRequest
 
             TimezoneRequest _ ->
                 IdRequestTimezone
@@ -556,34 +555,333 @@ interfaceToId =
 
 interfaceIdOrder : Ordering InterfaceId InterfaceIdOrder
 interfaceIdOrder =
-    Order.on idToRenderDomElementMapping Order.tie
-        |> Order.onTie (Order.on idToRequestTimeNowMapping Order.tie)
-
-
-idToRenderDomElementMapping : Mapping InterfaceId InterfaceIdToRenderDomElement (Maybe ())
-idToRenderDomElementMapping =
-    Map.tag InterfaceIdToRenderDomElement
-        (\interfaceId ->
+    let
+        dontForgetToAddAllVariants : InterfaceId -> Never
+        dontForgetToAddAllVariants interfaceId =
             case interfaceId of
+                IdTimeCurrentRequest ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdRequestTimezone ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdRequestTimezoneName ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdConsoleLog _ ->
+                    dontForgetToAddAllVariants interfaceId
+
                 IdRenderDomNode ->
-                    () |> Just
+                    dontForgetToAddAllVariants interfaceId
 
-                _ ->
-                    Nothing
+                IdHttpRequest _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdWindowEventListen _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdDocumentEventListen _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdNavigationReplaceUrl _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdNavigationPushUrl _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdNavigationGo _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdNavigationLoad _ ->
+                    dontForgetToAddAllVariants interfaceId
+
+                IdNavigationReload ->
+                    dontForgetToAddAllVariants interfaceId
+    in
+    Typed.tag InterfaceIdOrder
+        (Order.on
+            (Map.tag ()
+                (\interfaceId ->
+                    case interfaceId of
+                        IdTimeCurrentRequest ->
+                            () |> Just
+
+                        _ ->
+                            Nothing
+                )
+            )
+            Order.tie
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdRequestTimezone ->
+                                    () |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    Order.tie
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdRequestTimezoneName ->
+                                    () |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    Order.tie
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdConsoleLog string ->
+                                    string |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    (String.Order.earlier Char.Order.unicode)
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdRenderDomNode ->
+                                    () |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    Order.tie
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdHttpRequest request ->
+                                    request |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    httpRequestOrder
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdWindowEventListen string ->
+                                    string |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    (String.Order.earlier Char.Order.unicode)
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdDocumentEventListen string ->
+                                    string |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    (String.Order.earlier Char.Order.unicode)
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdNavigationReplaceUrl string ->
+                                    string |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    (String.Order.earlier Char.Order.unicode)
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdNavigationPushUrl string ->
+                                    string |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    (String.Order.earlier Char.Order.unicode)
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdNavigationGo urlSteps ->
+                                    urlSteps |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    Int.Order.up
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdNavigationLoad string ->
+                                    string |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    (String.Order.earlier Char.Order.unicode)
+                )
+            |> Order.onTie
+                (Order.on
+                    (Map.tag ()
+                        (\interfaceId ->
+                            case interfaceId of
+                                IdNavigationReload ->
+                                    () |> Just
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                    Order.tie
+                )
+            |> Typed.untag
         )
 
 
-idToRequestTimeNowMapping : Mapping InterfaceId InterfaceIdToRequestTimeNow (Maybe ())
-idToRequestTimeNowMapping =
-    Map.tag InterfaceIdToRequestTimeNow
-        (\interfaceId ->
-            case interfaceId of
-                IdRequestTimeNow ->
-                    () |> Just
-
-                _ ->
-                    Nothing
+httpRequestOrder : Ordering HttpRequestId ()
+httpRequestOrder =
+    Typed.tag ()
+        (Order.by (Map.tag () .url) (String.Order.earlier Char.Order.unicode)
+            |> Order.onTie (Order.by (Map.tag () .method) (String.Order.earlier Char.Order.unicode))
+            |> Order.onTie (Order.by (Map.tag () .headers) (List.Order.earlier httpHeaderOrder))
+            |> Order.onTie (Order.by (Map.tag () .body) httpBodyOrder)
+            |> Order.onTie (Order.by (Map.tag () .expect) httpExpectIdOrder)
+            |> Order.onTie (Order.by (Map.tag () .timeout) (Order.on (Map.tag () identity) Int.Order.up))
+            |> Typed.untag
         )
+
+
+httpHeaderOrder : Ordering HttpHeader ()
+httpHeaderOrder =
+    Order.by (Map.tag () Tuple.first) (String.Order.earlier Char.Order.unicode)
+        |> Order.onTie (Order.by (Map.tag () Tuple.second) (String.Order.earlier Char.Order.unicode))
+        |> Typed.untag
+        |> Typed.tag ()
+
+
+httpBodyOrder : Ordering HttpBody ()
+httpBodyOrder =
+    Order.on (Map.tag () httpBodyToEmpty) Order.tie
+        |> Order.onTie (Order.on (Map.tag () httpBodyToString) stringBodyOrder)
+        |> Typed.untag
+        |> Typed.tag ()
+
+
+httpBodyToEmpty : HttpBody -> Maybe ()
+httpBodyToEmpty =
+    \httpBody ->
+        case httpBody of
+            HttpEmptyBody ->
+                () |> Just
+
+            _ ->
+                Nothing
+
+
+httpBodyToString : HttpBody -> Maybe { mimeType : String, content : String }
+httpBodyToString =
+    \httpBody ->
+        case httpBody of
+            HttpStringBody stringBody ->
+                stringBody |> Just
+
+            _ ->
+                Nothing
+
+
+stringBodyOrder : Ordering { mimeType : String, content : String } ()
+stringBodyOrder =
+    Order.by (Map.tag () .mimeType) (String.Order.earlier Char.Order.unicode)
+        |> Order.onTie (Order.by (Map.tag () .content) (String.Order.earlier Char.Order.unicode))
+        |> Typed.untag
+        |> Typed.tag ()
+
+
+httpExpectIdOrder : Ordering HttpExpectId ()
+httpExpectIdOrder =
+    Order.on (Map.tag () httpExpectIdToExpectJson) Order.tie
+        |> Order.onTie (Order.on (Map.tag () httpExpectIdToExpectString) Order.tie)
+        |> Order.onTie (Order.on (Map.tag () httpExpectIdToExpectWhatever) Order.tie)
+        |> Typed.untag
+        |> Typed.tag ()
+
+
+httpExpectIdToExpectJson : HttpExpectId -> Maybe ()
+httpExpectIdToExpectJson =
+    \httpBody ->
+        case httpBody of
+            IdHttpExpectJson ->
+                () |> Just
+
+            _ ->
+                Nothing
+
+
+httpExpectIdToExpectString : HttpExpectId -> Maybe ()
+httpExpectIdToExpectString =
+    \httpBody ->
+        case httpBody of
+            IdHttpExpectString ->
+                () |> Just
+
+            _ ->
+                Nothing
+
+
+httpExpectIdToExpectWhatever : HttpExpectId -> Maybe ()
+httpExpectIdToExpectWhatever =
+    \httpBody ->
+        case httpBody of
+            IdHttpExpectWhatever ->
+                () |> Just
+
+            _ ->
+                Nothing
 
 
 domNodeToId : DomNode state_ -> DomNodeId
