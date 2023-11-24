@@ -14,4 +14,4 @@ as an [`Interface`](BrowserApp#Interface)
 -}
 log : String -> BrowserApp.Interface state_
 log string =
-    BrowserApp.ConsoleLog string
+    BrowserApp.ConsoleLog string |> BrowserApp.InterfaceSingle

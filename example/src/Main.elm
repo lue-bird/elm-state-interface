@@ -63,19 +63,18 @@ app =
                 |> BrowserApp.Dom.elementToNode
                 |> BrowserApp.Dom.render
             ]
-                |> List.map
-                    (BrowserApp.on
-                        (\event ->
-                            case event of
-                                MouseMovedTo newMousePoint ->
-                                    State { state | mousePoint = newMousePoint }
-                                
-                                CounterDecreaseClicked ->
-                                    State { state | counter = state.counter - 1 }
-                                
-                                CounterIncreaseClicked ->
-                                    State { state | counter = state.counter + 1 }
-                        )
+                |> BrowserApp.batch
+                |> BrowserApp.on
+                    (\event ->
+                        case event of
+                            MouseMovedTo newMousePoint ->
+                                State { state | mousePoint = newMousePoint }
+                            
+                            CounterDecreaseClicked ->
+                                State { state | counter = state.counter - 1 }
+                            
+                            CounterIncreaseClicked ->
+                                State { state | counter = state.counter + 1 }
                     )
     , ports = { fromJs = fromJs, toJs = toJs }
     }

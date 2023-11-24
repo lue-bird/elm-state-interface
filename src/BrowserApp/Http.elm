@@ -1,14 +1,14 @@
 module BrowserApp.Http exposing
     ( expectJson, expectString, expectWhatever
-    , jsonBody
+    , bodyJson
     , get, post
     , request
     )
 
-{-| Helpers for [HTTP primitives](BrowserApp#Http) as part of an [`Interface`](BrowserApp#Interface)
+{-| Helpers for [HTTP types](BrowserApp#Http) as part of an [`Interface`](BrowserApp#Interface)
 
 @docs expectJson, expectString, expectWhatever
-@docs jsonBody
+@docs bodyJson
 @docs get, post
 
 @docs request
@@ -24,9 +24,9 @@ import Json.Encode
 
 {-| Put some JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
 -}
-jsonBody : Json.Encode.Value -> HttpBody
-jsonBody value =
-    BrowserApp.HttpStringBody { mimeType = "application/json", content = Json.Encode.encode 0 value }
+bodyJson : Json.Encode.Value -> HttpBody
+bodyJson value =
+    BrowserApp.HttpBodyString { mimeType = "application/json", content = Json.Encode.encode 0 value }
 
 
 
@@ -71,7 +71,7 @@ get options =
     { url = options.url
     , method = "GET"
     , headers = options.headers
-    , body = BrowserApp.HttpEmptyBody
+    , body = BrowserApp.HttpBodyEmpty
     , expect = options.expect
     , timeout = options.timeout
     }
@@ -97,11 +97,12 @@ post options =
     }
 
 
-{-| An [`Interface`](BrowserApp#Interface) for handling an [`HttpRequest`](BrowserApp#HttpRequest).
-
-Uses the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
-
+{-| An [`Interface`](BrowserApp#Interface) for handling an [`HttpRequest`](BrowserApp#HttpRequest)
+using the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
 -}
 request : HttpRequest state -> BrowserApp.Interface state
 request =
-    BrowserApp.HttpRequest
+    \httpRequest ->
+        httpRequest
+            |> BrowserApp.HttpRequest
+            |> BrowserApp.InterfaceSingle

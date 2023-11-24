@@ -19,7 +19,7 @@ export interface ElmPorts {
     fromJs: { send: (toElm: any) => void };
 }
 
-export function start(ports: ElmPorts, appElement: HTMLElement) {
+export function start(config: { ports: ElmPorts, domElement: HTMLElement }) {
     const interfaceImplementations: { on: (event: any) => any, run: (config: any, sendToElm: (v: any) => void) => void }[] = [
         {
             on: event => event?.addRequestTimeNow,
@@ -55,7 +55,7 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
         {
             on: event => event?.removeDom,
             run: (_config, _sendToElm) => {
-                appElement.replaceChildren()
+                config.domElement.replaceChildren()
             }
         },
         {
@@ -114,11 +114,11 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
     ]
 
 
-    ports.toJs.subscribe(function (fromElm) {
+    config.ports.toJs.subscribe(function (fromElm) {
         // console.log("elm → js: ", fromElm)
         function sendToElm(eventData: void) {
             const toElm = { diff: fromElm, eventData: eventData }
-            ports.fromJs.send(toElm)
+            config.ports.fromJs.send(toElm)
             // console.log("js → elm: ", toElm)
         }
 
@@ -133,11 +133,11 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
     function renderDomNode(path: number[], node: any, sendToElm: (v: any) => void) {
         const createdDomNode = createDomNode([], node, sendToElm)
         if (path.length === 0) {
-            const parentDomNode = appElement
+            const parentDomNode = config.domElement
             parentDomNode.replaceChildren() // remove all subs
             parentDomNode.appendChild(createdDomNode)
         } else {
-            let parentDomNode: ChildNode | null = appElement.firstChild
+            let parentDomNode: ChildNode | null = config.domElement.firstChild
             if (parentDomNode) {
                 path.slice(1, path.length).reverse().forEach(subIndex => {
                     const subNode = parentDomNode?.childNodes[subIndex]

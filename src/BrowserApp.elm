@@ -1,16 +1,16 @@
 module BrowserApp exposing
     ( Config
-    , toProgram, Event(..), State
+    , toProgram, Event(..), State(..)
     , init, subscriptions, update
-    , Interface(..), on
+    , Interface(..), InterfaceSingle(..), none, batch, on
     , DomNode(..), DomElement
-    , HttpBody(..), HttpExpect(..), HttpHeader, HttpRequest, HttpError(..), HttpMetadata
-    , InterfaceKeys, InterfaceIdOrder
-    , InterfaceId(..), InterfaceToIdTag, InterfaceIdToRenderDomElement, InterfaceIdToRequestTimeNow, DomElementId, DomNodeId(..)
+    , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceDiff(..)
+    , InterfaceSingleKeys, InterfaceSingleIdOrderTag
+    , InterfaceSingleId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..)
     )
 
-{-| A state-interface program running in the browser as the platform
+{-| A state-interface program running in the browser
 
 @docs Config
 
@@ -22,31 +22,35 @@ module BrowserApp exposing
 
 ## embed
 
-Replace just one part of your elm app with this architecture. Make sure to wire in all 3:
+If you just want to replace a part of your elm app with this architecture. Make sure to wire in all 3:
 
 @docs init, subscriptions, update
 
 
 # interface types
 
-@docs Interface, on
+@docs Interface, InterfaceSingle, none, batch, on
 
 
 ## DOM
+
+Types used by [`BrowserApp.Dom`](BrowserApp-Dom)
 
 @docs DomNode, DomElement
 
 
 ## HTTP
 
-@docs HttpBody, HttpExpect, HttpHeader, HttpRequest, HttpError, HttpMetadata
+Types used by [`BrowserApp.Http`](BrowserApp-Http)
+
+@docs HttpRequest, HttpHeader, HttpBody, HttpExpect, HttpError, HttpMetadata
 
 
 ## internals, safe to ignore
 
-@docs InterfaceKeys, InterfaceIdOrder
-@docs InterfaceId, InterfaceToIdTag, InterfaceIdToRenderDomElement, InterfaceIdToRequestTimeNow, DomElementId, DomNodeId
 @docs InterfaceDiff
+@docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
+@docs InterfaceSingleId, InterfaceSingleToIdTag, DomElementId, DomNodeId
 
 -}
 
@@ -72,42 +76,47 @@ import Time
 import Typed
 
 
-{-| To annotate a program state. E.g.
+{-| To annotate a state-interface program state. E.g.
 
     main : Program () (BrowserApp.State YourState) (BrowserApp.Event YourState)
     main =
         BrowserApp.toProgram ...
 
 -}
-type alias State appState =
-    { interface : Emptiable (KeysSet (Interface appState) (InterfaceKeys appState) N1) Possibly
-    , appState : appState
-    }
+type State appState
+    = State
+        { interface : Emptiable (KeysSet (InterfaceSingle appState) (InterfaceSingleKeys appState) N1) Possibly
+        , appState : appState
+        }
 
 
-{-| Safely ignore. Identification and order of an [`Interface`](#Interface)
+{-| Safe to ignore. Identification and order of an [`Interface`](#Interface)
 -}
-type alias InterfaceKeys state =
-    Key (Interface state) (Order.By InterfaceToIdTag InterfaceIdOrder) InterfaceId N1
+type alias InterfaceSingleKeys state =
+    Key (InterfaceSingle state) (Order.By InterfaceSingleToIdTag InterfaceSingleIdOrderTag) InterfaceSingleId N1
 
 
-{-| Safely ignore. Tag for the ordering of an [`Interface`](#Interface)
+{-| Safe to ignore. Tag for the ordering of an [`InterfaceSingleId`](#InterfaceSingleId)
 -}
-type InterfaceIdOrder
-    = InterfaceIdOrder
+type InterfaceSingleIdOrderTag
+    = InterfaceSingleIdOrderTag
 
 
-{-| Safely ignore. Tag for the identification mapping of an [`Interface`](#Interface) → [`InterfaceId`](#InterfaceId)
+{-| Safe to ignore. Tag for the identification mapping of an [`InterfaceSingle`](#InterfaceSingle) → [`InterfaceSingleId`](#InterfaceSingleId)
 -}
-type InterfaceToIdTag
-    = InterfaceToIdTag
+type InterfaceSingleToIdTag
+    = InterfaceSingleToIdTag
 
 
-{-| What's needed to create a program
+{-| What's needed to create a state-interface program.
+
+  - `state` is what elm calls the model
+  - An [`Interface`](#Interface) can be created using the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
+
 -}
 type alias Config state =
     { initialState : state
-    , interface : state -> List (Interface state)
+    , interface : state -> Interface state
     , ports :
         { toJs : Json.Encode.Value -> Cmd Never
         , fromJs : (Json.Encode.Value -> Event state) -> Sub (Event state)
@@ -117,11 +126,16 @@ type alias Config state =
 
 {-| Incoming and outgoing effects.
 To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
-
-  - `HttpRequest`: Send an [Http request](#HttpRequest) - similar to `elm/http`'s [`Http.Task`](https://package.elm-lang.org/packages/elm/http/latest/Http#task)
-
 -}
 type Interface state
+    = InterfaceBatch (List (Interface state))
+    | InterfaceSingle (InterfaceSingle state)
+
+
+{-| An "non-batched" [`Interface`](#Interface).
+To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
+-}
+type InterfaceSingle state
     = TimeCurrentRequest (Time.Posix -> state)
     | TimezoneRequest (Time.Zone -> state)
     | TimezoneNameRequest (Time.ZoneName -> state)
@@ -154,7 +168,7 @@ type alias HttpRequest state =
         }
 
 
-{-| An Http header for configuring a request. TODO switch to named
+{-| An Http header for configuring a request.
 -}
 type alias HttpHeader =
     ( String, String )
@@ -170,23 +184,23 @@ type HttpExpect state
 
 {-| Data send in your http request.
 
-  - `HttpEmptyBody`: Create an empty body for your request.
+  - `HttpBodyEmpty`: Create an empty body for your request.
     This is useful for `GET` requests and `POST` requests where you are not sending any data.
 
-  - `HttpStringBody`: Put a `String` in the body of your request. Defining `BrowserApp.Http.jsonBody` looks like this:
+  - `HttpBodyString`: Put a `String` in the body of your request. Defining `BrowserApp.Http.jsonBody` looks like this:
 
         import Json.Encode
 
         jsonBody : Json.Encode.Value -> BrowserApp.HttpBody
         jsonBody value =
-            BrowserApp.HttpStringBody "application/json" (Json.Encode.encode 0 value)
+            BrowserApp.HttpBodyString "application/json" (Json.Encode.encode 0 value)
 
     The first argument is a [MIME type](https://en.wikipedia.org/wiki/Media_type) of the body.
 
 -}
 type HttpBody
-    = HttpEmptyBody
-    | HttpStringBody { mimeType : String, content : String }
+    = HttpBodyEmpty
+    | HttpBodyString { mimeType : String, content : String }
 
 
 type alias HttpRequestId =
@@ -206,15 +220,14 @@ type HttpExpectId
     | IdHttpExpectWhatever
 
 
-{-| Plain text or a [`DomElement`](#DomElement)
+{-| Plain text or a [`DomElement`](#DomElement) for use in an [`Interface`](#Interface).
 -}
 type DomNode state
     = DomText String
     | DomElement (DomElement state)
 
 
-{-| A primitive for svg/html.
-Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
+{-| A tagged DOM node that can itself contain child [node](#DomNode)s
 -}
 type alias DomElement state =
     RecordWithoutConstructorFunction
@@ -226,9 +239,9 @@ type alias DomElement state =
         }
 
 
-{-| Identifier for an [`Interface`](#Interface)
+{-| Safe to ignore. Identifier for an [`Interface`](#Interface)
 -}
-type InterfaceId
+type InterfaceSingleId
     = IdTimeCurrentRequest
     | IdRequestTimezone
     | IdRequestTimezoneName
@@ -244,7 +257,7 @@ type InterfaceId
     | IdNavigationReload
 
 
-{-| Identifier for a [`DomElement`](#DomElement)
+{-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
 -}
 type alias DomElementId =
     RecordWithoutConstructorFunction
@@ -256,7 +269,7 @@ type alias DomElementId =
         }
 
 
-{-| Identifier for an [`DomNode`](#DomNode)
+{-| Safe to ignore. Identifier for an [`DomNode`](#DomNode)
 -}
 type DomNodeId
     = DomTextId String
@@ -364,10 +377,85 @@ domNodeOn stateChange =
                 domElement_ |> domElementOn stateChange |> DomElement
 
 
-{-| Map the state constructed by the [`Interface`](#Interface)
+{-| Combine multiple [`Interface`](#Interface)s into one.
+-}
+batch : List (Interface state) -> Interface state
+batch =
+    InterfaceBatch
+
+
+{-| Doing nothing as an [`Interface`](#Interface). These two examples are equivalent:
+
+    BrowserApp.batch [ a, BrowserApp.none, b ]
+
+and
+
+    BrowserApp.batch
+        (List.filterMap identity
+            [ a |> Just, Nothing, b |> Just ]
+        )
+
+-}
+none : Interface state_
+none =
+    batch []
+
+
+{-| Map the state constructed by the [`Interface`](#Interface).
+
+In practice, this is sometimes used like a kind of event-config pattern:
+
+    BrowserApp.Time.currentRequest
+        |> BrowserApp.on (\timeNow -> TimeReceived timeNow)
+
+sometimes like elm's `update`
+
+    ...
+        |> BrowserApp.on
+            (\event ->
+                case event of
+                    MouseMovedTo newMousePoint ->
+                        State { state | mousePoint = newMousePoint }
+
+                    CounterDecreaseClicked ->
+                        State { state | counter = state.counter - 1 }
+
+                    CounterIncreaseClicked ->
+                        State { state | counter = state.counter + 1 }
+            )
+
+and sometimes like elm's `Cmd.map/Html.map/...`:
+
+    type State
+        = MenuState Menu.State
+        | PlayingState Playing.State
+
+    interface : State -> Interface State
+    interface state =
+        case state of
+            MenuState menuState ->
+                Interface.on MenuState (Menu.interface menuState)
+
+            GameState gameState ->
+                Interface.on GameState (Game.interface gameState)
+
+In all these examples, you end up converting the narrow state representation of part of the interface to a broader representation for
+the parent interface
+
 -}
 on : (state -> mappedState) -> (Interface state -> Interface mappedState)
 on stateChange =
+    \interface ->
+        case interface of
+            InterfaceBatch interfaces ->
+                interfaces |> List.map (on stateChange) |> InterfaceBatch
+
+            InterfaceSingle interfaceSingle ->
+                interfaceSingle |> interfaceSingleOn stateChange |> InterfaceSingle
+
+
+interfaceSingleOn : (state -> mappedState) -> (InterfaceSingle state -> InterfaceSingle mappedState)
+interfaceSingleOn stateChange =
     \interface ->
         case interface of
             TimeCurrentRequest requestTimeNow ->
@@ -505,18 +593,18 @@ domElementDiff path =
             [ { path = path, replacementDomNode = bElement |> DomElement } ]
 
 
-interfaceKeys : Keys (Interface state) (InterfaceKeys state) N1
+interfaceKeys : Keys (InterfaceSingle state) (InterfaceSingleKeys state) N1
 interfaceKeys =
     Keys.oneBy interfaceToIdMapping interfaceIdOrder
 
 
-interfaceToIdMapping : Mapping (Interface state_) InterfaceToIdTag InterfaceId
+interfaceToIdMapping : Mapping (InterfaceSingle state_) InterfaceSingleToIdTag InterfaceSingleId
 interfaceToIdMapping =
-    Map.tag InterfaceToIdTag interfaceToId
+    Map.tag InterfaceSingleToIdTag interfaceSingleToId
 
 
-interfaceToId : Interface state_ -> InterfaceId
-interfaceToId =
+interfaceSingleToId : InterfaceSingle state_ -> InterfaceSingleId
+interfaceSingleToId =
     \interface ->
         case interface of
             TimeCurrentRequest _ ->
@@ -559,10 +647,10 @@ interfaceToId =
                 IdNavigationReload
 
 
-interfaceIdOrder : Ordering InterfaceId InterfaceIdOrder
+interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
     let
-        dontForgetToAddAllVariants : InterfaceId -> Never
+        dontForgetToAddAllVariants : InterfaceSingleId -> Never
         dontForgetToAddAllVariants interfaceId =
             case interfaceId of
                 IdTimeCurrentRequest ->
@@ -604,7 +692,7 @@ interfaceIdOrder =
                 IdNavigationReload ->
                     dontForgetToAddAllVariants interfaceId
     in
-    Typed.tag InterfaceIdOrder
+    Typed.tag InterfaceSingleIdOrderTag
         (Order.on
             (Map.tag ()
                 (\interfaceId ->
@@ -822,7 +910,7 @@ httpBodyToEmpty : HttpBody -> Maybe ()
 httpBodyToEmpty =
     \httpBody ->
         case httpBody of
-            HttpEmptyBody ->
+            HttpBodyEmpty ->
                 () |> Just
 
             _ ->
@@ -833,7 +921,7 @@ httpBodyToString : HttpBody -> Maybe { mimeType : String, content : String }
 httpBodyToString =
     \httpBody ->
         case httpBody of
-            HttpStringBody stringBody ->
+            HttpBodyString stringBody ->
                 stringBody |> Just
 
             _ ->
@@ -901,8 +989,8 @@ domNodeToId domNode =
 
 
 interfaceDiffToCmds :
-    { old : Emptiable (KeysSet (Interface state) (InterfaceKeys state) N1) Possibly
-    , updated : Emptiable (KeysSet (Interface state) (InterfaceKeys state) N1) Possibly
+    { old : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
+    , updated : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
     }
     -> List InterfaceDiff
 interfaceDiffToCmds =
@@ -1109,20 +1197,33 @@ interfaceDiffToJson =
             ]
 
 
+interfaceUnBatch : Interface state -> List (InterfaceSingle state)
+interfaceUnBatch =
+    \interface ->
+        case interface of
+            InterfaceBatch interfaces ->
+                interfaces |> List.concatMap interfaceUnBatch
+
+            InterfaceSingle interfaceSingle ->
+                [ interfaceSingle ]
+
+
 {-| The "init" part for an embedded program
 -}
 init : Config state -> ( State state, Cmd (Event state) )
 init appConfig =
     let
-        initialInterface : Emptiable (KeysSet (Interface state) (InterfaceKeys state) N1) Possibly
+        initialInterface : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
         initialInterface =
             appConfig.initialState
                 |> appConfig.interface
+                |> interfaceUnBatch
                 |> KeysSet.fromList interfaceKeys
     in
-    ( { interface = initialInterface
-      , appState = appConfig.initialState
-      }
+    ( State
+        { interface = initialInterface
+        , appState = appConfig.initialState
+        }
     , { old = Emptiable.empty, updated = initialInterface }
         |> interfaceDiffToCmds
         |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
@@ -1135,7 +1236,7 @@ init appConfig =
 -}
 subscriptions : Config state -> (State state -> Sub (Event state))
 subscriptions appConfig =
-    \state ->
+    \(State state) ->
         -- re-associate event based on current interface
         appConfig.ports.fromJs
             (\interfaceJson ->
@@ -1193,7 +1294,7 @@ interfaceDiffJsonDecoder =
         ]
 
 
-eventDataAndConstructStateJsonDecoder : InterfaceDiff -> Interface state -> Maybe (Json.Decode.Decoder state)
+eventDataAndConstructStateJsonDecoder : InterfaceDiff -> InterfaceSingle state -> Maybe (Json.Decode.Decoder state)
 eventDataAndConstructStateJsonDecoder interfaceDiff interface =
     case interface of
         TimeCurrentRequest requestTimeNow ->
@@ -1407,15 +1508,16 @@ update appConfig =
                     ( state, Cmd.none )
 
             AppEventToNewAppState updatedAppState ->
-                \oldState ->
+                \(State oldState) ->
                     let
-                        updatedInterface : Emptiable (KeysSet (Interface state) (InterfaceKeys state) N1) Possibly
+                        updatedInterface : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
                         updatedInterface =
                             updatedAppState
                                 |> appConfig.interface
+                                |> interfaceUnBatch
                                 |> KeysSet.fromList interfaceKeys
                     in
-                    ( { interface = updatedInterface, appState = updatedAppState }
+                    ( State { interface = updatedInterface, appState = updatedAppState }
                     , { old = oldState.interface, updated = updatedInterface }
                         |> interfaceDiffToCmds
                         |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
@@ -1645,10 +1747,10 @@ encodeHeaders body headers =
 addContentTypeForBody : HttpBody -> List HttpHeader -> List HttpHeader
 addContentTypeForBody body headers =
     case body of
-        HttpEmptyBody ->
+        HttpBodyEmpty ->
             headers
 
-        HttpStringBody stringBodyInfo ->
+        HttpBodyString stringBodyInfo ->
             ( "Content-Type", stringBodyInfo.mimeType ) :: headers
 
 
@@ -1663,10 +1765,10 @@ encodeHeader ( name, value ) =
 httpBodyToJson : HttpBody -> Json.Encode.Value
 httpBodyToJson body =
     case body of
-        HttpStringBody stringBodyInfo ->
+        HttpBodyString stringBodyInfo ->
             stringBodyInfo.content |> Json.Encode.string
 
-        HttpEmptyBody ->
+        HttpBodyEmpty ->
             Json.Encode.null
 
 
@@ -1708,15 +1810,3 @@ toProgram appConfig =
         , update = update appConfig
         , subscriptions = subscriptions appConfig
         }
-
-
-{-| Safely ignore. Tag for the mapping [`Interface` → `RenderDomNode`](#Interface)
--}
-type InterfaceIdToRenderDomElement
-    = InterfaceIdToRenderDomElement
-
-
-{-| Safely ignore. Tag for the mapping [`Interface` → `RequestTimeNow`](#Interface)
--}
-type InterfaceIdToRequestTimeNow
-    = InterfaceIdToRequestTimeNow

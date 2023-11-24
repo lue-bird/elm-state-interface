@@ -20,6 +20,7 @@ import Json.Decode.Local
 listenToEvent : String -> BrowserApp.Interface Json.Decode.Value
 listenToEvent eventName =
     BrowserApp.WindowEventListen { eventName = eventName, on = identity }
+        |> BrowserApp.InterfaceSingle
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens changes to the inner window width and height.

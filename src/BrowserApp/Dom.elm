@@ -4,7 +4,10 @@ module BrowserApp.Dom exposing
     , render
     )
 
-{-| Helpers for [DOM](BrowserApp#DOM) nodes as part of an [`Interface`](BrowserApp#Interface)
+{-| Helpers for [DOM node types](BrowserApp#DOM) as part of an [`Interface`](BrowserApp#Interface).
+
+These are primitives used for svg and html.
+Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
 
 @docs text
 @docs element, elementAddSubs, elementOnEvent, elementToNode
@@ -22,7 +25,10 @@ import Json.Decode
 -}
 render : DomNode state -> BrowserApp.Interface state
 render =
-    BrowserApp.DomNodeRender
+    \domNode ->
+        domNode
+            |> BrowserApp.DomNodeRender
+            |> BrowserApp.InterfaceSingle
 
 
 {-| Plain text [`DomNode`](BrowserApp#DomNode)
