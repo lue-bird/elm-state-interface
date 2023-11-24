@@ -1,6 +1,6 @@
 module BrowserApp.Dom exposing
     ( text
-    , element, elementAddSubs, elementOnEvent, elementToNode
+    , element, elementAddAttributes, elementAddStyles, elementOnEvent, elementAddSubs, elementToNode
     , render
     )
 
@@ -10,7 +10,7 @@ These are primitives used for svg and html.
 Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
 
 @docs text
-@docs element, elementAddSubs, elementOnEvent, elementToNode
+@docs element, elementAddAttributes, elementAddStyles, elementOnEvent, elementAddSubs, elementToNode
 @docs render
 
 -}
@@ -21,7 +21,8 @@ import Dict
 import Json.Decode
 
 
-{-| An [`Interface`](BrowserApp#Interface) for displaying a given [`DomNode`](BrowserApp#DomNode)
+{-| An [`Interface`](BrowserApp#Interface) for displaying a given [`DomNode`](BrowserApp#DomNode).
+Don't forget to call [`elementToNode`](#elementToNode) if necessary
 -}
 render : DomNode state -> BrowserApp.Interface state
 render =
@@ -38,7 +39,7 @@ text =
     BrowserApp.DomText
 
 
-{-| Create a DOM element with a given tag.
+{-| Create a [`DomElement`](BrowserApp#DomElement) with a given tag.
 For example for <p>text</p>
 
     BrowserApp.Dom.element "p"
@@ -59,18 +60,50 @@ element tag =
 -}
 elementAddSubs : List (DomNode state) -> (DomElement state -> DomElement state)
 elementAddSubs subs =
-    \domElement_ ->
-        { domElement_ | subs = Array.append domElement_.subs (Array.fromList subs) }
+    \domElement ->
+        { domElement | subs = Array.append domElement.subs (Array.fromList subs) }
 
 
-{-| Listen for a specific html event
+{-| Listen for a specific DOM event on the [`DomElement`](BrowserApp#DomElement)
 -}
 elementOnEvent : String -> (Json.Decode.Value -> state) -> (DomElement state -> DomElement state)
 elementOnEvent eventName eventToState =
-    \domElement_ ->
-        { domElement_
+    \domElement ->
+        { domElement
             | eventListeners =
-                domElement_.eventListeners |> Dict.insert eventName eventToState
+                domElement.eventListeners |> Dict.insert eventName eventToState
+        }
+
+
+{-| Add attributes as `( key, value )` tuples to the [`DomElement`](BrowserApp#DomElement).
+
+For example to get `<a href="https://elm-lang.org">Elm</a>`
+
+    BrowserApp.Dom.element "a"
+        |> BrowserApp.Dom.elementAddAttributes
+            [ ( "href", "https://elm-lang.org" ) ]
+        |> BrowserApp.Dom.elementAddSubs
+            [ BrowserApp.Dom.text "Elm" ]
+        |> BrowserApp.Dom.elementToNode
+
+-}
+elementAddAttributes : List ( String, String ) -> (DomElement state -> DomElement state)
+elementAddAttributes attributes =
+    \domElement ->
+        { domElement
+            | attributes =
+                Dict.union (attributes |> Dict.fromList) domElement.attributes
+        }
+
+
+{-| Add styles as `( key, value )` tuples to the [`DomElement`](BrowserApp#DomElement)
+-}
+elementAddStyles : List ( String, String ) -> (DomElement state -> DomElement state)
+elementAddStyles styles =
+    \domElement ->
+        { domElement
+            | styles =
+                Dict.union (styles |> Dict.fromList) domElement.styles
         }
 
 
