@@ -111,17 +111,18 @@ type InterfaceSingleToIdTag
 {-| What's needed to create a state-interface program.
 
   - `state` is what elm calls the model
-  - An [`Interface`](#Interface) can be created using the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
+  - An [`Interface`](#Interface) can be created using the helpers in `BrowserApp.Time`, `BrowserApp.Dom`, `BrowserApp.Http` etc.
 
 -}
 type alias Config state =
-    { initialState : state
-    , interface : state -> Interface state
-    , ports :
-        { toJs : Json.Encode.Value -> Cmd Never
-        , fromJs : (Json.Encode.Value -> Event state) -> Sub (Event state)
+    RecordWithoutConstructorFunction
+        { initialState : state
+        , interface : state -> Interface state
+        , ports :
+            { toJs : Json.Encode.Value -> Cmd Never
+            , fromJs : (Json.Encode.Value -> Event state) -> Sub (Event state)
+            }
         }
-    }
 
 
 {-| Incoming and outgoing effects.
@@ -316,10 +317,18 @@ dictOrderEarlier keyOrder =
         (List.Order.earlier keyOrder)
 
 
+type DictKeys
+    = DictKeys
+
+
 setOrderEarlier : Ordering node nodeTag -> Ordering (Set node) (Order.By SetToList (List.Order.Earlier nodeTag))
 setOrderEarlier keyOrder =
     Order.by (Map.tag SetToList Set.toList)
         (List.Order.earlier keyOrder)
+
+
+type SetToList
+    = SetToList
 
 
 domNodeIdOrder : Ordering DomNodeId DomNodeIdOrder
@@ -356,14 +365,6 @@ domNodeIdToElement =
 
             DomTextId _ ->
                 Nothing
-
-
-type DictKeys
-    = DictKeys
-
-
-type SetToList
-    = SetToList
 
 
 domNodeOn : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
