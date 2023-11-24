@@ -1,5 +1,4 @@
 import * as fetchAdapter from "./http/fetch.js";
-import { HttpRequest } from "./http/index.js";
 /*
 import {
     DomError,
@@ -253,3 +252,4 @@ function load(url: string) {
         reload()
     }
 }
+
