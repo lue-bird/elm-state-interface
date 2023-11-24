@@ -1,18 +1,15 @@
 import { HttpResponse, HttpRequest, HttpError } from "./index.js";
 
-export function http(request: HttpRequest): Promise<HttpResponse> {
-    let controller: AbortController | undefined;
-
+export function http(request: HttpRequest, abortController: AbortController): Promise<HttpResponse> {
     if (request.timeout) {
-        controller = new AbortController();
-        setTimeout(() => controller?.abort(), request.timeout);
+        setTimeout(() => abortController?.abort(), request.timeout);
     }
 
     return fetch(request.url, {
         method: request.method,
         body: request.body || null,
         headers: new Headers(request.headers),
-        signal: controller?.signal,
+        signal: abortController?.signal,
     })
         .then((res: Response) => {
             const headers = Object.fromEntries(res.headers.entries());

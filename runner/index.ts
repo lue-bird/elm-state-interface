@@ -1,4 +1,5 @@
 import * as fetchAdapter from "./http/fetch.js";
+import { HttpRequest } from "./http/index.js";
 /*
 import {
     DomError,
@@ -61,7 +62,18 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
         {
             on: event => event?.addHttpRequest,
             run: (config, sendToElm) => {
-                fetchAdapter.http(config).then(response => { sendToElm(response) })
+                const abortController = new AbortController()
+                httpRequestAbortControllers[config] = abortController
+                fetchAdapter.http(config, abortController).then(response => { sendToElm(response) })
+            }
+        },
+        {
+            on: event => event?.removeHttpRequest,
+            run: (config, _sendToElm) => {
+                const maybeAbortController = httpRequestAbortControllers[config]
+                if (maybeAbortController != undefined) {
+                    maybeAbortController.abort()
+                }
             }
         },
         {
@@ -142,6 +154,8 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
         }
     }
 }
+
+const httpRequestAbortControllers: { [key: string]: AbortController } = {}
 
 // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L27-L35
 function getTimezoneName(): string | number {

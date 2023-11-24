@@ -623,9 +623,8 @@ interfaceDiffToCmds =
                         ConsoleLog _ ->
                             Nothing
 
-                        HttpRequest _ ->
-                            -- cancel request? Help appreciated!
-                            Nothing
+                        HttpRequest request ->
+                            RemoveHttpRequest (request |> httpRequestToId) |> Just
 
                         DomNodeRender _ ->
                             RemoveDom |> Just
@@ -773,6 +772,9 @@ interfaceDiffToJson =
 
                 AddHttpRequest httpRequestId ->
                     ( "addHttpRequest", httpRequestId |> httpRequestIdToJson )
+
+                RemoveHttpRequest httpRequestId ->
+                    ( "removeHttpRequest", httpRequestId |> httpRequestIdToJson )
 
                 AddWindowEventListener eventName ->
                     ( "addWindowEventListener", eventName |> Json.Encode.string )
@@ -1373,6 +1375,7 @@ type InterfaceDiff
     | AddConsoleLog String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
     | AddHttpRequest HttpRequestId
+    | RemoveHttpRequest HttpRequestId
     | RemoveDom
     | AddWindowEventListener String
     | RemoveWindowEventListener String
