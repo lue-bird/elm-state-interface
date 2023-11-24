@@ -3,7 +3,7 @@ module BrowserApp.Navigation exposing
     , load, reload
     )
 
-{-| Helpers for `document` interaction as part of an [`Interface`](BrowserApp#Interface)
+{-| Helpers for `history` interaction as part of an [`Interface`](BrowserApp#Interface)
 
 @docs forward, back, pushUrl, replaceUrl
 @docs load, reload
