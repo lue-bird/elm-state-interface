@@ -131,6 +131,11 @@ type Interface state
     | HttpRequest (HttpRequest state)
     | WindowEventListen { eventName : String, on : Json.Decode.Value -> state }
     | DocumentEventListen { eventName : String, on : Json.Decode.Value -> state }
+    | NavigationReplaceUrl String
+    | NavigationPushUrl String
+    | NavigationGo Int
+    | NavigationLoad String
+    | NavigationReload
 
 
 type alias HttpRequest state =
@@ -227,6 +232,11 @@ type InterfaceId
     | IdHttpRequest HttpRequestId
     | IdWindowEventListen String
     | IdDocumentEventListen String
+    | IdNavigationReplaceUrl String
+    | IdNavigationPushUrl String
+    | IdNavigationGo Int
+    | IdNavigationLoad String
+    | IdNavigationReload
 
 
 {-| Identifier for a [`DomElement`](#DomElement)
@@ -400,6 +410,21 @@ on stateChange =
                 { eventName = listener.eventName, on = \value -> listener.on value |> stateChange }
                     |> DocumentEventListen
 
+            NavigationReplaceUrl url ->
+                url |> NavigationReplaceUrl
+
+            NavigationPushUrl url ->
+                url |> NavigationPushUrl
+
+            NavigationGo urlSteps ->
+                urlSteps |> NavigationGo
+
+            NavigationLoad url ->
+                url |> NavigationLoad
+
+            NavigationReload ->
+                NavigationReload
+
 
 domElementOn : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
 domElementOn stateChange =
@@ -513,6 +538,21 @@ interfaceToId =
             DocumentEventListen listener ->
                 IdDocumentEventListen listener.eventName
 
+            NavigationReplaceUrl url ->
+                url |> IdNavigationReplaceUrl
+
+            NavigationPushUrl url ->
+                url |> IdNavigationPushUrl
+
+            NavigationGo urlSteps ->
+                urlSteps |> IdNavigationGo
+
+            NavigationLoad url ->
+                url |> IdNavigationLoad
+
+            NavigationReload ->
+                IdNavigationReload
+
 
 interfaceIdOrder : Ordering InterfaceId InterfaceIdOrder
 interfaceIdOrder =
@@ -595,6 +635,21 @@ interfaceDiffToCmds =
 
                         DocumentEventListen listener ->
                             RemoveDocumentEventListener listener.eventName |> Just
+
+                        NavigationReplaceUrl _ ->
+                            Nothing
+
+                        NavigationPushUrl _ ->
+                            Nothing
+
+                        NavigationGo _ ->
+                            Nothing
+
+                        NavigationLoad _ ->
+                            Nothing
+
+                        NavigationReload ->
+                            Nothing
                 )
         )
             ++ (interfaces.updated
@@ -628,6 +683,21 @@ interfaceDiffToCmds =
 
                                 DocumentEventListen listener ->
                                     AddDocumentEventListener listener.eventName |> Just
+
+                                NavigationReplaceUrl url ->
+                                    AddNavigationReplaceUrl url |> Just
+
+                                NavigationPushUrl url ->
+                                    AddNavigationPushUrl url |> Just
+
+                                NavigationGo urlSteps ->
+                                    AddNavigationGo urlSteps |> Just
+
+                                NavigationLoad url ->
+                                    url |> AddNavigationLoad |> Just
+
+                                NavigationReload ->
+                                    AddNavigationReload |> Just
                         )
                )
             ++ (case ( interfaces.old |> KeysSet.element interfaceKeys IdRenderDomNode, interfaces.updated |> KeysSet.element interfaceKeys IdRenderDomNode ) of
@@ -715,6 +785,21 @@ interfaceDiffToJson =
 
                 RemoveDocumentEventListener eventName ->
                     ( "removeDocumentEventListener", eventName |> Json.Encode.string )
+
+                AddNavigationPushUrl url ->
+                    ( "addNavigationPushUrl", url |> Json.Encode.string )
+
+                AddNavigationReplaceUrl url ->
+                    ( "addNavigationReplaceUrl", url |> Json.Encode.string )
+
+                AddNavigationGo urlSteps ->
+                    ( "addNavigationGo", urlSteps |> Json.Encode.int )
+
+                AddNavigationLoad url ->
+                    ( "addNavigationLoad", url |> Json.Encode.string )
+
+                AddNavigationReload ->
+                    ( "addNavigationReload", Json.Encode.null )
             ]
 
 
@@ -910,6 +995,21 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
 
                 _ ->
                     Nothing
+
+        NavigationPushUrl _ ->
+            Nothing
+
+        NavigationReplaceUrl _ ->
+            Nothing
+
+        NavigationGo _ ->
+            Nothing
+
+        NavigationLoad _ ->
+            Nothing
+
+        NavigationReload ->
+            Nothing
 
 
 domElementAtReversePath : List Int -> (DomNode state -> Maybe (DomNode state))
@@ -1278,6 +1378,11 @@ type InterfaceDiff
     | RemoveWindowEventListener String
     | AddDocumentEventListener String
     | RemoveDocumentEventListener String
+    | AddNavigationReplaceUrl String
+    | AddNavigationPushUrl String
+    | AddNavigationGo Int
+    | AddNavigationLoad String
+    | AddNavigationReload
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program). Short for

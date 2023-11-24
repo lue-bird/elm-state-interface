@@ -49,7 +49,6 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
         {
             on: event => event?.replaceDomNode,
             run: (config, sendToElm) => {
-                // console.log("replace dom node ", config.path)
                 renderDomNode(config.path, config.domNode, sendToElm)
             }
         },
@@ -80,6 +79,26 @@ export function start(ports: ElmPorts, appElement: HTMLElement) {
         {
             on: event => event?.removeDocumentEventListener,
             run: documentEventListenerRemove
+        },
+        {
+            on: event => event?.addNavigationGo,
+            run: (config, _sendToElm) => { go(config) }
+        },
+        {
+            on: event => event?.addReplaceUrl,
+            run: (config, _sendToElm) => { replaceUrl(config) }
+        },
+        {
+            on: event => event?.addPushUrl,
+            run: (config, _sendToElm) => { pushUrl(config) }
+        },
+        {
+            on: event => event?.addLoad,
+            run: (config, _sendToElm) => { load(config) }
+        },
+        {
+            on: event => event?.addReload,
+            run: (_config, _sendToElm) => { reload() }
         }
     ]
 
@@ -191,4 +210,32 @@ function documentEventListenerAdd(eventName: string, sendToElm: (v: any) => any)
 }
 function documentEventListenerRemove(eventName: string) {
     (window as { [key: string]: any })["on" + eventName] = null
+}
+
+function go(urlSteps: number) {
+    history.go(urlSteps);
+}
+
+function pushUrl(url: string) {
+    history.pushState({}, '', url);
+}
+
+function replaceUrl(url: string) {
+    history.replaceState({}, '', url);
+}
+
+
+function reload() {
+    document.location.reload()
+}
+
+function load(url: string) {
+    try {
+        window.location.href = url
+    }
+    catch (err) {
+        // Only Firefox can throw a NS_ERROR_MALFORMED_URI exception here.
+        // Other browsers reload the page, so let's be consistent about that.
+        reload()
+    }
 }
