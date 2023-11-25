@@ -699,248 +699,120 @@ interfaceSingleToId =
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
-    let
-        dontForgetToAddAllVariants : InterfaceSingleId -> Never
-        dontForgetToAddAllVariants interfaceId =
-            case interfaceId of
-                IdTimePosixRequest ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdRequestTimezone ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdRequestTimezoneName ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdConsoleLog _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdRenderDomNode ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdHttpRequest _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdWindowEventListen _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdWindowAnimationFrameListen ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdDocumentEventListen _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdNavigationReplaceUrl _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdNavigationPushUrl _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdNavigationGo _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdNavigationLoad _ ->
-                    dontForgetToAddAllVariants interfaceId
-
-                IdNavigationReload ->
-                    dontForgetToAddAllVariants interfaceId
-    in
     Typed.tag InterfaceSingleIdOrderTag
-        (Order.on
-            (Map.tag ()
-                (\interfaceId ->
-                    case interfaceId of
+        (\( a, b ) ->
+            case a of
+                IdTimePosixRequest ->
+                    case b of
                         IdTimePosixRequest ->
-                            () |> Just
+                            EQ
 
                         _ ->
-                            Nothing
-                )
-            )
-            Order.tie
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdRequestTimezone ->
-                                    () |> Just
+                            GT
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    Order.tie
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdRequestTimezoneName ->
-                                    () |> Just
+                IdRequestTimezone ->
+                    case b of
+                        IdRequestTimezone ->
+                            EQ
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    Order.tie
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdConsoleLog string ->
-                                    string |> Just
+                        _ ->
+                            GT
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    (String.Order.earlier Char.Order.unicode)
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdRenderDomNode ->
-                                    () |> Just
+                IdRequestTimezoneName ->
+                    case b of
+                        IdRequestTimezoneName ->
+                            EQ
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    Order.tie
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdHttpRequest request ->
-                                    request |> Just
+                        _ ->
+                            GT
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    httpRequestOrder
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdWindowEventListen string ->
-                                    string |> Just
+                IdConsoleLog aString ->
+                    case b of
+                        IdConsoleLog bString ->
+                            Order.with (String.Order.earlier Char.Order.unicode) aString bString
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    (String.Order.earlier Char.Order.unicode)
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdWindowAnimationFrameListen ->
-                                    () |> Just
+                        _ ->
+                            GT
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    Order.tie
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdDocumentEventListen string ->
-                                    string |> Just
+                IdRenderDomNode ->
+                    case b of
+                        IdRenderDomNode ->
+                            EQ
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    (String.Order.earlier Char.Order.unicode)
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdNavigationReplaceUrl string ->
-                                    string |> Just
+                        _ ->
+                            GT
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    (String.Order.earlier Char.Order.unicode)
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdNavigationPushUrl string ->
-                                    string |> Just
+                IdHttpRequest aRequest ->
+                    case b of
+                        IdHttpRequest bRequest ->
+                            Order.with httpRequestOrder aRequest bRequest
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    (String.Order.earlier Char.Order.unicode)
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdNavigationGo urlSteps ->
-                                    urlSteps |> Just
+                        _ ->
+                            GT
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    Int.Order.up
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdNavigationLoad string ->
-                                    string |> Just
+                IdWindowEventListen aEventName ->
+                    case b of
+                        IdWindowEventListen bEventName ->
+                            Order.with (String.Order.earlier Char.Order.unicode) aEventName bEventName
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    (String.Order.earlier Char.Order.unicode)
-                )
-            |> Order.onTie
-                (Order.on
-                    (Map.tag ()
-                        (\interfaceId ->
-                            case interfaceId of
-                                IdNavigationReload ->
-                                    () |> Just
+                        _ ->
+                            GT
 
-                                _ ->
-                                    Nothing
-                        )
-                    )
-                    Order.tie
-                )
-            |> Typed.untag
+                IdWindowAnimationFrameListen ->
+                    case b of
+                        IdWindowAnimationFrameListen ->
+                            EQ
+
+                        _ ->
+                            GT
+
+                IdDocumentEventListen aEventName ->
+                    case b of
+                        IdDocumentEventListen bEventName ->
+                            Order.with (String.Order.earlier Char.Order.unicode) aEventName bEventName
+
+                        _ ->
+                            GT
+
+                IdNavigationReplaceUrl aUrl ->
+                    case b of
+                        IdNavigationReplaceUrl bUrl ->
+                            Order.with (String.Order.earlier Char.Order.unicode) aUrl bUrl
+
+                        _ ->
+                            GT
+
+                IdNavigationPushUrl aUrl ->
+                    case b of
+                        IdNavigationPushUrl bUrl ->
+                            Order.with (String.Order.earlier Char.Order.unicode) aUrl bUrl
+
+                        _ ->
+                            GT
+
+                IdNavigationGo aUrlSteps ->
+                    case b of
+                        IdNavigationGo bUrlSteps ->
+                            Order.with Int.Order.up aUrlSteps bUrlSteps
+
+                        _ ->
+                            GT
+
+                IdNavigationLoad aUrl ->
+                    case b of
+                        IdNavigationLoad bUrl ->
+                            Order.with (String.Order.earlier Char.Order.unicode) aUrl bUrl
+
+                        _ ->
+                            GT
+
+                IdNavigationReload ->
+                    case b of
+                        IdNavigationReload ->
+                            EQ
+
+                        _ ->
+                            GT
         )
 
 
