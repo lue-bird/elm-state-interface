@@ -11,6 +11,7 @@ module BrowserApp.Navigation exposing
 -}
 
 import BrowserApp
+import Rope
 
 
 {-| An [`Interface`](BrowserApp#Interface) that changes the URL,
@@ -24,7 +25,7 @@ Replacement for [`Browser.Navigation.replaceUrl`](https://dark.elm.dmy.fr/packag
 replaceUrl : String -> BrowserApp.Interface state_
 replaceUrl url =
     BrowserApp.NavigationReplaceUrl url
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) that changes the URL and adds a new entry to the browser history,
@@ -36,7 +37,7 @@ Replacement for [`Browser.Navigation.pushUrl`](https://dark.elm.dmy.fr/packages/
 pushUrl : String -> BrowserApp.Interface state_
 pushUrl url =
     BrowserApp.NavigationPushUrl url
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) that goes forward a given number of pages.
@@ -50,7 +51,7 @@ Replacement for [`Browser.Navigation.forward`](https://dark.elm.dmy.fr/packages/
 forward : Int -> BrowserApp.Interface state_
 forward urlSteps =
     BrowserApp.NavigationGo urlSteps
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) that goes back a given number of pages.
@@ -63,7 +64,7 @@ Replacement for [`Browser.Navigation.back`](https://dark.elm.dmy.fr/packages/elm
 back : Int -> BrowserApp.Interface state_
 back urlSteps =
     BrowserApp.NavigationGo urlSteps
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) that leaves the current page and loads the given URL.
@@ -79,7 +80,7 @@ Replacement for [`Browser.Navigation.load`](https://dark.elm.dmy.fr/packages/elm
 load : String -> BrowserApp.Interface state_
 load url =
     BrowserApp.NavigationLoad url
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) that reloads the current page.
@@ -93,4 +94,4 @@ Replacement for [`Browser.Navigation.reload`](https://dark.elm.dmy.fr/packages/e
 reload : BrowserApp.Interface state_
 reload =
     BrowserApp.NavigationReload
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton

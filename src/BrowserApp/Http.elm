@@ -18,6 +18,7 @@ module BrowserApp.Http exposing
 import BrowserApp exposing (HttpBody, HttpError, HttpExpect, HttpHeader, HttpRequest)
 import Json.Decode
 import Json.Encode
+import Rope
 
 
 {-| Put some JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
@@ -101,6 +102,4 @@ using the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
 request : HttpRequest state -> BrowserApp.Interface state
 request =
     \httpRequest ->
-        httpRequest
-            |> BrowserApp.HttpRequest
-            |> BrowserApp.InterfaceSingle
+        httpRequest |> BrowserApp.HttpRequest |> Rope.singleton

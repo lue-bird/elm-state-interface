@@ -7,6 +7,7 @@ module BrowserApp.Console exposing (log)
 -}
 
 import BrowserApp
+import Rope
 
 
 {-| Like [`Debug.log`](https://dark.elm.dmy.fr/packages/elm/core/latest/Debug#log)
@@ -14,4 +15,4 @@ as an [`Interface`](BrowserApp#Interface)
 -}
 log : String -> BrowserApp.Interface state_
 log string =
-    BrowserApp.ConsoleLog string |> BrowserApp.InterfaceSingle
+    BrowserApp.ConsoleLog string |> Rope.singleton

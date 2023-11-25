@@ -2,7 +2,7 @@ module BrowserApp exposing
     ( Config
     , toProgram, State(..), Event(..)
     , init, subscriptions, update
-    , Interface(..), InterfaceSingle(..), none, batch, map
+    , Interface, InterfaceSingle(..), none, batch, map
     , DomNode(..), DomElement
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceDiff(..)
@@ -70,6 +70,7 @@ import N exposing (N1)
 import Order exposing (Ordering)
 import Possibly exposing (Possibly)
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
+import Rope exposing (Rope)
 import Set exposing (Set)
 import String.Order
 import Time
@@ -131,9 +132,8 @@ To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
 To combine multiple, use [`BrowserApp.batch`](#batch) and [`BrowserApp.none`](#none)
 
 -}
-type Interface state
-    = InterfaceBatch (List (Interface state))
-    | InterfaceSingle (InterfaceSingle state)
+type alias Interface state =
+    Rope (InterfaceSingle state)
 
 
 {-| An "non-batched" [`Interface`](#Interface).
@@ -380,7 +380,7 @@ domNodeIdToElement =
 -}
 batch : List (Interface state) -> Interface state
 batch =
-    InterfaceBatch
+    \interfaces -> interfaces |> Rope.fromList |> Rope.concat
 
 
 {-| Doing nothing as an [`Interface`](#Interface). These two examples are equivalent:
@@ -397,18 +397,7 @@ and
 -}
 none : Interface state_
 none =
-    batch []
-
-
-interfaceUnBatch : Interface state -> List (InterfaceSingle state)
-interfaceUnBatch =
-    \interface ->
-        case interface of
-            InterfaceBatch interfaces ->
-                interfaces |> List.concatMap interfaceUnBatch
-
-            InterfaceSingle interfaceSingle ->
-                [ interfaceSingle ]
+    Rope.empty
 
 
 {-| Map the state constructed by the [`Interface`](#Interface).
@@ -457,12 +446,12 @@ map : (state -> mappedState) -> (Interface state -> Interface mappedState)
 map stateChange =
     \interface ->
         interface
-            |> interfaceUnBatch
+            |> Rope.toList
             |> List.map
                 (\interfaceSingle ->
-                    interfaceSingle |> interfaceSingleMap stateChange |> InterfaceSingle
+                    interfaceSingle |> interfaceSingleMap stateChange
                 )
-            |> batch
+            |> Rope.fromList
 
 
 domNodeMap : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
@@ -1368,7 +1357,7 @@ init appConfig =
         initialInterface =
             appConfig.initialState
                 |> appConfig.interface
-                |> interfaceUnBatch
+                |> Rope.toList
                 |> KeysSet.fromList interfaceKeys
     in
     ( State
@@ -1770,7 +1759,7 @@ update appConfig =
                         updatedInterface =
                             updatedAppState
                                 |> appConfig.interface
-                                |> interfaceUnBatch
+                                |> Rope.toList
                                 |> KeysSet.fromList interfaceKeys
                     in
                     ( State { interface = updatedInterface, appState = updatedAppState }

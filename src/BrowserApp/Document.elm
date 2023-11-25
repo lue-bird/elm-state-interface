@@ -8,6 +8,7 @@ module BrowserApp.Document exposing (eventListen)
 
 import BrowserApp
 import Json.Decode
+import Rope
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for a specific `document` event
@@ -16,4 +17,4 @@ like like keypress, keydown, keyup, click, mousemove, mousedown, mouseup
 eventListen : String -> BrowserApp.Interface Json.Decode.Value
 eventListen eventName =
     BrowserApp.DocumentEventListen { eventName = eventName, on = identity }
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton

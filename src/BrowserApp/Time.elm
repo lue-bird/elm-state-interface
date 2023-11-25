@@ -7,6 +7,7 @@ module BrowserApp.Time exposing (posixRequest, zoneRequest, zoneNameRequest)
 -}
 
 import BrowserApp
+import Rope
 import Time
 
 
@@ -18,7 +19,7 @@ Replacement for `elm/time`'s [`Time.now`](https://package.elm-lang.org/packages/
 posixRequest : BrowserApp.Interface Time.Posix
 posixRequest =
     BrowserApp.TimePosixRequest identity
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| Produce a `Zone` based on the current UTC offset.
@@ -29,7 +30,7 @@ Replacement for `elm/time`'s [`Time.here`](https://package.elm-lang.org/packages
 zoneRequest : BrowserApp.Interface Time.Zone
 zoneRequest =
     BrowserApp.TimezoneRequest identity
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| Use `Intl.DateTimeFormat().resolvedOptions().timeZone` to try to get names like Europe/Moscow or America/Havana.
@@ -40,4 +41,4 @@ Replacement for `elm/time`'s [`Time.getZoneName`](https://package.elm-lang.org/p
 zoneNameRequest : BrowserApp.Interface Time.ZoneName
 zoneNameRequest =
     BrowserApp.TimezoneNameRequest identity
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton

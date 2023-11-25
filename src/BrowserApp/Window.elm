@@ -13,6 +13,7 @@ module BrowserApp.Window exposing
 import BrowserApp
 import Json.Decode
 import Json.Decode.Local
+import Rope
 import Time
 
 
@@ -21,7 +22,7 @@ import Time
 eventListen : String -> BrowserApp.Interface Json.Decode.Value
 eventListen eventName =
     BrowserApp.WindowEventListen { eventName = eventName, on = identity }
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for changes to the inner window width and height.
@@ -59,4 +60,4 @@ Note: uses [`window.requestAnimationFrame`](https://developer.mozilla.org/en-US/
 animationFrameListen : BrowserApp.Interface Time.Posix
 animationFrameListen =
     BrowserApp.WindowAnimationFrameListen identity
-        |> BrowserApp.InterfaceSingle
+        |> Rope.singleton

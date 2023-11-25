@@ -1,6 +1,6 @@
 module BrowserApp.Dom exposing
     ( text
-    , element, Modifier(..), listenTo, style, attribute, modifierMap
+    , element, Modifier, ModifierSingle(..), attribute, style, listenTo, modifierMap, modifierBatch, modifierNone
     , render
     )
 
@@ -10,7 +10,7 @@ These are primitives used for svg and html.
 Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
 
 @docs text
-@docs element, Modifier, listenTo, style, attribute, modifierMap
+@docs element, Modifier, ModifierSingle, attribute, style, listenTo, modifierMap, modifierBatch, modifierNone
 @docs render
 
 -}
@@ -19,6 +19,7 @@ import Array
 import BrowserApp exposing (DomNode)
 import Dict
 import Json.Decode
+import Rope exposing (Rope)
 
 
 {-| An [`Interface`](BrowserApp#Interface) for displaying a given [`DomNode`](BrowserApp#DomNode).
@@ -28,7 +29,7 @@ render =
     \domNode ->
         domNode
             |> BrowserApp.DomNodeRender
-            |> BrowserApp.InterfaceSingle
+            |> Rope.singleton
 
 
 {-| Plain text [`DomNode`](BrowserApp#DomNode)
@@ -48,14 +49,19 @@ For example for <p>text</p>
 -}
 element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
 element tag modifiers subs =
+    let
+        modifierList : List (ModifierSingle state)
+        modifierList =
+            modifiers |> Rope.fromList |> Rope.concat |> Rope.toList
+    in
     { tag = tag
     , eventListens =
-        modifiers
+        modifierList
             |> List.foldl
                 (\modifier ->
                     case modifier of
-                        Listen listen_ ->
-                            Dict.insert listen_.eventName listen_.on
+                        Listen listen ->
+                            Dict.insert listen.eventName listen.on
 
                         _ ->
                             identity
@@ -69,7 +75,8 @@ element tag modifiers subs =
 
 
 {-| Set the behavior of a [`BrowserApp.Dom.element`](BrowserApp-Dom#element).
-To create one, use [`attribute`](#attribute), [`style`](#style), [`listen`](#listen)
+To create one, use [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo).
+To combine multiple, use [`BrowserApp.Dom.modifierBatch`](#modifierBatch) and [`BrowserApp.Dom.modifierNone`](#modifierNone)
 
 For example to get `<a href="https://elm-lang.org">Elm</a>`
 
@@ -78,7 +85,38 @@ For example to get `<a href="https://elm-lang.org">Elm</a>`
         [ BrowserApp.Dom.text "Elm" ]
 
 -}
-type Modifier state
+type alias Modifier state =
+    Rope (ModifierSingle state)
+
+
+{-| Combine multiple [`Modifier`](#Modifier)s into one.
+-}
+modifierBatch : List (Modifier state) -> Modifier state
+modifierBatch =
+    \modifiers -> modifiers |> Rope.fromList |> Rope.concat
+
+
+{-| Doing nothing as a [`Modifier`](#Modifier). These two examples are equivalent:
+
+    BrowserApp.Dom.modifierBatch
+        [ a, BrowserApp.Dom.modifierNone, b ]
+
+and
+
+    BrowserApp.Dom.modifierBatch
+        (List.filterMap identity
+            [ a |> Just, Nothing, b |> Just ]
+        )
+
+-}
+modifierNone : Modifier state_
+modifierNone =
+    Rope.empty
+
+
+{-| An individual [`Modifier`](#Modifier)
+-}
+type ModifierSingle state
     = Attribute { key : String, value : String }
     | Style { key : String, value : String }
     | Listen { eventName : String, on : Json.Decode.Value -> state }
@@ -88,14 +126,14 @@ type Modifier state
 -}
 attribute : String -> String -> Modifier state_
 attribute key value =
-    { key = key, value = value } |> Attribute
+    { key = key, value = value } |> Attribute |> Rope.singleton
 
 
 {-| A key-value style [`Modifier`](#Modifier)
 -}
 style : String -> String -> Modifier state_
 style key value =
-    { key = key, value = value } |> Attribute
+    { key = key, value = value } |> Attribute |> Rope.singleton
 
 
 {-| Listen for a specific DOM event on the [`DomElement`](BrowserApp#DomElement).
@@ -103,7 +141,7 @@ Use [`modifierMap`](#modifierMap) to wire this to a specific event.
 -}
 listenTo : String -> Modifier Json.Decode.Value
 listenTo eventName =
-    Listen { eventName = eventName, on = identity }
+    Listen { eventName = eventName, on = identity } |> Rope.singleton
 
 
 {-| Wire events from this [`Modifier`](#Modifier) to a specific event.
@@ -113,6 +151,12 @@ listenTo eventName =
 -}
 modifierMap : (state -> mappedState) -> (Modifier state -> Modifier mappedState)
 modifierMap stateChange =
+    \modifier ->
+        modifier |> Rope.map (\modifierSingle -> modifierSingle |> modifierSingleMap stateChange)
+
+
+modifierSingleMap : (state -> mappedState) -> (ModifierSingle state -> ModifierSingle mappedState)
+modifierSingleMap stateChange =
     \modifier ->
         case modifier of
             Attribute keyValue ->
