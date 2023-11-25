@@ -193,7 +193,7 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => an
         for (let [styleKey, styleValue] of Object.entries(node.element.styles)) {
             createdDomElement.style.setProperty(styleKey, styleValue as string)
         }
-        node.element.eventListeners.forEach((eventListenName: string) => {
+        node.element.eventListens.forEach((eventListenName: string) => {
             createdDomElement.addEventListener(
                 eventListenName,
                 (triggeredEvent) => {
