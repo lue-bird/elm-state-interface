@@ -26,8 +26,8 @@ type alias State =
     Int
 
 type Event
-    = CounterDecreaseClicked
-    | CounterIncreaseClicked
+    = DecreaseClicked
+    | IncreaseClicked
 
 app : BrowserApp.Config State
 app =
@@ -39,7 +39,7 @@ app =
                     [ Ui.element "button"
                         |> Ui.elementAddSubs [ "+" |> Ui.text ]
                         |> Ui.elementOnEvent "click"
-                            (\_ -> CounterIncreaseClicked)
+                            (\_ -> IncreaseClicked)
                         |> Ui.elementToNode
                     , Ui.element "div"
                         |> Ui.elementAddSubs
@@ -48,7 +48,7 @@ app =
                     , Ui.element "button"
                         |> Ui.elementAddSubs [ "-" |> Ui.text ]
                         |> Ui.elementOnEvent "click"
-                            (\_ -> CounterDecreaseClicked)
+                            (\_ -> DecreaseClicked)
                         |> Ui.elementToNode
                     ]
                 |> Ui.elementToNode
@@ -56,10 +56,10 @@ app =
                 |> BrowserApp.on
                     (\event ->
                         case event of
-                            CounterDecreaseClicked ->
+                            DecreaseClicked ->
                                 counter - 1
                             
-                            CounterIncreaseClicked ->
+                            IncreaseClicked ->
                                 counter + 1
                     )
     , ports = { fromJs = fromJs, toJs = toJs }
