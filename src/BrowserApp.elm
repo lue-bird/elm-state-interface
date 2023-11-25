@@ -143,6 +143,7 @@ type InterfaceSingle state
     = TimePosixRequest (Time.Posix -> state)
     | TimezoneRequest (Time.Zone -> state)
     | TimezoneNameRequest (Time.ZoneName -> state)
+    | RandomUnsignedIntsRequest { count : Int, on : List Int -> state }
     | ConsoleLog String
     | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
@@ -253,10 +254,11 @@ type alias DomElement state =
 -}
 type InterfaceSingleId
     = IdTimePosixRequest
-    | IdRequestTimezone
-    | IdRequestTimezoneName
+    | IdTimezoneRequest
+    | IdTimezoneNameRequest
+    | IdRandomUnsignedIntsRequest Int
     | IdConsoleLog String
-    | IdRenderDomNode
+    | IdDomNodeRender
     | IdHttpRequest HttpRequestId
     | IdWindowEventListen String
     | IdWindowAnimationFrameListen
@@ -483,6 +485,12 @@ interfaceSingleMap stateChange =
                 (\event -> requestTimezoneName event |> stateChange)
                     |> TimezoneNameRequest
 
+            RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
+                { count = randomUnsignedIntsRequest.count
+                , on = \ints -> randomUnsignedIntsRequest.on ints |> stateChange
+                }
+                    |> RandomUnsignedIntsRequest
+
             ConsoleLog string ->
                 ConsoleLog string
 
@@ -663,16 +671,19 @@ interfaceSingleToId =
                 IdTimePosixRequest
 
             TimezoneRequest _ ->
-                IdRequestTimezone
+                IdTimezoneRequest
 
             TimezoneNameRequest _ ->
-                IdRequestTimezoneName
+                IdTimezoneNameRequest
+
+            RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
+                IdRandomUnsignedIntsRequest randomUnsignedIntsRequest.count
 
             ConsoleLog string ->
                 IdConsoleLog string
 
             DomNodeRender _ ->
-                IdRenderDomNode
+                IdDomNodeRender
 
             HttpRequest httpRequest ->
                 httpRequest |> httpRequestToId |> IdHttpRequest
@@ -718,18 +729,26 @@ interfaceIdOrder =
                         _ ->
                             GT
 
-                IdRequestTimezone ->
+                IdTimezoneRequest ->
                     case b of
-                        IdRequestTimezone ->
+                        IdTimezoneRequest ->
                             EQ
 
                         _ ->
                             GT
 
-                IdRequestTimezoneName ->
+                IdTimezoneNameRequest ->
                     case b of
-                        IdRequestTimezoneName ->
+                        IdTimezoneNameRequest ->
                             EQ
+
+                        _ ->
+                            GT
+
+                IdRandomUnsignedIntsRequest aCount ->
+                    case b of
+                        IdRandomUnsignedIntsRequest bCount ->
+                            Order.with Int.Order.up aCount bCount
 
                         _ ->
                             GT
@@ -742,9 +761,9 @@ interfaceIdOrder =
                         _ ->
                             GT
 
-                IdRenderDomNode ->
+                IdDomNodeRender ->
                     case b of
-                        IdRenderDomNode ->
+                        IdDomNodeRender ->
                             EQ
 
                         _ ->
@@ -953,7 +972,7 @@ interfaceDiffToCmds =
         [ interfaces.old
             |> KeysSet.except interfaceKeys
                 (interfaces.updated |> KeysSet.toKeys interfaceKeys)
-            |> KeysSet.remove interfaceKeys IdRenderDomNode
+            |> KeysSet.remove interfaceKeys IdDomNodeRender
             |> KeysSet.toList interfaceKeys
             |> List.filterMap
                 (\interface ->
@@ -965,6 +984,9 @@ interfaceDiffToCmds =
                             Nothing
 
                         TimezoneNameRequest _ ->
+                            Nothing
+
+                        RandomUnsignedIntsRequest _ ->
                             Nothing
 
                         ConsoleLog _ ->
@@ -1006,7 +1028,7 @@ interfaceDiffToCmds =
         , interfaces.updated
             |> KeysSet.except interfaceKeys
                 (interfaces.old |> KeysSet.toKeys interfaceKeys)
-            |> KeysSet.remove interfaceKeys IdRenderDomNode
+            |> KeysSet.remove interfaceKeys IdDomNodeRender
             |> KeysSet.toList interfaceKeys
             |> List.filterMap
                 (\interface ->
@@ -1019,6 +1041,9 @@ interfaceDiffToCmds =
 
                         TimezoneNameRequest _ ->
                             AddTimezoneNameRequest |> Just
+
+                        RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
+                            AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> Just
 
                         ConsoleLog string ->
                             AddConsoleLog string |> Just
@@ -1056,7 +1081,7 @@ interfaceDiffToCmds =
                         NavigationReload ->
                             AddNavigationReload |> Just
                 )
-        , case ( interfaces.old |> KeysSet.element interfaceKeys IdRenderDomNode, interfaces.updated |> KeysSet.element interfaceKeys IdRenderDomNode ) of
+        , case ( interfaces.old |> KeysSet.element interfaceKeys IdDomNodeRender, interfaces.updated |> KeysSet.element interfaceKeys IdDomNodeRender ) of
             ( Emptiable.Filled (DomNodeRender domElementPreviouslyRendered), Emptiable.Filled (DomNodeRender domElementToRender) ) ->
                 ( domElementPreviouslyRendered, domElementToRender )
                     |> domNodeDiff []
@@ -1106,13 +1131,16 @@ interfaceDiffToJson =
         Json.Encode.object
             [ case interfaceDiff of
                 AddTimePosixRequest ->
-                    ( "addRequestTimeNow", Json.Encode.null )
+                    ( "addTimePosixRequest", Json.Encode.null )
 
                 AddTimezoneRequest ->
-                    ( "addRequestTimezoneOffset", Json.Encode.null )
+                    ( "addTimezoneOffsetRequest", Json.Encode.null )
 
                 AddTimezoneNameRequest ->
-                    ( "addRequestTimezoneName", Json.Encode.null )
+                    ( "addTimezoneNameRequest", Json.Encode.null )
+
+                AddRandomUnsignedIntsRequest count ->
+                    ( "addRandomUnsignedIntsRequest", count |> Json.Encode.int )
 
                 AddConsoleLog string ->
                     ( "addConsoleLog", string |> Json.Encode.string )
@@ -1366,6 +1394,21 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                                 ]
                             )
                         |> Just
+
+                _ ->
+                    Nothing
+
+        RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
+            case interfaceDiff of
+                AddRandomUnsignedIntsRequest diffCount ->
+                    if randomUnsignedIntsRequest.count == diffCount then
+                        Json.Decode.succeed randomUnsignedIntsRequest.on
+                            |> Json.Decode.Local.andMap
+                                (Json.Decode.list Json.Decode.int)
+                            |> Just
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
@@ -1753,6 +1796,7 @@ type InterfaceDiff
     = AddTimePosixRequest
     | AddTimezoneRequest
     | AddTimezoneNameRequest
+    | AddRandomUnsignedIntsRequest Int
     | AddConsoleLog String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
     | AddHttpRequest HttpRequestId

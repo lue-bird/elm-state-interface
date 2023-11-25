@@ -22,22 +22,28 @@ export interface ElmPorts {
 export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
     const interfaceImplementations: { on: (event: any) => any, run: (config: any, sendToElm: (v: any) => void) => void }[] = [
         {
-            on: event => event?.addRequestTimeNow,
+            on: event => event?.addTimePosixRequest,
             run: (_config, sendToElm) => {
                 sendToElm(Date.now())
             },
         },
         {
-            on: event => event?.addRequestTimezoneOffset,
+            on: event => event?.addTimezoneOffsetRequest,
             run: (_config, sendToElm) => {
                 // // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
                 sendToElm(-new Date().getTimezoneOffset())
             }
         },
         {
-            on: event => event?.addRequestTimezoneName,
+            on: event => event?.addTimezoneNameRequest,
             run: (_config, sendToElm) => {
                 sendToElm(getTimezoneName())
+            }
+        },
+        {
+            on: event => event?.addRandomUnsignedIntsRequest,
+            run: (config, sendToElm) => {
+                sendToElm(crypto.getRandomValues(new Uint32Array(config)))
             }
         },
         {
@@ -124,7 +130,6 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
             run: (_config, _sendToElm) => { reload() }
         }
     ]
-
 
     appConfig.ports.toJs.subscribe(function (fromElm) {
         // console.log("elm → js: ", fromElm)
