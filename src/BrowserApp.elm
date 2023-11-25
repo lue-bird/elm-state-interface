@@ -442,8 +442,8 @@ and sometimes like elm's `Cmd.map/Html.map/...`:
             MenuState menuState ->
                 Interface.on MenuState (Menu.interface menuState)
 
-            GameState gameState ->
-                Interface.on GameState (Game.interface gameState)
+            PlayingState playingState ->
+                Interface.on PlayingState (Playing.interface playingState)
 
 In all these examples, you end up converting the narrow state representation of part of the interface to a broader representation for
 the parent interface
