@@ -3,7 +3,7 @@
 The Elm Architecture with its model, view, msg, update, sub, cmd, task
 can be reduced down to state and interface, making it simpler, safer and more declarative.
 
-## the ideas
+#### the ideas
 - cmds, tasks, subs and view are combined into one view/subscriptions-like
   `state -> Interface state`.
   Now actions are not tied to a specific event happening but to a specific state
@@ -11,7 +11,7 @@ can be reduced down to state and interface, making it simpler, safer and more de
   the event itself holds all the relevant state.
   Don't worry, even if the interface responds late, the state information will be up to date
 
-## the extras
+#### the extras
 - an event type only exists as an optional intermediate type (still highly recommended, though most of the time)
 - update is part of the interface via [`BrowserApp.on`](BrowserApp#on)
 
