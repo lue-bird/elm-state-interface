@@ -564,7 +564,7 @@ domElementMap stateChange =
 type Event appState
     = InterfaceDiffFailedToDecode Json.Decode.Error
     | InterfaceEventDataFailedToDecode Json.Decode.Error
-    | InterfaceEventIgnored InterfaceDiff
+    | InterfaceEventIgnored
     | AppEventToNewAppState appState
 
 
@@ -1271,7 +1271,7 @@ subscriptions appConfig =
                                         eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
 
                             Nothing ->
-                                InterfaceEventIgnored interfaceDiff
+                                InterfaceEventIgnored
 
                     Err interfaceDiffJsonDecodeError ->
                         interfaceDiffJsonDecodeError |> InterfaceDiffFailedToDecode
@@ -1600,29 +1600,33 @@ update : Config state -> (Event state -> State state -> ( State state, Cmd (Even
 update appConfig =
     \event ->
         case event of
-            InterfaceEventIgnored interfaceDiff ->
+            InterfaceEventIgnored ->
                 \state ->
-                    let
-                        _ =
-                            Debug.log "info: ignored event from this interface" interfaceDiff
-                    in
                     ( state, Cmd.none )
 
             InterfaceDiffFailedToDecode jsonError ->
                 \state ->
-                    let
-                        _ =
-                            Debug.log "interface diff failed to decode" (jsonError |> Json.Decode.errorToString)
-                    in
-                    ( state, Cmd.none )
+                    ( state
+                    , ("bug in lue-bird/elm-state-interface: interface diff failed to decode: "
+                        ++ (jsonError |> Json.Decode.errorToString)
+                      )
+                        |> AddConsoleLog
+                        |> interfaceDiffToJson
+                        |> appConfig.ports.toJs
+                        |> Cmd.map never
+                    )
 
             InterfaceEventDataFailedToDecode jsonError ->
                 \state ->
-                    let
-                        _ =
-                            Debug.log "InterfaceEventDataFailedToDecode" (jsonError |> Json.Decode.errorToString)
-                    in
-                    ( state, Cmd.none )
+                    ( state
+                    , ("bug in lue-bird/elm-state-interface: interface event data failed to decode: "
+                        ++ (jsonError |> Json.Decode.errorToString)
+                      )
+                        |> AddConsoleLog
+                        |> interfaceDiffToJson
+                        |> appConfig.ports.toJs
+                        |> Cmd.map never
+                    )
 
             AppEventToNewAppState updatedAppState ->
                 \(State oldState) ->
