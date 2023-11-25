@@ -4,12 +4,12 @@ The Elm Architecture with its model, view, msg, update, sub, cmd, task
 can be reduced down to state and interface, making it simpler, safer and more declarative.
 
 ## the ideas
-- cmds, tasks, subs and view are combined into one big view/subscriptions-like function
+- cmds, tasks, subs and view are combined into one view/subscriptions-like
   `state -> Interface state`.
-  This means that actions are not tied to a specific event happening but to a specific state
+  Now actions are not tied to a specific event happening but to a specific state
 - Instead of the update casing on the relevant state+event combination,
   the event itself holds all the relevant state.
-  Don't worry, even if the interface responds late, the state information will be up to date.
+  Don't worry, even if the interface responds late, the state information will be up to date
 
 ## the extras
 - an event type only exists as an optional intermediate type (still highly recommended, though most of the time)
@@ -88,7 +88,7 @@ BrowserApp.start({
 })
 ```
 
-Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make this package.
+Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) 🌱 for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) as _the_ motivation to make a package out of it.
 
 ## state-interface as an alternative to tasks
 
@@ -175,12 +175,14 @@ A goal is to publish more browser APIs like webstorage in this elm package inste
 
 ## future
 
-  - add audio interface similar to [`MartinSStewart/elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/)
-  - potentially: basic `node` APIs
+  - 🧩 add many [example](https://github.com/lue-bird/elm-state-interface/tree/main/example) projects. Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
+  - 🔊 add audio interface similar to [`MartinSStewart/elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/)
+  - 🔋 The we API you miss the most
+  - 🗃️ only with help: basic `node` APIs
+
+If you have knowledge in any of these fields on the js side, have pointers or already 
+a basic implementation using ports, [come by](https://github.com/lue-bird/elm-state-interface/discussions/new/choose)!
 
 Note: The package is very much not designed to be easily extensible.
 Adding stuff _will_ force a major version bump.
 The module and interface structure is also not equipped to support multiple platforms.
-
-If you have knowledge in any of these fields on the js side, have pointers or already 
-a basic implementation using ports, [come by](https://github.com/lue-bird/elm-state-interface/discussions/new/choose)!
