@@ -208,6 +208,8 @@ type HttpBody
     | HttpBodyString { mimeType : String, content : String }
 
 
+{-| Safe to ignore. Identifier for an [`HttpRequest`](#HttpRequest)
+-}
 type alias HttpRequestId =
     RecordWithoutConstructorFunction
         { url : String
@@ -219,6 +221,8 @@ type alias HttpRequestId =
         }
 
 
+{-| Safe to ignore. Identifier for an [`HttpExpect`](#HttpExpect)
+-}
 type HttpExpectId
     = IdHttpExpectJson
     | IdHttpExpectString
@@ -275,7 +279,7 @@ type alias DomElementId =
         }
 
 
-{-| Safe to ignore. Identifier for an [`DomNode`](#DomNode)
+{-| Safe to ignore. Identifier for a [`DomNode`](#DomNode)
 -}
 type DomNodeId
     = DomTextId String
@@ -396,6 +400,17 @@ none =
     batch []
 
 
+interfaceUnBatch : Interface state -> List (InterfaceSingle state)
+interfaceUnBatch =
+    \interface ->
+        case interface of
+            InterfaceBatch interfaces ->
+                interfaces |> List.concatMap interfaceUnBatch
+
+            InterfaceSingle interfaceSingle ->
+                [ interfaceSingle ]
+
+
 {-| Map the state constructed by the [`Interface`](#Interface).
 
 In practice, this is sometimes used like a kind of event-config pattern:
@@ -441,12 +456,13 @@ the parent interface
 map : (state -> mappedState) -> (Interface state -> Interface mappedState)
 map stateChange =
     \interface ->
-        case interface of
-            InterfaceBatch interfaces ->
-                interfaces |> List.map (map stateChange) |> InterfaceBatch
-
-            InterfaceSingle interfaceSingle ->
-                interfaceSingle |> interfaceSingleMap stateChange |> InterfaceSingle
+        interface
+            |> interfaceUnBatch
+            |> List.map
+                (\interfaceSingle ->
+                    interfaceSingle |> interfaceSingleMap stateChange |> InterfaceSingle
+                )
+            |> batch
 
 
 domNodeMap : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
@@ -1057,7 +1073,7 @@ interfaceDiffToCmds :
     -> List InterfaceDiff
 interfaceDiffToCmds =
     \interfaces ->
-        (interfaces.old
+        [ interfaces.old
             |> KeysSet.except interfaceKeys
                 (interfaces.updated |> KeysSet.toKeys interfaceKeys)
             |> KeysSet.remove interfaceKeys IdRenderDomNode
@@ -1107,84 +1123,83 @@ interfaceDiffToCmds =
                         NavigationReload ->
                             Nothing
                 )
-        )
-            ++ (interfaces.updated
-                    |> KeysSet.except interfaceKeys
-                        (interfaces.old |> KeysSet.toKeys interfaceKeys)
-                    |> KeysSet.remove interfaceKeys IdRenderDomNode
-                    |> KeysSet.toList interfaceKeys
-                    |> List.filterMap
-                        (\interface ->
-                            case interface of
-                                TimePosixRequest _ ->
-                                    AddTimePosixRequest |> Just
+        , interfaces.updated
+            |> KeysSet.except interfaceKeys
+                (interfaces.old |> KeysSet.toKeys interfaceKeys)
+            |> KeysSet.remove interfaceKeys IdRenderDomNode
+            |> KeysSet.toList interfaceKeys
+            |> List.filterMap
+                (\interface ->
+                    case interface of
+                        TimePosixRequest _ ->
+                            AddTimePosixRequest |> Just
 
-                                TimezoneRequest _ ->
-                                    AddTimezoneRequest |> Just
+                        TimezoneRequest _ ->
+                            AddTimezoneRequest |> Just
 
-                                TimezoneNameRequest _ ->
-                                    AddTimezoneNameRequest |> Just
+                        TimezoneNameRequest _ ->
+                            AddTimezoneNameRequest |> Just
 
-                                ConsoleLog string ->
-                                    AddConsoleLog string |> Just
+                        ConsoleLog string ->
+                            AddConsoleLog string |> Just
 
-                                DomNodeRender _ ->
-                                    Nothing
+                        DomNodeRender _ ->
+                            Nothing
 
-                                HttpRequest httpRequest ->
-                                    AddHttpRequest (httpRequest |> httpRequestToId) |> Just
+                        HttpRequest httpRequest ->
+                            AddHttpRequest (httpRequest |> httpRequestToId) |> Just
 
-                                WindowEventListen listen ->
-                                    AddWindowEventListen listen.eventName |> Just
+                        WindowEventListen listen ->
+                            AddWindowEventListen listen.eventName |> Just
 
-                                WindowAnimationFrameListen _ ->
-                                    AddWindowAnimationFrameListen |> Just
+                        WindowAnimationFrameListen _ ->
+                            AddWindowAnimationFrameListen |> Just
 
-                                DocumentEventListen listen ->
-                                    AddDocumentEventListen listen.eventName |> Just
+                        DocumentEventListen listen ->
+                            AddDocumentEventListen listen.eventName |> Just
 
-                                NavigationReplaceUrl url ->
-                                    AddNavigationReplaceUrl url |> Just
+                        NavigationReplaceUrl url ->
+                            AddNavigationReplaceUrl url |> Just
 
-                                NavigationPushUrl url ->
-                                    AddNavigationPushUrl url |> Just
+                        NavigationPushUrl url ->
+                            AddNavigationPushUrl url |> Just
 
-                                NavigationGo urlSteps ->
-                                    AddNavigationGo urlSteps |> Just
+                        NavigationGo urlSteps ->
+                            AddNavigationGo urlSteps |> Just
 
-                                NavigationLoad url ->
-                                    url |> AddNavigationLoad |> Just
+                        NavigationLoad url ->
+                            url |> AddNavigationLoad |> Just
 
-                                NavigationReload ->
-                                    AddNavigationReload |> Just
+                        NavigationReload ->
+                            AddNavigationReload |> Just
+                )
+        , case ( interfaces.old |> KeysSet.element interfaceKeys IdRenderDomNode, interfaces.updated |> KeysSet.element interfaceKeys IdRenderDomNode ) of
+            ( Emptiable.Filled (DomNodeRender domElementPreviouslyRendered), Emptiable.Filled (DomNodeRender domElementToRender) ) ->
+                ( domElementPreviouslyRendered, domElementToRender )
+                    |> domNodeDiff []
+                    |> List.map
+                        (\subDiff ->
+                            ReplaceDomNode
+                                { path = subDiff.path
+                                , domNode = subDiff.replacementDomNode |> domNodeToId
+                                }
                         )
-               )
-            ++ (case ( interfaces.old |> KeysSet.element interfaceKeys IdRenderDomNode, interfaces.updated |> KeysSet.element interfaceKeys IdRenderDomNode ) of
-                    ( Emptiable.Filled (DomNodeRender domElementPreviouslyRendered), Emptiable.Filled (DomNodeRender domElementToRender) ) ->
-                        ( domElementPreviouslyRendered, domElementToRender )
-                            |> domNodeDiff []
-                            |> List.map
-                                (\subDiff ->
-                                    ReplaceDomNode
-                                        { path = subDiff.path
-                                        , domNode = subDiff.replacementDomNode |> domNodeToId
-                                        }
-                                )
 
-                    ( Emptiable.Empty _, Emptiable.Filled (DomNodeRender replacementDomNode) ) ->
-                        [ ReplaceDomNode
-                            { path = []
-                            , domNode = replacementDomNode |> domNodeToId
-                            }
-                        ]
+            ( Emptiable.Empty _, Emptiable.Filled (DomNodeRender replacementDomNode) ) ->
+                [ ReplaceDomNode
+                    { path = []
+                    , domNode = replacementDomNode |> domNodeToId
+                    }
+                ]
 
-                    ( Emptiable.Filled (DomNodeRender _), _ ) ->
-                        -- already handles earlier
-                        []
+            ( Emptiable.Filled (DomNodeRender _), _ ) ->
+                -- already handles earlier
+                []
 
-                    _ ->
-                        []
-               )
+            _ ->
+                []
+        ]
+            |> List.concat
 
 
 domNodeIdToJson : DomNodeId -> Json.Encode.Value
@@ -1342,17 +1357,6 @@ httpBodyToJson body =
 
         HttpBodyEmpty ->
             Json.Encode.null
-
-
-interfaceUnBatch : Interface state -> List (InterfaceSingle state)
-interfaceUnBatch =
-    \interface ->
-        case interface of
-            InterfaceBatch interfaces ->
-                interfaces |> List.concatMap interfaceUnBatch
-
-            InterfaceSingle interfaceSingle ->
-                [ interfaceSingle ]
 
 
 {-| The "init" part for an embedded program
@@ -1518,7 +1522,11 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             case interfaceDiff of
                 AddHttpRequest addedHttpRequestId ->
                     if (httpRequest |> httpRequestToId) == addedHttpRequestId then
-                        httpExpectJsonDecoder httpRequest.expect |> Just
+                        Json.Decode.oneOf
+                            [ httpExpectJsonDecoder httpRequest.expect
+                            , httpErrorJsonDecoder httpRequest |> Json.Decode.map (httpExpectOnError httpRequest.expect)
+                            ]
+                            |> Just
 
                     else
                         Nothing
@@ -1577,24 +1585,37 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
 
 
 domElementAtReversePath : List Int -> (DomNode state -> Maybe (DomNode state))
-domElementAtReversePath path =
-    \domNode ->
-        case path of
-            [] ->
-                domNode |> Just
+domElementAtReversePath path domNode =
+    case path of
+        [] ->
+            Just domNode
 
-            subIndex :: parentsOfSub ->
-                case domNode of
-                    DomText _ ->
-                        Nothing
+        subIndex :: parentsOfSub ->
+            case domNode of
+                DomText _ ->
+                    Nothing
 
-                    DomElement domElement ->
-                        case domElement.subs |> Array.get subIndex of
-                            Nothing ->
-                                Nothing
+                DomElement domElement ->
+                    case Array.get subIndex domElement.subs of
+                        Nothing ->
+                            Nothing
 
-                            Just subNodeAtIndex ->
-                                subNodeAtIndex |> domElementAtReversePath parentsOfSub
+                        Just subNodeAtIndex ->
+                            domElementAtReversePath parentsOfSub subNodeAtIndex
+
+
+httpExpectOnError : HttpExpect state -> (HttpError -> state)
+httpExpectOnError =
+    \httpExpect ->
+        case httpExpect of
+            HttpExpectJson toState ->
+                \e -> e |> Err |> toState
+
+            HttpExpectString toState ->
+                \e -> e |> Err |> toState
+
+            HttpExpectWhatever toState ->
+                \e -> e |> Err |> toState
 
 
 httpExpectJsonDecoder : HttpExpect state -> Json.Decode.Decoder state
@@ -1653,6 +1674,26 @@ httpMetadataJsonDecoder =
         |> Json.Decode.Local.andMap (Json.Decode.field "statusCode" Json.Decode.int)
         |> Json.Decode.Local.andMap (Json.Decode.field "statusText" Json.Decode.string)
         |> Json.Decode.Local.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
+
+
+httpErrorJsonDecoder : HttpRequest state_ -> Json.Decode.Decoder HttpError
+httpErrorJsonDecoder httpRequest =
+    Json.Decode.field "reason" Json.Decode.string
+        |> Json.Decode.andThen
+            (\code ->
+                case code of
+                    "TIMEOUT" ->
+                        Json.Decode.succeed HttpTimeout
+
+                    "NETWORK_ERROR" ->
+                        Json.Decode.succeed HttpNetworkError
+
+                    "BAD_URL" ->
+                        Json.Decode.succeed (HttpBadUrl httpRequest.url)
+
+                    otherCode ->
+                        Json.Decode.fail ("Unknown error code: " ++ otherCode)
+            )
 
 
 listFirstJust : (node -> Maybe found) -> List node -> Maybe found
@@ -1808,26 +1849,6 @@ type alias HttpMetadata =
         , statusText : String
         , headers : Dict String String
         }
-
-
-httpErrorJsonDecoder : HttpRequest state_ -> Json.Decode.Decoder HttpError
-httpErrorJsonDecoder r =
-    Json.Decode.field "reason" Json.Decode.string
-        |> Json.Decode.andThen
-            (\code ->
-                case code of
-                    "TIMEOUT" ->
-                        Json.Decode.succeed HttpTimeout
-
-                    "NETWORK_ERROR" ->
-                        Json.Decode.succeed HttpNetworkError
-
-                    "BAD_URL" ->
-                        Json.Decode.succeed (HttpBadUrl r.url)
-
-                    _ ->
-                        Json.Decode.fail ("Unknown error code: " ++ code)
-            )
 
 
 {-| Individual messages to js. Also used to identify responses with the same part in the interface
