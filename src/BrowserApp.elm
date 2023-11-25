@@ -423,7 +423,7 @@ sometimes like elm's `update`
                         { state | counter = state.counter + 1 }
             )
 
-and sometimes like elm's `Cmd.map/Html.map/...`:
+and sometimes like elm's `Cmd.map/Task.map/Sub.map/...`:
 
     type State
         = MenuState Menu.State
