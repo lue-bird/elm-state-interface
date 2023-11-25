@@ -1,5 +1,6 @@
 module BrowserApp.Dom exposing
-    ( text
+    ( documentEventListen
+    , text
     , element, Modifier, ModifierSingle(..), attribute, style, listenTo, modifierMap, modifierBatch, modifierNone
     , render
     )
