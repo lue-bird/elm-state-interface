@@ -2,11 +2,11 @@ port module Main exposing (main)
 
 import Array
 import BrowserApp
+import BrowserApp.Dom
 import Color
 import Json.Decode
 import Json.Decode.Local
 import Json.Encode
-import BrowserApp.Dom
 
 
 main : Program () (BrowserApp.State State) (BrowserApp.Event State)
@@ -36,9 +36,9 @@ app =
                 [ BrowserApp.Dom.element "p"
                     []
                     [ "hello state-interface! Mouse coords:" |> BrowserApp.Dom.text
-                    , BrowserApp.Dom.element "br" |> BrowserApp.Dom.elementToNode
+                    , BrowserApp.Dom.element "br" [] []
                     , ("x = " ++ (state.mousePoint.x |> String.fromInt)) |> BrowserApp.Dom.text
-                    , BrowserApp.Dom.element "br" |> BrowserApp.Dom.elementToNode
+                    , BrowserApp.Dom.element "br" [] []
                     , ("y = " ++ (state.mousePoint.y |> String.fromInt)) |> BrowserApp.Dom.text
                     ]
                 , BrowserApp.Dom.element "div"
@@ -66,10 +66,10 @@ app =
                         case event of
                             MouseMovedTo newMousePoint ->
                                 State { state | mousePoint = newMousePoint }
-                            
+
                             CounterDecreaseClicked ->
                                 State { state | counter = state.counter - 1 }
-                            
+
                             CounterIncreaseClicked ->
                                 State { state | counter = state.counter + 1 }
                     )
