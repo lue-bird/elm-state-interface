@@ -1716,7 +1716,7 @@ type alias HttpMetadata =
         }
 
 
-{-| Individual messages to js. Also used to identify responses with the same part in the interface
+{-| Safe to ignore. Individual messages to js. Also used to identify responses with the same part in the interface
 -}
 type InterfaceDiff
     = AddTimePosixRequest
