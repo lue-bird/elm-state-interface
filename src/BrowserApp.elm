@@ -404,7 +404,7 @@ none =
 
 In practice, this is sometimes used like a kind of event-config pattern:
 
-    BrowserApp.Time.currentRequest
+    BrowserApp.Time.posixRequest
         |> BrowserApp.map (\timeNow -> TimeReceived timeNow)
 
 sometimes like elm's `update`
