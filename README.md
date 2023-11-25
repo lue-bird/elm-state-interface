@@ -169,6 +169,12 @@ This package is (currently) not a replacement
 for [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) which allows custom tasks.
 A goal is to publish more browser APIs like webstorage in this elm package instead of users doing the work only for their own projects. I'm a noob in the js world, so feedback and contributions are welcome ❀
 
+## the 1.0.0 release
+
+A goal is feature-parity with elm's exposed browser APIs.
+Still, I expect to have missed some interfaces you might expect.
+For now, I also left out some more niche interfaces like [`Browser.Dom.setViewportOf`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Dom#setViewportOf) and [`WebGL.Texture.loadWith`](https://dark.elm.dmy.fr/packages/elm-explorations/webgl/latest/WebGL-Texture#loadWith).
+
 ## future
 
   - 🧩 add many [example](https://github.com/lue-bird/elm-state-interface/tree/main/example) projects. Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
