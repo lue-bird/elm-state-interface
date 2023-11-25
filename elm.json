@@ -24,7 +24,8 @@
         "lue-bird/elm-emptiness-typed": "9.2.1 <= v < 10.0.0",
         "lue-bird/elm-keysset": "5.0.2 <= v < 6.0.0",
         "lue-bird/elm-no-record-type-alias-constructor-function": "1.0.8 <= v < 2.0.0",
-        "lue-bird/elm-typed-value": "8.2.0 <= v < 9.0.0"
+        "lue-bird/elm-typed-value": "8.2.0 <= v < 9.0.0",
+        "miniBill/elm-rope": "1.0.0 <= v < 2.0.0"
     },
     "test-dependencies": {}
 }
