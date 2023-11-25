@@ -29,7 +29,7 @@ eventListen eventName =
 resizeListen : BrowserApp.Interface (Result Json.Decode.Error { width : Int, height : Int })
 resizeListen =
     eventListen "resize"
-        |> BrowserApp.on
+        |> BrowserApp.map
             (\value ->
                 value
                     |> Json.Decode.decodeValue

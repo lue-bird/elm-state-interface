@@ -2,12 +2,12 @@ module BrowserApp exposing
     ( Config
     , toProgram, State(..), Event(..)
     , init, subscriptions, update
-    , Interface(..), InterfaceSingle(..), none, batch, on
+    , Interface(..), InterfaceSingle(..), none, batch, map
     , DomNode(..), DomElement
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceDiff(..)
     , InterfaceSingleKeys, InterfaceSingleIdOrderTag
-    , InterfaceSingleId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..)
+    , InterfaceSingleId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program running in the browser
@@ -29,7 +29,7 @@ If you just want to replace a part of your elm app with this architecture. Make 
 
 # interface types
 
-@docs Interface, InterfaceSingle, none, batch, on
+@docs Interface, InterfaceSingle, none, batch, map
 
 
 ## DOM
@@ -50,7 +50,7 @@ Types used by [`BrowserApp.Http`](BrowserApp-Http)
 
 @docs InterfaceDiff
 @docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
-@docs InterfaceSingleId, InterfaceSingleToIdTag, DomElementId, DomNodeId
+@docs InterfaceSingleId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
 -}
 
@@ -322,14 +322,14 @@ dictOrderEarlier keyOrder =
         (List.Order.earlier keyOrder)
 
 
-type DictKeys
-    = DictKeys
-
-
 setOrderEarlier : Ordering node nodeTag -> Ordering (Set node) (Order.By SetToList (List.Order.Earlier nodeTag))
 setOrderEarlier keyOrder =
     Order.by (Map.tag SetToList Set.toList)
         (List.Order.earlier keyOrder)
+
+
+type DictKeys
+    = DictKeys
 
 
 type SetToList
@@ -372,17 +372,6 @@ domNodeIdToElement =
                 Nothing
 
 
-domNodeOn : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
-domNodeOn stateChange =
-    \domElementToMap ->
-        case domElementToMap of
-            DomText text ->
-                DomText text
-
-            DomElement domElement_ ->
-                domElement_ |> domElementOn stateChange |> DomElement
-
-
 {-| Combine multiple [`Interface`](#Interface)s into one.
 -}
 batch : List (Interface state) -> Interface state
@@ -412,22 +401,22 @@ none =
 In practice, this is sometimes used like a kind of event-config pattern:
 
     BrowserApp.Time.currentRequest
-        |> BrowserApp.on (\timeNow -> TimeReceived timeNow)
+        |> BrowserApp.map (\timeNow -> TimeReceived timeNow)
 
 sometimes like elm's `update`
 
     ...
-        |> BrowserApp.on
+        |> BrowserApp.map
             (\event ->
                 case event of
                     MouseMovedTo newMousePoint ->
-                        State { state | mousePoint = newMousePoint }
+                        { state | mousePoint = newMousePoint }
 
                     CounterDecreaseClicked ->
-                        State { state | counter = state.counter - 1 }
+                        { state | counter = state.counter - 1 }
 
                     CounterIncreaseClicked ->
-                        State { state | counter = state.counter + 1 }
+                        { state | counter = state.counter + 1 }
             )
 
 and sometimes like elm's `Cmd.map/Html.map/...`:
@@ -440,28 +429,39 @@ and sometimes like elm's `Cmd.map/Html.map/...`:
     interface state =
         case state of
             MenuState menuState ->
-                Interface.on MenuState (Menu.interface menuState)
+                BrowserApp.map MenuState (Menu.interface menuState)
 
             PlayingState playingState ->
-                Interface.on PlayingState (Playing.interface playingState)
+                BrowserApp.map PlayingState (Playing.interface playingState)
 
 In all these examples, you end up converting the narrow state representation of part of the interface to a broader representation for
 the parent interface
 
 -}
-on : (state -> mappedState) -> (Interface state -> Interface mappedState)
-on stateChange =
+map : (state -> mappedState) -> (Interface state -> Interface mappedState)
+map stateChange =
     \interface ->
         case interface of
             InterfaceBatch interfaces ->
-                interfaces |> List.map (on stateChange) |> InterfaceBatch
+                interfaces |> List.map (map stateChange) |> InterfaceBatch
 
             InterfaceSingle interfaceSingle ->
-                interfaceSingle |> interfaceSingleOn stateChange |> InterfaceSingle
+                interfaceSingle |> interfaceSingleMap stateChange |> InterfaceSingle
 
 
-interfaceSingleOn : (state -> mappedState) -> (InterfaceSingle state -> InterfaceSingle mappedState)
-interfaceSingleOn stateChange =
+domNodeMap : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
+domNodeMap stateChange =
+    \domElementToMap ->
+        case domElementToMap of
+            DomText text ->
+                DomText text
+
+            DomElement domElement ->
+                domElement |> domElementMap stateChange |> DomElement
+
+
+interfaceSingleMap : (state -> mappedState) -> (InterfaceSingle state -> InterfaceSingle mappedState)
+interfaceSingleMap stateChange =
     \interface ->
         case interface of
             TimePosixRequest requestTimeNow ->
@@ -480,25 +480,11 @@ interfaceSingleOn stateChange =
                 ConsoleLog string
 
             DomNodeRender domElementToRender ->
-                domElementToRender |> domNodeOn stateChange |> DomNodeRender
+                domElementToRender |> domNodeMap stateChange |> DomNodeRender
 
             HttpRequest httpRequest ->
-                { url = httpRequest.url
-                , method = httpRequest.method
-                , headers = httpRequest.headers
-                , body = httpRequest.body
-                , timeout = httpRequest.timeout
-                , expect =
-                    case httpRequest.expect of
-                        HttpExpectWhatever expectWhatever ->
-                            (\unit -> expectWhatever unit |> stateChange) |> HttpExpectWhatever
-
-                        HttpExpectString expectString ->
-                            (\string -> expectString string |> stateChange) |> HttpExpectString
-
-                        HttpExpectJson expectJson ->
-                            (\json -> expectJson json |> stateChange) |> HttpExpectJson
-                }
+                httpRequest
+                    |> httpRequestMap stateChange
                     |> HttpRequest
 
             WindowEventListen listen ->
@@ -528,8 +514,29 @@ interfaceSingleOn stateChange =
                 NavigationReload
 
 
-domElementOn : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
-domElementOn stateChange =
+httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
+httpRequestMap stateChange =
+    \httpRequest ->
+        { url = httpRequest.url
+        , method = httpRequest.method
+        , headers = httpRequest.headers
+        , body = httpRequest.body
+        , timeout = httpRequest.timeout
+        , expect =
+            case httpRequest.expect of
+                HttpExpectWhatever expectWhatever ->
+                    (\unit -> expectWhatever unit |> stateChange) |> HttpExpectWhatever
+
+                HttpExpectString expectString ->
+                    (\string -> expectString string |> stateChange) |> HttpExpectString
+
+                HttpExpectJson expectJson ->
+                    (\json -> expectJson json |> stateChange) |> HttpExpectJson
+        }
+
+
+domElementMap : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
+domElementMap stateChange =
     \domElementToMap ->
         { tag = domElementToMap.tag
         , styles = domElementToMap.styles
@@ -538,7 +545,7 @@ domElementOn stateChange =
             domElementToMap.eventListens
                 |> Dict.map (\_ listen -> \event -> listen event |> stateChange)
         , subs =
-            domElementToMap.subs |> Array.map (domNodeOn stateChange)
+            domElementToMap.subs |> Array.map (domNodeMap stateChange)
         }
 
 
@@ -610,6 +617,32 @@ interfaceKeys =
 interfaceToIdMapping : Mapping (InterfaceSingle state_) InterfaceSingleToIdTag InterfaceSingleId
 interfaceToIdMapping =
     Map.tag InterfaceSingleToIdTag interfaceSingleToId
+
+
+httpRequestToId : HttpRequest state_ -> HttpRequestId
+httpRequestToId =
+    \httpRequest ->
+        { url = httpRequest.url
+        , method = httpRequest.method |> String.toUpper
+        , headers = httpRequest.headers
+        , body = httpRequest.body
+        , expect = httpRequest.expect |> httpExpectToId
+        , timeout = httpRequest.timeout
+        }
+
+
+httpExpectToId : HttpExpect state_ -> HttpExpectId
+httpExpectToId =
+    \httpExpect ->
+        case httpExpect of
+            HttpExpectWhatever _ ->
+                IdHttpExpectWhatever
+
+            HttpExpectString _ ->
+                IdHttpExpectString
+
+            HttpExpectJson _ ->
+                IdHttpExpectJson
 
 
 interfaceSingleToId : InterfaceSingle state_ -> InterfaceSingleId
@@ -1053,7 +1086,7 @@ interfaceDiffToCmds =
                         WindowEventListen listen ->
                             RemoveWindowEventListen listen.eventName |> Just
 
-                        WindowAnimationFrameListen toState ->
+                        WindowAnimationFrameListen _ ->
                             RemoveWindowAnimationFrameListen |> Just
 
                         DocumentEventListen listen ->
@@ -1104,7 +1137,7 @@ interfaceDiffToCmds =
                                 WindowEventListen listen ->
                                     AddWindowEventListen listen.eventName |> Just
 
-                                WindowAnimationFrameListen toState ->
+                                WindowAnimationFrameListen _ ->
                                     AddWindowAnimationFrameListen |> Just
 
                                 DocumentEventListen listen ->
@@ -1236,6 +1269,79 @@ interfaceDiffToJson =
                 AddNavigationReload ->
                     ( "addNavigationReload", Json.Encode.null )
             ]
+
+
+httpRequestIdToJson : HttpRequestId -> Json.Encode.Value
+httpRequestIdToJson =
+    \httpRequestId ->
+        Json.Encode.object
+            [ ( "url", httpRequestId.url |> Json.Encode.string )
+            , ( "method", httpRequestId.method |> Json.Encode.string )
+            , ( "headers", encodeHeaders httpRequestId.body httpRequestId.headers )
+            , ( "expect", httpRequestId.expect |> httpExpectIdToJson )
+            , ( "body", httpRequestId.body |> httpBodyToJson )
+            , ( "timeout", httpRequestId.timeout |> httpTimeoutToJson )
+            ]
+
+
+httpTimeoutToJson : Maybe Int -> Json.Encode.Value
+httpTimeoutToJson =
+    \maybeTimeout ->
+        case maybeTimeout of
+            Nothing ->
+                Json.Encode.null
+
+            Just timeout ->
+                timeout |> Json.Encode.int
+
+
+httpExpectIdToJson : HttpExpectId -> Json.Encode.Value
+httpExpectIdToJson =
+    \httpExpectId ->
+        case httpExpectId of
+            IdHttpExpectString ->
+                Json.Encode.string "STRING"
+
+            IdHttpExpectJson ->
+                Json.Encode.string "JSON"
+
+            IdHttpExpectWhatever ->
+                Json.Encode.string "WHATEVER"
+
+
+encodeHeaders : HttpBody -> List HttpHeader -> Json.Encode.Value
+encodeHeaders body headers =
+    headers
+        |> addContentTypeForBody body
+        |> Json.Encode.list encodeHeader
+
+
+addContentTypeForBody : HttpBody -> List HttpHeader -> List HttpHeader
+addContentTypeForBody body headers =
+    case body of
+        HttpBodyEmpty ->
+            headers
+
+        HttpBodyString stringBodyInfo ->
+            ( "Content-Type", stringBodyInfo.mimeType ) :: headers
+
+
+encodeHeader : HttpHeader -> Json.Encode.Value
+encodeHeader ( name, value ) =
+    Json.Encode.list identity
+        [ Json.Encode.string name
+        , Json.Encode.string value
+        ]
+
+
+httpBodyToJson : HttpBody -> Json.Encode.Value
+httpBodyToJson body =
+    case body of
+        HttpBodyString stringBodyInfo ->
+            stringBodyInfo.content |> Json.Encode.string
+
+        HttpBodyEmpty ->
+            Json.Encode.null
 
 
 interfaceUnBatch : Interface state -> List (InterfaceSingle state)
@@ -1482,13 +1588,71 @@ domElementAtReversePath path =
                     DomText _ ->
                         Nothing
 
-                    DomElement domElement_ ->
-                        case domElement_.subs |> Array.get subIndex of
+                    DomElement domElement ->
+                        case domElement.subs |> Array.get subIndex of
                             Nothing ->
                                 Nothing
 
                             Just subNodeAtIndex ->
                                 subNodeAtIndex |> domElementAtReversePath parentsOfSub
+
+
+httpExpectJsonDecoder : HttpExpect state -> Json.Decode.Decoder state
+httpExpectJsonDecoder expect =
+    httpMetadataJsonDecoder
+        |> Json.Decode.andThen
+            (\meta ->
+                let
+                    isOk : Bool
+                    isOk =
+                        meta.statusCode >= 200 && meta.statusCode < 300
+                in
+                Json.Decode.field "body"
+                    (case expect of
+                        HttpExpectJson toState ->
+                            Json.Decode.map toState
+                                (if isOk then
+                                    Json.Decode.map Ok Json.Decode.value
+
+                                 else
+                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                )
+
+                        HttpExpectString toState ->
+                            Json.Decode.map toState
+                                (if isOk then
+                                    Json.Decode.map Ok Json.Decode.string
+
+                                 else
+                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                )
+
+                        HttpExpectWhatever toState ->
+                            Json.Decode.map toState
+                                (if isOk then
+                                    Json.Decode.succeed (Ok ())
+
+                                 else
+                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                )
+                    )
+            )
+
+
+httpMetadataJsonDecoder : Json.Decode.Decoder HttpMetadata
+httpMetadataJsonDecoder =
+    Json.Decode.succeed
+        (\url statusCode statusText headers ->
+            { url = url
+            , statusCode = statusCode
+            , statusText = statusText
+            , headers = headers
+            }
+        )
+        |> Json.Decode.Local.andMap (Json.Decode.field "url" Json.Decode.string)
+        |> Json.Decode.Local.andMap (Json.Decode.field "statusCode" Json.Decode.int)
+        |> Json.Decode.Local.andMap (Json.Decode.field "statusText" Json.Decode.string)
+        |> Json.Decode.Local.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
 
 
 listFirstJust : (node -> Maybe found) -> List node -> Maybe found
@@ -1579,14 +1743,14 @@ update appConfig =
 
 domElementToId : DomElement state_ -> DomElementId
 domElementToId =
-    \domElement_ ->
-        { tag = domElement_.tag
-        , styles = domElement_.styles
-        , attributes = domElement_.attributes
+    \domElement ->
+        { tag = domElement.tag
+        , styles = domElement.styles
+        , attributes = domElement.attributes
         , eventListens =
-            domElement_.eventListens |> Dict.foldl (\k _ -> Set.insert k) Set.empty
+            domElement.eventListens |> Dict.foldl (\k _ -> Set.insert k) Set.empty
         , subs =
-            domElement_.subs |> Array.map domNodeToId
+            domElement.subs |> Array.map domNodeToId
         }
 
 
@@ -1600,32 +1764,6 @@ domElementIdToJson =
             , ( "eventListens", domElementId.eventListens |> Json.Encode.set Json.Encode.string )
             , ( "subs", domElementId.subs |> Json.Encode.array domNodeIdToJson )
             ]
-
-
-httpRequestToId : HttpRequest state -> HttpRequestId
-httpRequestToId =
-    \httpRequest ->
-        { url = httpRequest.url
-        , method = httpRequest.method |> String.toUpper
-        , headers = httpRequest.headers
-        , body = httpRequest.body
-        , expect = httpRequest.expect |> httpExpectToId
-        , timeout = httpRequest.timeout
-        }
-
-
-httpExpectToId : HttpExpect state -> HttpExpectId
-httpExpectToId =
-    \httpExpect ->
-        case httpExpect of
-            HttpExpectWhatever _ ->
-                IdHttpExpectWhatever
-
-            HttpExpectString _ ->
-                IdHttpExpectString
-
-            HttpExpectJson _ ->
-                IdHttpExpectJson
 
 
 {-| A Request can fail in a couple ways:
@@ -1690,137 +1828,6 @@ httpErrorJsonDecoder r =
                     _ ->
                         Json.Decode.fail ("Unknown error code: " ++ code)
             )
-
-
-httpExpectJsonDecoder : HttpExpect state -> Json.Decode.Decoder state
-httpExpectJsonDecoder expect =
-    httpMetadataJsonDecoder
-        |> Json.Decode.andThen
-            (\meta ->
-                let
-                    isOk : Bool
-                    isOk =
-                        meta.statusCode >= 200 && meta.statusCode < 300
-                in
-                Json.Decode.field "body"
-                    (case expect of
-                        HttpExpectJson toState ->
-                            Json.Decode.map toState
-                                (if isOk then
-                                    Json.Decode.map Ok Json.Decode.value
-
-                                 else
-                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
-                                )
-
-                        HttpExpectString toState ->
-                            Json.Decode.map toState
-                                (if isOk then
-                                    Json.Decode.map Ok Json.Decode.string
-
-                                 else
-                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
-                                )
-
-                        HttpExpectWhatever toState ->
-                            Json.Decode.map toState
-                                (if isOk then
-                                    Json.Decode.map Ok (Json.Decode.succeed ())
-
-                                 else
-                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
-                                )
-                    )
-            )
-
-
-httpMetadataJsonDecoder : Json.Decode.Decoder HttpMetadata
-httpMetadataJsonDecoder =
-    Json.Decode.succeed
-        (\url statusCode statusText headers ->
-            { url = url
-            , statusCode = statusCode
-            , statusText = statusText
-            , headers = headers
-            }
-        )
-        |> Json.Decode.Local.andMap (Json.Decode.field "url" Json.Decode.string)
-        |> Json.Decode.Local.andMap (Json.Decode.field "statusCode" Json.Decode.int)
-        |> Json.Decode.Local.andMap (Json.Decode.field "statusText" Json.Decode.string)
-        |> Json.Decode.Local.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
-
-
-httpRequestIdToJson : HttpRequestId -> Json.Encode.Value
-httpRequestIdToJson =
-    \httpRequestId ->
-        Json.Encode.object
-            [ ( "url", httpRequestId.url |> Json.Encode.string )
-            , ( "method", httpRequestId.method |> Json.Encode.string )
-            , ( "headers", encodeHeaders httpRequestId.body httpRequestId.headers )
-            , ( "expect", httpRequestId.expect |> httpExpectIdToJson )
-            , ( "body", httpRequestId.body |> httpBodyToJson )
-            , ( "timeout", httpRequestId.timeout |> httpTimeoutToJson )
-            ]
-
-
-httpTimeoutToJson : Maybe Int -> Json.Encode.Value
-httpTimeoutToJson =
-    \maybeTimeout ->
-        case maybeTimeout of
-            Nothing ->
-                Json.Encode.null
-
-            Just timeout ->
-                timeout |> Json.Encode.int
-
-
-httpExpectIdToJson : HttpExpectId -> Json.Encode.Value
-httpExpectIdToJson =
-    \httpExpectId ->
-        case httpExpectId of
-            IdHttpExpectString ->
-                Json.Encode.string "STRING"
-
-            IdHttpExpectJson ->
-                Json.Encode.string "JSON"
-
-            IdHttpExpectWhatever ->
-                Json.Encode.string "WHATEVER"
-
-
-encodeHeaders : HttpBody -> List HttpHeader -> Json.Encode.Value
-encodeHeaders body headers =
-    headers
-        |> addContentTypeForBody body
-        |> Json.Encode.list encodeHeader
-
-
-addContentTypeForBody : HttpBody -> List HttpHeader -> List HttpHeader
-addContentTypeForBody body headers =
-    case body of
-        HttpBodyEmpty ->
-            headers
-
-        HttpBodyString stringBodyInfo ->
-            ( "Content-Type", stringBodyInfo.mimeType ) :: headers
-
-
-encodeHeader : HttpHeader -> Json.Encode.Value
-encodeHeader ( name, value ) =
-    Json.Encode.list identity
-        [ Json.Encode.string name
-        , Json.Encode.string value
-        ]
-
-
-httpBodyToJson : HttpBody -> Json.Encode.Value
-httpBodyToJson body =
-    case body of
-        HttpBodyString stringBodyInfo ->
-            stringBodyInfo.content |> Json.Encode.string
-
-        HttpBodyEmpty ->
-            Json.Encode.null
 
 
 {-| Individual messages to js. Also used to identify responses with the same part in the interface

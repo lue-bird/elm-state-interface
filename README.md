@@ -13,7 +13,7 @@ can be reduced down to state and interface, making it simpler, safer and more de
 
 #### the extras
 - an event type only exists as an optional intermediate type (still highly recommended, though most of the time)
-- update is part of the interface via [`BrowserApp.on`](BrowserApp#on)
+- update is part of the interface via [`BrowserApp.map`](https://package.elm-lang.org/packages/lue-bird/elm-state-interface/1.0.0/BrowserApp#map)
 
 The classic counter example:
 
@@ -53,7 +53,7 @@ app =
                     ]
                 |> Ui.elementToNode
                 |> Ui.render
-                |> BrowserApp.on
+                |> BrowserApp.map
                     (\event ->
                         case event of
                             DecreaseClicked ->
@@ -156,13 +156,13 @@ type alias State =
                         BrowserApp.none
                     Err _ ->
                         Http.request { url = "...", decoder = Image.jsonDecoder }
-                            |> Interface.on (\result -> { state | icon = result })
+                            |> BrowserApp.map (\result -> { state | icon = result })
                 , case state.content of
                     Ok _ ->
                         BrowserApp.none
                     Err _ ->
                         Http.request { url = "...", decoder = Json.Decode.string }
-                            |> Interface.on (\result -> { state | content = result })
+                            |> BrowserApp.map (\result -> { state | content = result })
                 , ..error ui..
                 ]
                     |> BrowserApp.batch

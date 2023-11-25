@@ -64,7 +64,7 @@ app =
                 |> BrowserApp.Dom.render
             ]
                 |> BrowserApp.batch
-                |> BrowserApp.on
+                |> BrowserApp.map
                     (\event ->
                         case event of
                             MouseMovedTo newMousePoint ->
