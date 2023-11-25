@@ -1,6 +1,6 @@
 module BrowserApp.Dom exposing
     ( text
-    , element, elementAddAttributes, elementAddStyles, elementOnEvent, elementAddSubs, elementToNode
+    , element, Modifier(..), listenTo, style, attribute, modifierMap
     , render
     )
 
@@ -10,19 +10,18 @@ These are primitives used for svg and html.
 Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
 
 @docs text
-@docs element, elementAddAttributes, elementAddStyles, elementOnEvent, elementAddSubs, elementToNode
+@docs element, Modifier, listenTo, style, attribute, modifierMap
 @docs render
 
 -}
 
 import Array
-import BrowserApp exposing (DomElement, DomNode)
+import BrowserApp exposing (DomNode)
 import Dict
 import Json.Decode
 
 
 {-| An [`Interface`](BrowserApp#Interface) for displaying a given [`DomNode`](BrowserApp#DomNode).
-Don't forget to call [`elementToNode`](#elementToNode) if necessary
 -}
 render : DomNode state -> BrowserApp.Interface state
 render =
@@ -39,76 +38,91 @@ text =
     BrowserApp.DomText
 
 
-{-| Create a [`DomElement`](BrowserApp#DomElement) with a given tag.
+{-| Create a DOM element with a given tag.
 For example for <p>text</p>
 
     BrowserApp.Dom.element "p"
-        |> BrowserApp.Dom.elementAddSubs [ BrowserApp.Dom.text "text" ]
+        []
+        [ BrowserApp.Dom.text "text" ]
 
 -}
-element : String -> DomElement state_
-element tag =
+element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+element tag modifiers subs =
     { tag = tag
-    , eventListens = Dict.empty
+    , eventListens =
+        modifiers
+            |> List.foldl
+                (\modifier ->
+                    case modifier of
+                        Listen listen_ ->
+                            Dict.insert listen_.eventName listen_.on
+
+                        _ ->
+                            identity
+                )
+                Dict.empty
     , styles = Dict.empty
     , attributes = Dict.empty
-    , subs = Array.empty
+    , subs = subs |> Array.fromList
     }
+        |> BrowserApp.DomElement
 
 
-{-| Append child-[`DomNode`](BrowserApp#DomNode)s
--}
-elementAddSubs : List (DomNode state) -> (DomElement state -> DomElement state)
-elementAddSubs subs =
-    \domElement ->
-        { domElement | subs = Array.append domElement.subs (Array.fromList subs) }
-
-
-{-| Listen for a specific DOM event on the [`DomElement`](BrowserApp#DomElement)
--}
-elementOnEvent : String -> (Json.Decode.Value -> state) -> (DomElement state -> DomElement state)
-elementOnEvent eventName eventToState =
-    \domElement ->
-        { domElement
-            | eventListens =
-                domElement.eventListens |> Dict.insert eventName eventToState
-        }
-
-
-{-| Add attributes as `( key, value )` tuples to the [`DomElement`](BrowserApp#DomElement).
+{-| Set the behavior of a [`BrowserApp.Dom.element`](BrowserApp-Dom#element).
+To create one, use [`attribute`](#attribute), [`style`](#style), [`listen`](#listen)
 
 For example to get `<a href="https://elm-lang.org">Elm</a>`
 
     BrowserApp.Dom.element "a"
-        |> BrowserApp.Dom.elementAddAttributes
-            [ ( "href", "https://elm-lang.org" ) ]
-        |> BrowserApp.Dom.elementAddSubs
-            [ BrowserApp.Dom.text "Elm" ]
-        |> BrowserApp.Dom.elementToNode
+        [ BrowserApp.Dom.attribute "href" "https://elm-lang.org" ]
+        [ BrowserApp.Dom.text "Elm" ]
 
 -}
-elementAddAttributes : List ( String, String ) -> (DomElement state -> DomElement state)
-elementAddAttributes attributes =
-    \domElement ->
-        { domElement
-            | attributes =
-                Dict.union (attributes |> Dict.fromList) domElement.attributes
-        }
+type Modifier state
+    = Attribute { key : String, value : String }
+    | Style { key : String, value : String }
+    | Listen { eventName : String, on : Json.Decode.Value -> state }
 
 
-{-| Add styles as `( key, value )` tuples to the [`DomElement`](BrowserApp#DomElement)
+{-| A key-value attribute [`Modifier`](#Modifier)
 -}
-elementAddStyles : List ( String, String ) -> (DomElement state -> DomElement state)
-elementAddStyles styles =
-    \domElement ->
-        { domElement
-            | styles =
-                Dict.union (styles |> Dict.fromList) domElement.styles
-        }
+attribute : String -> String -> Modifier state_
+attribute key value =
+    { key = key, value = value } |> Attribute
 
 
-{-| Convert a [`DomElement`](BrowserApp#DomElement) to a more general [`DomNode`](BrowserApp#DomNode)
+{-| A key-value style [`Modifier`](#Modifier)
 -}
-elementToNode : DomElement state -> DomNode state
-elementToNode =
-    BrowserApp.DomElement
+style : String -> String -> Modifier state_
+style key value =
+    { key = key, value = value } |> Attribute
+
+
+{-| Listen for a specific DOM event on the [`DomElement`](BrowserApp#DomElement).
+Use [`modifierMap`](#modifierMap) to wire this to a specific event.
+-}
+listenTo : String -> Modifier Json.Decode.Value
+listenTo eventName =
+    Listen { eventName = eventName, on = identity }
+
+
+{-| Wire events from this [`Modifier`](#Modifier) to a specific event.
+
+    BrowserApp.Dom.listen "click" |> BrowserApp.Dom.modifierMap (\_ -> ButtonClicked)
+
+-}
+modifierMap : (state -> mappedState) -> (Modifier state -> Modifier mappedState)
+modifierMap stateChange =
+    \modifier ->
+        case modifier of
+            Attribute keyValue ->
+                keyValue |> Attribute
+
+            Style keyValue ->
+                keyValue |> Style
+
+            Listen listen ->
+                { eventName = listen.eventName
+                , on = \json -> listen.on json |> stateChange
+                }
+                    |> Listen

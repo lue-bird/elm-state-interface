@@ -20,47 +20,44 @@ app =
     , interface =
         \(State state) ->
             [ BrowserApp.Dom.element "div"
-                |> BrowserApp.Dom.elementAddSubs
-                    [ BrowserApp.Dom.element "p"
-                        |> BrowserApp.Dom.elementAddSubs
-                            [ "hello state-interface! Mouse coords:" |> BrowserApp.Dom.text
-                            , BrowserApp.Dom.element "br" |> BrowserApp.Dom.elementToNode
-                            , ("x = " ++ (state.mousePoint.x |> String.fromInt)) |> BrowserApp.Dom.text
-                            , BrowserApp.Dom.element "br" |> BrowserApp.Dom.elementToNode
-                            , ("y = " ++ (state.mousePoint.y |> String.fromInt)) |> BrowserApp.Dom.text
-                            ]
-                        |> BrowserApp.Dom.elementToNode
-                    , BrowserApp.Dom.element "div"
-                        |> BrowserApp.Dom.elementAddSubs
-                            [ BrowserApp.Dom.element "button"
-                                |> BrowserApp.Dom.elementAddSubs  [ "+" |> BrowserApp.Dom.text ]
-                                |> BrowserApp.Dom.elementOnEvent "click"
-                                    (\_ -> CounterIncreaseClicked)
-                                |> BrowserApp.Dom.elementToNode
-                            , BrowserApp.Dom.element "div"
-                                |> BrowserApp.Dom.elementAddSubs
-                                    [ (state.counter |> String.fromInt) |> BrowserApp.Dom.text ]
-                                |> BrowserApp.Dom.elementToNode
-                            , BrowserApp.Dom.element "button"
-                                |> BrowserApp.Dom.elementAddSubs  [ "-" |> BrowserApp.Dom.text ]
-                                |> BrowserApp.Dom.elementOnEvent "click"
-                                    (\_ -> CounterDecreaseClicked)
-                                |> BrowserApp.Dom.elementToNode
-                            ]
-                        |> BrowserApp.Dom.elementToNode
+                [ BrowserApp.Dom.listenTo "mousemove"
+                    |> BrowserApp.Dom.modifierMap
+                        (\mouseEvent ->
+                            mouseEvent
+                                |> Json.Decode.decodeValue
+                                    (Json.Decode.succeed (\x y -> { x = x, y = y })
+                                        |> Json.Decode.Local.andMap (Json.Decode.field "clientX" Json.Decode.int)
+                                        |> Json.Decode.Local.andMap (Json.Decode.field "clientY" Json.Decode.int)
+                                    )
+                                |> Result.withDefault { x = -1, y = -1 }
+                                |> MouseMovedTo
+                        )
+                ]
+                [ BrowserApp.Dom.element "p"
+                    []
+                    [ "hello state-interface! Mouse coords:" |> BrowserApp.Dom.text
+                    , BrowserApp.Dom.element "br" |> BrowserApp.Dom.elementToNode
+                    , ("x = " ++ (state.mousePoint.x |> String.fromInt)) |> BrowserApp.Dom.text
+                    , BrowserApp.Dom.element "br" |> BrowserApp.Dom.elementToNode
+                    , ("y = " ++ (state.mousePoint.y |> String.fromInt)) |> BrowserApp.Dom.text
                     ]
-                |> BrowserApp.Dom.elementOnEvent "mousemove"
-                    (\mouseEvent ->
-                        mouseEvent
-                            |> Json.Decode.decodeValue
-                                (Json.Decode.succeed (\x y -> { x = x, y = y })
-                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientX" Json.Decode.int)
-                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientY" Json.Decode.int)
-                                )
-                            |> Result.withDefault { x = -1, y = -1 }
-                            |> MouseMovedTo
-                    )
-                |> BrowserApp.Dom.elementToNode
+                , BrowserApp.Dom.element "div"
+                    []
+                    [ BrowserApp.Dom.element "button"
+                        [ BrowserApp.Dom.listenTo "click"
+                            |> BrowserApp.Dom.modifierMap (\_ -> CounterIncreaseClicked)
+                        ]
+                        [ "+" |> BrowserApp.Dom.text ]
+                    , BrowserApp.Dom.element "div"
+                        []
+                        [ (state.counter |> String.fromInt) |> BrowserApp.Dom.text ]
+                    , BrowserApp.Dom.element "button"
+                        [ BrowserApp.Dom.listenTo "click"
+                            |> BrowserApp.Dom.modifierMap (\_ -> CounterDecreaseClicked)
+                        ]
+                        [ "-" |> BrowserApp.Dom.text ]
+                    ]
+                ]
                 |> BrowserApp.Dom.render
             ]
                 |> BrowserApp.batch

@@ -35,23 +35,17 @@ app =
     , interface =
         \counter ->
             Ui.element "div"
-                |> Ui.elementAddSubs
-                    [ Ui.element "button"
-                        |> Ui.elementAddSubs [ "+" |> Ui.text ]
-                        |> Ui.elementOnEvent "click"
-                            (\_ -> IncreaseClicked)
-                        |> Ui.elementToNode
-                    , Ui.element "div"
-                        |> Ui.elementAddSubs
-                            [ counter |> String.fromInt |> Ui.text ]
-                        |> Ui.elementToNode
-                    , Ui.element "button"
-                        |> Ui.elementAddSubs [ "-" |> Ui.text ]
-                        |> Ui.elementOnEvent "click"
-                            (\_ -> DecreaseClicked)
-                        |> Ui.elementToNode
-                    ]
-                |> Ui.elementToNode
+                []
+                [ Ui.element "button"
+                    [ Ui.listenTo "click" |> Ui.modifierMap (\_ -> IncreaseClicked) ]
+                    [ "+" |> Ui.text ]
+                , Ui.element "div"
+                    []
+                    [ counter |> String.fromInt |> Ui.text ]
+                , Ui.element "button"
+                    [ Ui.listenTo "click" |> Ui.modifierMap (\_ -> DecreaseClicked) ]
+                    [ "-" |> Ui.text ]
+                ]
                 |> Ui.render
                 |> BrowserApp.map
                     (\event ->
