@@ -90,6 +90,8 @@ BrowserApp.start({
 
 Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) 🌱 for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) as _the_ motivation to make a package out of it.
 
+> The complete example and more in [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
+
 ## state-interface as an alternative to tasks
 
 Simplified examples.
