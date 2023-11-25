@@ -1,10 +1,12 @@
 module BrowserApp.Navigation exposing
-    ( forward, back, pushUrl, replaceUrl
+    ( urlRequest
+    , forward, back, pushUrl, replaceUrl
     , load, reload
     )
 
 {-| Helpers for `history` interaction as part of an [`Interface`](BrowserApp#Interface)
 
+@docs urlRequest
 @docs forward, back, pushUrl, replaceUrl
 @docs load, reload
 
@@ -12,6 +14,18 @@ module BrowserApp.Navigation exposing
 
 import BrowserApp
 import Rope
+
+
+{-| An [`Interface`](BrowserApp#Interface) for getting the current page's url.
+Is usually used while starting up the app.
+
+Note: Uses [`window.location.href`](https://developer.mozilla.org/en-US/docs/Web/API/Window/location)
+
+-}
+urlRequest : BrowserApp.Interface String
+urlRequest =
+    BrowserApp.NavigationUrlRequest identity
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) that changes the URL,

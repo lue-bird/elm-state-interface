@@ -148,6 +148,7 @@ type InterfaceSingle state
     | HttpRequest (HttpRequest state)
     | WindowEventListen { eventName : String, on : Json.Decode.Value -> state }
     | WindowAnimationFrameListen (Time.Posix -> state)
+    | NavigationUrlRequest (String -> state)
     | DocumentEventListen { eventName : String, on : Json.Decode.Value -> state }
     | NavigationReplaceUrl String
     | NavigationPushUrl String
@@ -259,6 +260,7 @@ type InterfaceSingleId
     | IdHttpRequest HttpRequestId
     | IdWindowEventListen String
     | IdWindowAnimationFrameListen
+    | IdNavigationUrlRequest
     | IdDocumentEventListen String
     | IdNavigationReplaceUrl String
     | IdNavigationPushUrl String
@@ -499,6 +501,9 @@ interfaceSingleMap stateChange =
             WindowAnimationFrameListen toState ->
                 (\event -> toState event |> stateChange) |> WindowAnimationFrameListen
 
+            NavigationUrlRequest toState ->
+                (\event -> toState event |> stateChange) |> NavigationUrlRequest
+
             DocumentEventListen listen ->
                 { eventName = listen.eventName, on = \value -> listen.on value |> stateChange }
                     |> DocumentEventListen
@@ -678,6 +683,9 @@ interfaceSingleToId =
             WindowAnimationFrameListen _ ->
                 IdWindowAnimationFrameListen
 
+            NavigationUrlRequest _ ->
+                IdNavigationUrlRequest
+
             DocumentEventListen listen ->
                 IdDocumentEventListen listen.eventName
 
@@ -761,6 +769,14 @@ interfaceIdOrder =
                 IdWindowAnimationFrameListen ->
                     case b of
                         IdWindowAnimationFrameListen ->
+                            EQ
+
+                        _ ->
+                            GT
+
+                IdNavigationUrlRequest ->
+                    case b of
+                        IdNavigationUrlRequest ->
                             EQ
 
                         _ ->
@@ -966,6 +982,9 @@ interfaceDiffToCmds =
                         WindowAnimationFrameListen _ ->
                             RemoveWindowAnimationFrameListen |> Just
 
+                        NavigationUrlRequest _ ->
+                            Nothing
+
                         DocumentEventListen listen ->
                             RemoveDocumentEventListen listen.eventName |> Just
 
@@ -1015,6 +1034,9 @@ interfaceDiffToCmds =
 
                         WindowAnimationFrameListen _ ->
                             AddWindowAnimationFrameListen |> Just
+
+                        NavigationUrlRequest _ ->
+                            AddNavigationUrlRequest |> Just
 
                         DocumentEventListen listen ->
                             AddDocumentEventListen listen.eventName |> Just
@@ -1123,6 +1145,9 @@ interfaceDiffToJson =
 
                 RemoveWindowAnimationFrameListen ->
                     ( "removeWindowAnimationFrameListen", Json.Encode.null )
+
+                AddNavigationUrlRequest ->
+                    ( "addNavigationUrlRequest", Json.Encode.null )
 
                 AddDocumentEventListen eventName ->
                     ( "addDocumentEventListen", eventName |> Json.Encode.string )
@@ -1413,6 +1438,14 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Json.Decode.map Time.millisToPosix Json.Decode.int
                         |> Json.Decode.map toState
                         |> Just
+
+                _ ->
+                    Nothing
+
+        NavigationUrlRequest toState ->
+            case interfaceDiff of
+                AddNavigationUrlRequest ->
+                    Json.Decode.string |> Json.Decode.map toState |> Just
 
                 _ ->
                     Nothing
@@ -1729,6 +1762,7 @@ type InterfaceDiff
     | RemoveWindowEventListen String
     | AddWindowAnimationFrameListen
     | RemoveWindowAnimationFrameListen
+    | AddNavigationUrlRequest
     | AddDocumentEventListen String
     | RemoveDocumentEventListen String
     | AddNavigationReplaceUrl String

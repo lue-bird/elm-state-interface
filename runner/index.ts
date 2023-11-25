@@ -92,6 +92,10 @@ export function start(config: { ports: ElmPorts, domElement: HTMLElement }) {
             run: (_config, _sendToElm) => { removeAnimationFrameListen() }
         },
         {
+            on: event => event?.addNavigationUrlRequest,
+            run: (_config, sendToElm) => { sendToElm(window.location.href) }
+        },
+        {
             on: event => event?.addDocumentEventListen,
             run: documentEventListenAdd
         },
