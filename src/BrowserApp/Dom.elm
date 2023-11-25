@@ -4,7 +4,7 @@ module BrowserApp.Dom exposing
     , render
     )
 
-{-| Helpers for [DOM node types](BrowserApp#DOM) as part of an [`Interface`](BrowserApp#Interface).
+{-| Helpers for [DOM node types](BrowserApp#DomNode) as part of an [`Interface`](BrowserApp#Interface).
 
 These are primitives used for svg and html.
 Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)

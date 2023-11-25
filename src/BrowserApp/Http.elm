@@ -5,7 +5,7 @@ module BrowserApp.Http exposing
     , request
     )
 
-{-| Helpers for [HTTP types](BrowserApp#HTTP) as part of an [`Interface`](BrowserApp#Interface)
+{-| Helpers for [HTTP types](BrowserApp#HttpRequest) as part of an [`Interface`](BrowserApp#Interface)
 
 @docs expectJson, expectString, expectWhatever
 @docs bodyJson
