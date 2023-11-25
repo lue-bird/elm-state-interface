@@ -5,7 +5,7 @@ module BrowserApp.Http exposing
     , request
     )
 
-{-| Helpers for [HTTP types](BrowserApp#Http) as part of an [`Interface`](BrowserApp#Interface)
+{-| Helpers for [HTTP types](BrowserApp#HTTP) as part of an [`Interface`](BrowserApp#Interface)
 
 @docs expectJson, expectString, expectWhatever
 @docs bodyJson
@@ -16,9 +16,7 @@ module BrowserApp.Http exposing
 -}
 
 import BrowserApp exposing (HttpBody, HttpError, HttpExpect, HttpHeader, HttpRequest)
-import Dict exposing (Dict)
 import Json.Decode
-import Json.Decode.Local
 import Json.Encode
 
 

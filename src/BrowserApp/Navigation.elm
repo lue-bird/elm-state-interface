@@ -11,8 +11,6 @@ module BrowserApp.Navigation exposing
 -}
 
 import BrowserApp
-import Json.Decode
-import Json.Decode.Local
 
 
 {-| An [`Interface`](BrowserApp#Interface) that changes the URL,

@@ -8,7 +8,6 @@ module BrowserApp.Document exposing (eventListen)
 
 import BrowserApp
 import Json.Decode
-import Json.Decode.Local
 
 
 {-| An [`Interface`](BrowserApp#Interface) that listens for a specific `document` event
