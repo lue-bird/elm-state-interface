@@ -1,18 +1,21 @@
 module BrowserApp.Navigation exposing
-    ( urlRequest
+    ( urlRequest, byUserListen
     , forward, back, pushUrl, replaceUrl
     , load, reload
     )
 
 {-| Helpers for `history` interaction as part of an [`Interface`](BrowserApp#Interface)
 
-@docs urlRequest
+@docs urlRequest, byUserListen
 @docs forward, back, pushUrl, replaceUrl
 @docs load, reload
 
 -}
 
+-- elm/browser on "How do I manage URL from a Browser.element?" https://github.com/elm/browser/blob/master/notes/navigation-in-elements.md
+
 import BrowserApp
+import Json.Decode
 import Rope
 
 
@@ -108,4 +111,24 @@ Replacement for [`Browser.Navigation.reload`](https://dark.elm.dmy.fr/packages/e
 reload : BrowserApp.Interface state_
 reload =
     BrowserApp.NavigationReload
+        |> Rope.singleton
+
+
+{-| If you use [`pushUrl`](#pushUrl) to update the URL,
+when the user clicks ← or → buttons, the URL will change but your UI will not.
+
+Use [`byUserListen`](#byUserListen) to detect those URL changes and make ui changes as needed.
+
+Note: When the app itself initiates a url change, like with [`pushUrl`](#pushUrl) or [`replaceUrl`](#replaceUrl)
+, no such event is triggered
+
+-}
+byUserListen : BrowserApp.Interface (Result Json.Decode.Error String)
+byUserListen =
+    BrowserApp.WindowEventListen
+        { eventName = "popstate"
+        , on =
+            Json.Decode.decodeValue
+                (Json.Decode.field "url" Json.Decode.string)
+        }
         |> Rope.singleton

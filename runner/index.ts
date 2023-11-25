@@ -240,20 +240,16 @@ function documentEventListenRemove(eventName: string) {
 function go(urlSteps: number) {
     history.go(urlSteps);
 }
-
 function pushUrl(url: string) {
-    history.pushState({}, '', url);
+    history.pushState({ url: url }, "", url);
 }
-
 function replaceUrl(url: string) {
-    history.replaceState({}, '', url);
+    history.replaceState({ url: url }, "", url);
 }
-
 
 function reload() {
     document.location.reload()
 }
-
 function load(url: string) {
     try {
         window.location.href = url
