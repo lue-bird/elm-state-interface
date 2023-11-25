@@ -19,7 +19,7 @@ export interface ElmPorts {
     fromJs: { send: (toElm: any) => void };
 }
 
-export function start(config: { ports: ElmPorts, domElement: HTMLElement }) {
+export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
     const interfaceImplementations: { on: (event: any) => any, run: (config: any, sendToElm: (v: any) => void) => void }[] = [
         {
             on: event => event?.addRequestTimeNow,
@@ -55,7 +55,7 @@ export function start(config: { ports: ElmPorts, domElement: HTMLElement }) {
         {
             on: event => event?.removeDom,
             run: (_config, _sendToElm) => {
-                config.domElement.replaceChildren()
+                appConfig.domElement.replaceChildren()
             }
         },
         {
@@ -126,11 +126,11 @@ export function start(config: { ports: ElmPorts, domElement: HTMLElement }) {
     ]
 
 
-    config.ports.toJs.subscribe(function (fromElm) {
+    appConfig.ports.toJs.subscribe(function (fromElm) {
         // console.log("elm → js: ", fromElm)
         function sendToElm(eventData: void) {
             const toElm = { diff: fromElm, eventData: eventData }
-            config.ports.fromJs.send(toElm)
+            appConfig.ports.fromJs.send(toElm)
             // console.log("js → elm: ", toElm)
         }
 
@@ -145,11 +145,11 @@ export function start(config: { ports: ElmPorts, domElement: HTMLElement }) {
     function renderDomNode(path: number[], node: any, sendToElm: (v: any) => void) {
         const createdDomNode = createDomNode([], node, sendToElm)
         if (path.length === 0) {
-            const parentDomNode = config.domElement
+            const parentDomNode = appConfig.domElement
             parentDomNode.replaceChildren() // remove all subs
             parentDomNode.appendChild(createdDomNode)
         } else {
-            let parentDomNode: ChildNode | null = config.domElement.firstChild
+            let parentDomNode: ChildNode | null = appConfig.domElement.firstChild
             if (parentDomNode) {
                 path.slice(1, path.length).reverse().forEach(subIndex => {
                     const subNode = parentDomNode?.childNodes[subIndex]
