@@ -39,12 +39,12 @@ text =
     BrowserApp.DomText
 
 
-{-| Create a DOM element with a given tag.
-For example for <p>text</p>
+{-| Create a DOM element with a given tag, [`Modifier`](#Modifier)s and sub-[node](BrowserApp#DomNode)s.
+For example to get `<p>flying</p>`
 
     BrowserApp.Dom.element "p"
         []
-        [ BrowserApp.Dom.text "text" ]
+        [ BrowserApp.Dom.text "flying" ]
 
 -}
 element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
@@ -78,11 +78,11 @@ element tag modifiers subs =
 To create one, use [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo).
 To combine multiple, use [`BrowserApp.Dom.modifierBatch`](#modifierBatch) and [`BrowserApp.Dom.modifierNone`](#modifierNone)
 
-For example to get `<a href="https://elm-lang.org">Elm</a>`
+For example to get `<a href="https://elm-lang.org">elm</a>`
 
     BrowserApp.Dom.element "a"
         [ BrowserApp.Dom.attribute "href" "https://elm-lang.org" ]
-        [ BrowserApp.Dom.text "Elm" ]
+        [ BrowserApp.Dom.text "elm" ]
 
 -}
 type alias Modifier state =
@@ -114,7 +114,8 @@ modifierNone =
     Rope.empty
 
 
-{-| An individual [`Modifier`](#Modifier)
+{-| An individual [`Modifier`](#Modifier).
+Create using [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo).
 -}
 type ModifierSingle state
     = Attribute { key : String, value : String }
