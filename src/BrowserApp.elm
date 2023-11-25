@@ -2,7 +2,7 @@ module BrowserApp exposing
     ( Config
     , toProgram, State(..), Event(..)
     , init, subscriptions, update
-    , Interface, InterfaceSingle(..), none, batch, map
+    , Interface, InterfaceSingle(..), batch, none, map
     , DomNode(..), DomElement
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceDiff(..)
@@ -29,7 +29,7 @@ If you just want to replace a part of your elm app with this architecture. Make 
 
 # interface types
 
-@docs Interface, InterfaceSingle, none, batch, map
+@docs Interface, InterfaceSingle, batch, none, map
 
 
 ## DOM
