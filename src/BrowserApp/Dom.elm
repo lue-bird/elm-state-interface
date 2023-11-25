@@ -52,7 +52,7 @@ element tag modifiers subs =
     let
         modifierList : List (ModifierSingle state)
         modifierList =
-            modifiers |> Rope.fromList |> Rope.concat |> Rope.toList
+            modifiers |> modifierBatch |> Rope.toList
     in
     { tag = tag
     , eventListens =
