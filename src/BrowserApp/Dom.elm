@@ -9,6 +9,7 @@ module BrowserApp.Dom exposing
 These are primitives used for svg and html.
 Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
 
+@docs documentEventListen
 @docs text
 @docs element, Modifier, ModifierSingle, attribute, style, listenTo, modifierMap, modifierBatch, modifierNone
 @docs render
@@ -20,6 +21,15 @@ import BrowserApp exposing (DomNode)
 import Dict
 import Json.Decode
 import Rope exposing (Rope)
+
+
+{-| An [`Interface`](BrowserApp#Interface) that listens for a specific `document` event
+like like keypress, keydown, keyup, click, mousemove, mousedown, mouseup
+-}
+documentEventListen : String -> BrowserApp.Interface Json.Decode.Value
+documentEventListen eventName =
+    BrowserApp.DocumentEventListen { eventName = eventName, on = identity }
+        |> Rope.singleton
 
 
 {-| An [`Interface`](BrowserApp#Interface) for displaying a given [`DomNode`](BrowserApp#DomNode).
