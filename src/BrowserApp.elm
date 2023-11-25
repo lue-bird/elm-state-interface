@@ -1700,9 +1700,7 @@ type HttpError
   - statusText describing what the statusCode means a little
   - headers like Content-Length and Expires
 
-**Note:**
-
-It is possible for a response to have the same header multiple times.
+Note: It is possible for a response to have the same header multiple times.
 In that case, all the values end up in a single entry in the headers dictionary.
 The values are separated by commas, following the rules outlined [here](https://stackoverflow.com/questions/4371328/are-duplicate-http-response-headers-acceptable).
 
