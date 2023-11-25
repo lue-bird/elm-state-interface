@@ -1,7 +1,7 @@
+> ⚠️ experimental
+
 The Elm Architecture with its model, view, msg, update, sub, cmd, task
 can be reduced down to state and interface, making it simpler, safer and more declarative.
-
-First: Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make this package.
 
 ## the ideas
 - cmds, tasks, subs and view are combined into one big view/subscriptions-like function
@@ -13,7 +13,7 @@ First: Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dm
 
 ## the extras
 - an event type only exists as an optional intermediate type (still highly recommended, though most of the time)
-- update is part of `interface` via [`BrowserApp.on`](BrowserApp#on)
+- update is part of the interface via [`BrowserApp.on`](BrowserApp#on)
 
 The classic counter example:
 
@@ -87,6 +87,8 @@ BrowserApp.start({
     domElement : document.getElementById("your-app-element")
 })
 ```
+
+Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make this package.
 
 ## state-interface as an alternative to tasks
 
@@ -169,4 +171,16 @@ which feels a bit more explicit, declarative and less wiring-heavy at least.
 Note: This example is supposed to show differences in architecture.
 This package is (currently) not a replacement
 for [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) which allows custom tasks.
-A goal is to publish those APIs in this elm package instead of users doing the work only for their own projects. I'm a noob in the js world, so feedback and contributions are welcome ❀
+A goal is to publish more browser APIs like webstorage in this elm package instead of users doing the work only for their own projects. I'm a noob in the js world, so feedback and contributions are welcome ❀
+
+## future
+
+  - add audio interface similar to [`MartinSStewart/elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/)
+  - potentially: basic `node` APIs
+
+Note: The package is very much not designed to be easily extensible.
+Adding stuff _will_ force a major version bump.
+The module and interface structure is also not equipped to support multiple platforms.
+
+If you have knowledge in any of these fields on the js side, have pointers or already 
+a basic implementation using ports, [come by](https://github.com/lue-bird/elm-state-interface/discussions/new/choose)!
