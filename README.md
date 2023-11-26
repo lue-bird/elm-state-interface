@@ -171,8 +171,8 @@ A goal is to publish more browser APIs like webstorage in this elm package inste
 
 ## the 1.0.0 release
 
-A goal is feature-parity with elm's exposed browser APIs.
-Still, I expect to have missed some interfaces you might expect.
+A goal is feature-parity with elm's exposed browser APIs
+though I expect to have missed some interfaces you might expect.
 For now, I also left out some more niche interfaces like [`Browser.Dom.setViewportOf`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Dom#setViewportOf) and [`WebGL.Texture.loadWith`](https://dark.elm.dmy.fr/packages/elm-explorations/webgl/latest/WebGL-Texture#loadWith).
 
 ## future
