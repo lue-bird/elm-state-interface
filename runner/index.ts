@@ -20,52 +20,60 @@ export interface ElmPorts {
 }
 
 export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
-    const interfaceImplementations: { on: (event: any) => any, run: (config: any, sendToElm: (v: any) => void) => void }[] = [
+    const interfaceImplementations: { on: string, run: (config: any, sendToElm: (v: any) => void) => void }[] = [
         {
-            on: event => event?.addTimePosixRequest,
+            on: "addTimePosixRequest",
             run: (_config, sendToElm) => {
                 sendToElm(Date.now())
             },
         },
         {
-            on: event => event?.addTimezoneOffsetRequest,
+            on: "addTimezoneOffsetRequest",
             run: (_config, sendToElm) => {
-                // // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
-                sendToElm(-new Date().getTimezoneOffset())
+                // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
+                sendToElm(new Date().getTimezoneOffset())
             }
         },
         {
-            on: event => event?.addTimezoneNameRequest,
+            on: "addTimezoneNameRequest",
             run: (_config, sendToElm) => {
                 sendToElm(getTimezoneName())
             }
         },
         {
-            on: event => event?.addRandomUnsignedIntsRequest,
+            on: "addTimePeriodicallyListen",
+            run: (config, sendToElm) => { addTimePeriodicallyListen(config, sendToElm) }
+        },
+        {
+            on: "removeTimePeriodicallyListen",
+            run: (config, _sendToElm) => { removeTimePeriodicallyListen(config) }
+        },
+        {
+            on: "addRandomUnsignedIntsRequest",
             run: (config, sendToElm) => {
                 sendToElm(crypto.getRandomValues(new Uint32Array(config)))
             }
         },
         {
-            on: event => event?.addConsoleLog,
+            on: "addConsoleLog",
             run: (config, _sendToElm) => {
                 console.log(config)
             },
         },
         {
-            on: event => event?.replaceDomNode,
+            on: "replaceDomNode",
             run: (config, sendToElm) => {
                 renderDomNode(config.path, config.domNode, sendToElm)
             }
         },
         {
-            on: event => event?.removeDom,
+            on: "removeDom",
             run: (_config, _sendToElm) => {
                 appConfig.domElement.replaceChildren()
             }
         },
         {
-            on: event => event?.addHttpRequest,
+            on: "addHttpRequest",
             run: (config, sendToElm) => {
                 const abortController = new AbortController()
                 httpRequestAbortControllers[config] = abortController
@@ -73,7 +81,7 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
             }
         },
         {
-            on: event => event?.removeHttpRequest,
+            on: "removeHttpRequest",
             run: (config, _sendToElm) => {
                 const maybeAbortController = httpRequestAbortControllers[config]
                 if (maybeAbortController) {
@@ -82,51 +90,51 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
             }
         },
         {
-            on: event => event?.addWindowEventListen,
+            on: "addWindowEventListen",
             run: windowEventListenAdd
         },
         {
-            on: event => event?.removeWindowEventListen,
+            on: "removeWindowEventListen",
             run: windowEventListenRemove
         },
         {
-            on: event => event?.addWindowAnimationFrameListen,
+            on: "addWindowAnimationFrameListen",
             run: (_config, sendToElm) => { addAnimationFrameListen(sendToElm) }
         },
         {
-            on: event => event?.removeAnimationFrameListen,
+            on: "removeAnimationFrameListen",
             run: (_config, _sendToElm) => { removeAnimationFrameListen() }
         },
         {
-            on: event => event?.addNavigationUrlRequest,
+            on: "addNavigationUrlRequest",
             run: (_config, sendToElm) => { sendToElm(window.location.href) }
         },
         {
-            on: event => event?.addDocumentEventListen,
+            on: "addDocumentEventListen",
             run: documentEventListenAdd
         },
         {
-            on: event => event?.removeDocumentEventListen,
+            on: "removeDocumentEventListen",
             run: documentEventListenRemove
         },
         {
-            on: event => event?.addNavigationGo,
+            on: "addNavigationGo",
             run: (config, _sendToElm) => { go(config) }
         },
         {
-            on: event => event?.addReplaceUrl,
+            on: "addReplaceUrl",
             run: (config, _sendToElm) => { replaceUrl(config) }
         },
         {
-            on: event => event?.addPushUrl,
+            on: "addPushUrl",
             run: (config, _sendToElm) => { pushUrl(config) }
         },
         {
-            on: event => event?.addLoad,
+            on: "addLoad",
             run: (config, _sendToElm) => { load(config) }
         },
         {
-            on: event => event?.addReload,
+            on: "addReload",
             run: (_config, _sendToElm) => { reload() }
         }
     ]
@@ -140,9 +148,8 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
         }
 
         interfaceImplementations.forEach(interfaceImplementation => {
-            if (interfaceImplementation.on(fromElm)) {
-                const specific = interfaceImplementation.on(fromElm)
-                interfaceImplementation.run(specific, sendToElm)
+            if (interfaceImplementation.on in fromElm) {
+                interfaceImplementation.run(fromElm[interfaceImplementation.on], sendToElm)
             }
         })
     });
@@ -173,6 +180,21 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
 
 const httpRequestAbortControllers: { [key: string]: AbortController } = {}
 
+const timePeriodicallyListens: { [key: number]: number } = {}
+function addTimePeriodicallyListen(intervalDuration: { milliSeconds: number }, sendToElm: (v: any) => any) {
+    timePeriodicallyListens[intervalDuration.milliSeconds] =
+        window.setInterval(
+            () => { sendToElm(Date.now()) },
+            intervalDuration.milliSeconds
+        )
+}
+function removeTimePeriodicallyListen(intervalDuration: { milliSeconds: number }) {
+    const maybeTimePeriodicallyListen = timePeriodicallyListens[intervalDuration.milliSeconds]
+    if (maybeTimePeriodicallyListen) {
+        window.clearInterval(maybeTimePeriodicallyListen)
+    }
+}
+
 // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L27-L35
 function getTimezoneName(): string | number {
     try {
@@ -182,14 +204,22 @@ function getTimezoneName(): string | number {
     }
 }
 
-function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => any): HTMLElement | Text {
+function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => any): Element | Text {
     if (node?.text) {
         return document.createTextNode(node.text)
     } else { // if (node?.element)
-        const createdDomElement: HTMLElement = document.createElement(noScript(node.element.tag))
+        const createdDomElement: (Element & ElementCSSInlineStyle) =
+            node.element?.namespace ?
+                document.createElementNS(node.element.namespace, noScript(node.element.tag))
+                :
+                document.createElement(noScript(node.element.tag))
+
         for (let [attributeKey, attributeValue] of Object.entries(node.element.attributes)) {
             createdDomElement.setAttribute(attributeKey, attributeValue as string)
         }
+        node.element.attributesNamespaced.forEach((attributeNamespaced: { namespace: string, key: string, value: string }) => {
+            createdDomElement.setAttributeNS(attributeNamespaced.namespace, attributeNamespaced.key, attributeNamespaced.value)
+        })
         for (let [styleKey, styleValue] of Object.entries(node.element.styles)) {
             createdDomElement.style.setProperty(styleKey, styleValue as string)
         }

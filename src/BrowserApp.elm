@@ -55,16 +55,13 @@ Types used by [`BrowserApp.Http`](BrowserApp-Http)
 -}
 
 import Array exposing (Array)
-import Char.Order
 import Dict exposing (Dict)
 import Emptiable exposing (Emptiable)
-import Int.Order
 import Json.Decode
 import Json.Decode.Local
 import Json.Encode
 import Keys exposing (Key, Keys)
 import KeysSet exposing (KeysSet)
-import List.Order
 import Map exposing (Mapping)
 import N exposing (N1)
 import Order exposing (Ordering)
@@ -72,7 +69,6 @@ import Possibly exposing (Possibly)
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Set exposing (Set)
-import String.Order
 import Time
 import Typed
 
@@ -141,8 +137,9 @@ To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
 -}
 type InterfaceSingle state
     = TimePosixRequest (Time.Posix -> state)
-    | TimezoneRequest (Time.Zone -> state)
+    | TimezoneOffsetRequest (Int -> state)
     | TimezoneNameRequest (Time.ZoneName -> state)
+    | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> state }
     | RandomUnsignedIntsRequest { count : Int, on : List Int -> state }
     | ConsoleLog String
     | DomNodeRender (DomNode state)
@@ -242,9 +239,11 @@ type DomNode state
 -}
 type alias DomElement state =
     RecordWithoutConstructorFunction
-        { tag : String
+        { namespace : Maybe String
+        , tag : String
         , styles : Dict String String
         , attributes : Dict String String
+        , attributesNamespaced : Dict ( String, String ) String
         , eventListens : Dict String (Json.Decode.Value -> state)
         , subs : Array (DomNode state)
         }
@@ -254,8 +253,9 @@ type alias DomElement state =
 -}
 type InterfaceSingleId
     = IdTimePosixRequest
-    | IdTimezoneRequest
+    | IdTimezoneOffsetRequest
     | IdTimezoneNameRequest
+    | IdTimePeriodicallyListen { milliSeconds : Int }
     | IdRandomUnsignedIntsRequest Int
     | IdConsoleLog String
     | IdDomNodeRender
@@ -275,9 +275,11 @@ type InterfaceSingleId
 -}
 type alias DomElementId =
     RecordWithoutConstructorFunction
-        { tag : String
+        { namespace : Maybe String
+        , tag : String
         , styles : Dict String String
         , attributes : Dict String String
+        , attributesNamespaced : Dict ( String, String ) String
         , eventListens : Set String
         , subs : Array DomNodeId
         }
@@ -288,96 +290,6 @@ type alias DomElementId =
 type DomNodeId
     = DomTextId String
     | DomElementId DomElementId
-
-
-type DomElementIdOrder
-    = DomElementIdOrder
-
-
-type DomNodeIdOrder
-    = DomNodeIdOrder
-
-
-domElementIdOrder : Ordering DomElementId DomElementIdOrder
-domElementIdOrder =
-    Typed.mapTo DomElementIdOrder
-        identity
-        (Order.by (Map.tag { tag = () } .tag) (String.Order.earlier Char.Order.unicode)
-            |> Order.onTie
-                (Order.by (Map.tag () .styles)
-                    (dictOrderEarlier (String.Order.earlier Char.Order.unicode))
-                )
-            |> Order.onTie
-                (Order.by (Map.tag () .attributes)
-                    (dictOrderEarlier (String.Order.earlier Char.Order.unicode))
-                )
-            |> Order.onTie
-                (Order.by (Map.tag () .eventListens)
-                    (setOrderEarlier (String.Order.earlier Char.Order.unicode))
-                )
-            |> Order.onTie
-                (Order.by (Map.tag () .subs)
-                    (Typed.tag ()
-                        (\( a, b ) -> Order.with (List.Order.earlier domNodeIdOrder) (a |> Array.toList) (b |> Array.toList))
-                    )
-                )
-        )
-
-
-dictOrderEarlier : Ordering key nodeTag -> Ordering (Dict key value_) (Order.By DictKeys (List.Order.Earlier nodeTag))
-dictOrderEarlier keyOrder =
-    Order.by (Map.tag DictKeys Dict.keys)
-        (List.Order.earlier keyOrder)
-
-
-setOrderEarlier : Ordering node nodeTag -> Ordering (Set node) (Order.By SetToList (List.Order.Earlier nodeTag))
-setOrderEarlier keyOrder =
-    Order.by (Map.tag SetToList Set.toList)
-        (List.Order.earlier keyOrder)
-
-
-type DictKeys
-    = DictKeys
-
-
-type SetToList
-    = SetToList
-
-
-domNodeIdOrder : Ordering DomNodeId DomNodeIdOrder
-domNodeIdOrder =
-    Typed.mapTo DomNodeIdOrder
-        identity
-        (Order.on (Map.tag () domNodeIdToText) (String.Order.earlier Char.Order.unicode)
-            |> Order.onTie
-                (Order.on (Map.tag () domNodeIdToElement)
-                    (Typed.tag ()
-                        (\( a, b ) -> Order.with domElementIdOrder a b)
-                    )
-                )
-        )
-
-
-domNodeIdToText : DomNodeId -> Maybe String
-domNodeIdToText =
-    \domElementSub ->
-        case domElementSub of
-            DomTextId string ->
-                string |> Just
-
-            DomElementId _ ->
-                Nothing
-
-
-domNodeIdToElement : DomNodeId -> Maybe DomElementId
-domNodeIdToElement =
-    \domElementSub ->
-        case domElementSub of
-            DomElementId domElementId ->
-                domElementId |> Just
-
-            DomTextId _ ->
-                Nothing
 
 
 {-| Combine multiple [`Interface`](#Interface)s into one.
@@ -477,13 +389,19 @@ interfaceSingleMap stateChange =
                 (\event -> requestTimeNow event |> stateChange)
                     |> TimePosixRequest
 
-            TimezoneRequest requestTimezone ->
+            TimezoneOffsetRequest requestTimezone ->
                 (\event -> requestTimezone event |> stateChange)
-                    |> TimezoneRequest
+                    |> TimezoneOffsetRequest
 
             TimezoneNameRequest requestTimezoneName ->
                 (\event -> requestTimezoneName event |> stateChange)
                     |> TimezoneNameRequest
+
+            TimePeriodicallyListen timePeriodicallyListen ->
+                { intervalDurationMilliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds
+                , on = \posix -> timePeriodicallyListen.on posix |> stateChange
+                }
+                    |> TimePeriodicallyListen
 
             RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
                 { count = randomUnsignedIntsRequest.count
@@ -556,9 +474,11 @@ httpRequestMap stateChange =
 domElementMap : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
 domElementMap stateChange =
     \domElementToMap ->
-        { tag = domElementToMap.tag
+        { namespace = domElementToMap.namespace
+        , tag = domElementToMap.tag
         , styles = domElementToMap.styles
         , attributes = domElementToMap.attributes
+        , attributesNamespaced = domElementToMap.attributesNamespaced
         , eventListens =
             domElementToMap.eventListens
                 |> Dict.map (\_ listen -> \event -> listen event |> stateChange)
@@ -627,6 +547,53 @@ domElementDiff path =
             [ { path = path, replacementDomNode = bElement |> DomElement } ]
 
 
+type Comparable
+    = ComparableString String
+    | ComparableList (List Comparable)
+
+
+comparableOrder : ( Comparable, Comparable ) -> Order
+comparableOrder =
+    \( a, b ) ->
+        case ( a, b ) of
+            ( ComparableString aString, ComparableString bString ) ->
+                compare aString bString
+
+            ( ComparableString _, ComparableList _ ) ->
+                LT
+
+            ( ComparableList _, ComparableString _ ) ->
+                GT
+
+            ( ComparableList aList, ComparableList bList ) ->
+                ( aList, bList ) |> comparableListOrder
+
+
+comparableListOrder : ( List Comparable, List Comparable ) -> Order
+comparableListOrder =
+    \( a, b ) ->
+        case ( a, b ) of
+            ( [], [] ) ->
+                EQ
+
+            ( [], _ :: _ ) ->
+                LT
+
+            ( _ :: _, [] ) ->
+                GT
+
+            ( head0 :: tail0, head1 :: tail1 ) ->
+                case ( head0, head1 ) |> comparableOrder of
+                    LT ->
+                        LT
+
+                    GT ->
+                        GT
+
+                    EQ ->
+                        comparableListOrder ( tail0, tail1 )
+
+
 interfaceKeys : Keys (InterfaceSingle state) (InterfaceSingleKeys state) N1
 interfaceKeys =
     Keys.oneBy interfaceToIdMapping interfaceIdOrder
@@ -670,11 +637,15 @@ interfaceSingleToId =
             TimePosixRequest _ ->
                 IdTimePosixRequest
 
-            TimezoneRequest _ ->
-                IdTimezoneRequest
+            TimezoneOffsetRequest _ ->
+                IdTimezoneOffsetRequest
 
             TimezoneNameRequest _ ->
                 IdTimezoneNameRequest
+
+            TimePeriodicallyListen timePeriodicallyListen ->
+                IdTimePeriodicallyListen
+                    { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
 
             RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
                 IdRandomUnsignedIntsRequest randomUnsignedIntsRequest.count
@@ -719,237 +690,171 @@ interfaceSingleToId =
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
     Typed.tag InterfaceSingleIdOrderTag
-        (\( a, b ) ->
-            case a of
-                IdTimePosixRequest ->
-                    case b of
-                        IdTimePosixRequest ->
-                            EQ
-
-                        _ ->
-                            GT
-
-                IdTimezoneRequest ->
-                    case b of
-                        IdTimezoneRequest ->
-                            EQ
-
-                        _ ->
-                            GT
-
-                IdTimezoneNameRequest ->
-                    case b of
-                        IdTimezoneNameRequest ->
-                            EQ
-
-                        _ ->
-                            GT
-
-                IdRandomUnsignedIntsRequest aCount ->
-                    case b of
-                        IdRandomUnsignedIntsRequest bCount ->
-                            Order.with Int.Order.up aCount bCount
-
-                        _ ->
-                            GT
-
-                IdConsoleLog aString ->
-                    case b of
-                        IdConsoleLog bString ->
-                            Order.with (String.Order.earlier Char.Order.unicode) aString bString
-
-                        _ ->
-                            GT
-
-                IdDomNodeRender ->
-                    case b of
-                        IdDomNodeRender ->
-                            EQ
-
-                        _ ->
-                            GT
-
-                IdHttpRequest aRequest ->
-                    case b of
-                        IdHttpRequest bRequest ->
-                            Order.with httpRequestOrder aRequest bRequest
-
-                        _ ->
-                            GT
-
-                IdWindowEventListen aEventName ->
-                    case b of
-                        IdWindowEventListen bEventName ->
-                            Order.with (String.Order.earlier Char.Order.unicode) aEventName bEventName
-
-                        _ ->
-                            GT
-
-                IdWindowAnimationFrameListen ->
-                    case b of
-                        IdWindowAnimationFrameListen ->
-                            EQ
-
-                        _ ->
-                            GT
-
-                IdNavigationUrlRequest ->
-                    case b of
-                        IdNavigationUrlRequest ->
-                            EQ
-
-                        _ ->
-                            GT
-
-                IdDocumentEventListen aEventName ->
-                    case b of
-                        IdDocumentEventListen bEventName ->
-                            Order.with (String.Order.earlier Char.Order.unicode) aEventName bEventName
-
-                        _ ->
-                            GT
-
-                IdNavigationReplaceUrl aUrl ->
-                    case b of
-                        IdNavigationReplaceUrl bUrl ->
-                            Order.with (String.Order.earlier Char.Order.unicode) aUrl bUrl
-
-                        _ ->
-                            GT
-
-                IdNavigationPushUrl aUrl ->
-                    case b of
-                        IdNavigationPushUrl bUrl ->
-                            Order.with (String.Order.earlier Char.Order.unicode) aUrl bUrl
-
-                        _ ->
-                            GT
-
-                IdNavigationGo aUrlSteps ->
-                    case b of
-                        IdNavigationGo bUrlSteps ->
-                            Order.with Int.Order.up aUrlSteps bUrlSteps
-
-                        _ ->
-                            GT
-
-                IdNavigationLoad aUrl ->
-                    case b of
-                        IdNavigationLoad bUrl ->
-                            Order.with (String.Order.earlier Char.Order.unicode) aUrl bUrl
-
-                        _ ->
-                            GT
-
-                IdNavigationReload ->
-                    case b of
-                        IdNavigationReload ->
-                            EQ
-
-                        _ ->
-                            GT
-        )
+        (\( a, b ) -> ( a |> interfaceSingleIdToComparable, b |> interfaceSingleIdToComparable ) |> comparableOrder)
 
 
-httpRequestOrder : Ordering HttpRequestId ()
-httpRequestOrder =
-    Typed.tag ()
-        (Order.by (Map.tag () .url) (String.Order.earlier Char.Order.unicode)
-            |> Order.onTie (Order.by (Map.tag () .method) (String.Order.earlier Char.Order.unicode))
-            |> Order.onTie (Order.by (Map.tag () .headers) (List.Order.earlier httpHeaderOrder))
-            |> Order.onTie (Order.by (Map.tag () .body) httpBodyOrder)
-            |> Order.onTie (Order.by (Map.tag () .expect) httpExpectIdOrder)
-            |> Order.onTie (Order.by (Map.tag () .timeout) (Order.on (Map.tag () identity) Int.Order.up))
-            |> Typed.untag
-        )
+intToComparable : Int -> Comparable
+intToComparable =
+    \int -> int |> String.fromInt |> ComparableString
 
 
-httpHeaderOrder : Ordering HttpHeader ()
-httpHeaderOrder =
-    Order.by (Map.tag () Tuple.first) (String.Order.earlier Char.Order.unicode)
-        |> Order.onTie (Order.by (Map.tag () Tuple.second) (String.Order.earlier Char.Order.unicode))
-        |> Typed.untag
-        |> Typed.tag ()
+interfaceSingleIdToComparable : InterfaceSingleId -> Comparable
+interfaceSingleIdToComparable =
+    \interfaceId ->
+        case interfaceId of
+            IdTimePosixRequest ->
+                ComparableString "IdTimePosixRequest"
+
+            IdTimezoneOffsetRequest ->
+                ComparableString "IdTimezoneOffsetRequest"
+
+            IdTimezoneNameRequest ->
+                ComparableString "IdTimezoneNameRequest"
+
+            IdTimePeriodicallyListen intervalDuration ->
+                ComparableList
+                    [ ComparableString "IdTimePeriodicallyListen"
+                    , intervalDuration.milliSeconds |> intToComparable
+                    ]
+
+            IdRandomUnsignedIntsRequest count ->
+                ComparableList
+                    [ ComparableString "IdRandomUnsignedIntsRequest"
+                    , count |> intToComparable
+                    ]
+
+            IdConsoleLog string ->
+                ComparableList
+                    [ ComparableString "IdConsoleLog"
+                    , ComparableString string
+                    ]
+
+            IdDomNodeRender ->
+                ComparableString "IdDomNodeRender"
+
+            IdHttpRequest request ->
+                ComparableList
+                    [ ComparableString "IdHttpRequest"
+                    , request |> httpRequestIdToComparable
+                    ]
+
+            IdWindowEventListen eventName ->
+                ComparableList
+                    [ ComparableString "IdWindowEventListen"
+                    , ComparableString eventName
+                    ]
+
+            IdWindowAnimationFrameListen ->
+                ComparableString "IdWindowAnimationFrameListen"
+
+            IdNavigationUrlRequest ->
+                ComparableString "IdNavigationUrlRequest"
+
+            IdDocumentEventListen eventName ->
+                ComparableList
+                    [ ComparableString "IdDocumentEventListen"
+                    , ComparableString eventName
+                    ]
+
+            IdNavigationReplaceUrl url ->
+                ComparableList
+                    [ ComparableString "IdNavigationReplaceUrl"
+                    , ComparableString url
+                    ]
+
+            IdNavigationPushUrl url ->
+                ComparableList
+                    [ ComparableString "IdNavigationPushUrl"
+                    , ComparableString url
+                    ]
+
+            IdNavigationGo urlSteps ->
+                ComparableList
+                    [ ComparableString "IdNavigationGo"
+                    , urlSteps |> intToComparable
+                    ]
+
+            IdNavigationLoad url ->
+                ComparableList
+                    [ ComparableString "IdNavigationLoad"
+                    , ComparableString url
+                    ]
+
+            IdNavigationReload ->
+                ComparableString "IdNavigationReload"
 
 
-httpBodyOrder : Ordering HttpBody ()
-httpBodyOrder =
-    Order.on (Map.tag () httpBodyToEmpty) Order.tie
-        |> Order.onTie (Order.on (Map.tag () httpBodyToString) stringBodyOrder)
-        |> Typed.untag
-        |> Typed.tag ()
+httpRequestIdToComparable : HttpRequestId -> Comparable
+httpRequestIdToComparable =
+    \httpRequestId ->
+        ComparableList
+            [ httpRequestId.url |> ComparableString
+            , httpRequestId.method |> ComparableString
+            , httpRequestId.headers |> List.map httpHeaderToComparable |> ComparableList
+            , httpRequestId.body |> httpBodyToComparable
+            , httpRequestId.expect |> httpExpectIdToComparable
+            , httpRequestId.timeout |> maybeToComparable intToComparable
+            ]
 
 
-httpBodyToEmpty : HttpBody -> Maybe ()
-httpBodyToEmpty =
+maybeToComparable : (value -> Comparable) -> (Maybe value -> Comparable)
+maybeToComparable valueToComparable =
+    \maybe ->
+        case maybe of
+            Nothing ->
+                "Nothing" |> ComparableString
+
+            Just value ->
+                ComparableList
+                    [ "Just" |> ComparableString
+                    , value |> valueToComparable
+                    ]
+
+
+httpHeaderToComparable : HttpHeader -> Comparable
+httpHeaderToComparable =
+    \( httpHeaderName, httpHeaderValue ) ->
+        ComparableList
+            [ httpHeaderName |> ComparableString
+            , httpHeaderValue |> ComparableString
+            ]
+
+
+httpBodyToComparable : HttpBody -> Comparable
+httpBodyToComparable =
     \httpBody ->
         case httpBody of
             HttpBodyEmpty ->
-                () |> Just
+                "HttpBodyEmpty" |> ComparableString
 
-            _ ->
-                Nothing
-
-
-httpBodyToString : HttpBody -> Maybe { mimeType : String, content : String }
-httpBodyToString =
-    \httpBody ->
-        case httpBody of
             HttpBodyString stringBody ->
-                stringBody |> Just
-
-            _ ->
-                Nothing
-
-
-stringBodyOrder : Ordering { mimeType : String, content : String } ()
-stringBodyOrder =
-    Order.by (Map.tag () .mimeType) (String.Order.earlier Char.Order.unicode)
-        |> Order.onTie (Order.by (Map.tag () .content) (String.Order.earlier Char.Order.unicode))
-        |> Typed.untag
-        |> Typed.tag ()
+                ComparableList
+                    [ "HttpBodyString" |> ComparableString
+                    , stringBody |> httpStringBodyToComparable
+                    ]
 
 
-httpExpectIdOrder : Ordering HttpExpectId ()
-httpExpectIdOrder =
-    Order.on (Map.tag () httpExpectIdToExpectJson) Order.tie
-        |> Order.onTie (Order.on (Map.tag () httpExpectIdToExpectString) Order.tie)
-        |> Order.onTie (Order.on (Map.tag () httpExpectIdToExpectWhatever) Order.tie)
-        |> Typed.untag
-        |> Typed.tag ()
+httpStringBodyToComparable : { mimeType : String, content : String } -> Comparable
+httpStringBodyToComparable =
+    \httpStringBody ->
+        ComparableList
+            [ httpStringBody.mimeType |> ComparableString
+            , httpStringBody.content |> ComparableString
+            ]
 
 
-httpExpectIdToExpectJson : HttpExpectId -> Maybe ()
-httpExpectIdToExpectJson =
-    \httpBody ->
-        case httpBody of
+httpExpectIdToComparable : HttpExpectId -> Comparable
+httpExpectIdToComparable =
+    \httpExpectId ->
+        case httpExpectId of
             IdHttpExpectJson ->
-                () |> Just
+                "IdHttpExpectJson" |> ComparableString
 
-            _ ->
-                Nothing
-
-
-httpExpectIdToExpectString : HttpExpectId -> Maybe ()
-httpExpectIdToExpectString =
-    \httpBody ->
-        case httpBody of
             IdHttpExpectString ->
-                () |> Just
+                "IdHttpExpectString" |> ComparableString
 
-            _ ->
-                Nothing
-
-
-httpExpectIdToExpectWhatever : HttpExpectId -> Maybe ()
-httpExpectIdToExpectWhatever =
-    \httpBody ->
-        case httpBody of
             IdHttpExpectWhatever ->
-                () |> Just
-
-            _ ->
-                Nothing
+                "IdHttpExpectWhatever" |> ComparableString
 
 
 domNodeToId : DomNode state_ -> DomNodeId
@@ -980,11 +885,16 @@ interfaceDiffToCmds =
                         TimePosixRequest _ ->
                             Nothing
 
-                        TimezoneRequest _ ->
+                        TimezoneOffsetRequest _ ->
                             Nothing
 
                         TimezoneNameRequest _ ->
                             Nothing
+
+                        TimePeriodicallyListen timePeriodicallyListen ->
+                            RemoveTimePeriodicallyListen
+                                { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
+                                |> Just
 
                         RandomUnsignedIntsRequest _ ->
                             Nothing
@@ -1036,11 +946,16 @@ interfaceDiffToCmds =
                         TimePosixRequest _ ->
                             AddTimePosixRequest |> Just
 
-                        TimezoneRequest _ ->
-                            AddTimezoneRequest |> Just
+                        TimezoneOffsetRequest _ ->
+                            AddTimezoneOffsetRequest |> Just
 
                         TimezoneNameRequest _ ->
                             AddTimezoneNameRequest |> Just
+
+                        TimePeriodicallyListen timePeriodicallyListen ->
+                            AddTimePeriodicallyListen
+                                { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
+                                |> Just
 
                         RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
                             AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> Just
@@ -1133,11 +1048,21 @@ interfaceDiffToJson =
                 AddTimePosixRequest ->
                     ( "addTimePosixRequest", Json.Encode.null )
 
-                AddTimezoneRequest ->
+                AddTimezoneOffsetRequest ->
                     ( "addTimezoneOffsetRequest", Json.Encode.null )
 
                 AddTimezoneNameRequest ->
                     ( "addTimezoneNameRequest", Json.Encode.null )
+
+                AddTimePeriodicallyListen intervalDuration ->
+                    ( "addTimePeriodicallyListen"
+                    , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
+                    )
+
+                RemoveTimePeriodicallyListen intervalDuration ->
+                    ( "removeTimePeriodicallyListen"
+                    , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
+                    )
 
                 AddRandomUnsignedIntsRequest count ->
                     ( "addRandomUnsignedIntsRequest", count |> Json.Encode.int )
@@ -1206,7 +1131,7 @@ httpRequestIdToJson =
         Json.Encode.object
             [ ( "url", httpRequestId.url |> Json.Encode.string )
             , ( "method", httpRequestId.method |> Json.Encode.string )
-            , ( "headers", encodeHeaders httpRequestId.body httpRequestId.headers )
+            , ( "headers", httpRequestId.headers |> headersToJson httpRequestId.body )
             , ( "expect", httpRequestId.expect |> httpExpectIdToJson )
             , ( "body", httpRequestId.body |> httpBodyToJson )
             , ( "timeout", httpRequestId.timeout |> httpTimeoutToJson )
@@ -1238,11 +1163,11 @@ httpExpectIdToJson =
                 Json.Encode.string "WHATEVER"
 
 
-encodeHeaders : HttpBody -> List HttpHeader -> Json.Encode.Value
-encodeHeaders body headers =
+headersToJson : HttpBody -> List HttpHeader -> Json.Encode.Value
+headersToJson body headers =
     headers
         |> addContentTypeForBody body
-        |> Json.Encode.list encodeHeader
+        |> Json.Encode.list headerToJson
 
 
 addContentTypeForBody : HttpBody -> List HttpHeader -> List HttpHeader
@@ -1255,8 +1180,8 @@ addContentTypeForBody body headers =
             ( "Content-Type", stringBodyInfo.mimeType ) :: headers
 
 
-encodeHeader : HttpHeader -> Json.Encode.Value
-encodeHeader ( name, value ) =
+headerToJson : HttpHeader -> Json.Encode.Value
+headerToJson ( name, value ) =
     Json.Encode.list identity
         [ Json.Encode.string name
         , Json.Encode.string value
@@ -1264,13 +1189,14 @@ encodeHeader ( name, value ) =
 
 
 httpBodyToJson : HttpBody -> Json.Encode.Value
-httpBodyToJson body =
-    case body of
-        HttpBodyString stringBodyInfo ->
-            stringBodyInfo.content |> Json.Encode.string
+httpBodyToJson =
+    \body ->
+        case body of
+            HttpBodyString stringBodyInfo ->
+                stringBodyInfo.content |> Json.Encode.string
 
-        HttpBodyEmpty ->
-            Json.Encode.null
+            HttpBodyEmpty ->
+                Json.Encode.null
 
 
 {-| The "init" part for an embedded program
@@ -1295,6 +1221,21 @@ init appConfig =
         |> Cmd.batch
         |> Cmd.map never
     )
+
+
+listFirstJust : (node -> Maybe found) -> List node -> Maybe found
+listFirstJust tryMapToFound list =
+    case list of
+        [] ->
+            Nothing
+
+        head :: tail ->
+            case tryMapToFound head of
+                Just b ->
+                    Just b
+
+                Nothing ->
+                    listFirstJust tryMapToFound tail
 
 
 {-| The "subscriptions" part for an embedded program
@@ -1346,7 +1287,27 @@ interfaceDiffJsonDecoder : Json.Decode.Decoder InterfaceDiff
 interfaceDiffJsonDecoder =
     Json.Decode.oneOf
         [ Json.Decode.map (\() -> AddTimePosixRequest)
-            (Json.Decode.field "requestTimeNow" (Json.Decode.null ()))
+            (Json.Decode.field "addTimePosixRequest" (Json.Decode.null ()))
+        , Json.Decode.map (\() -> AddTimezoneOffsetRequest)
+            (Json.Decode.field "addTimezoneOffsetRequest" (Json.Decode.null ()))
+        , Json.Decode.map (\() -> AddTimezoneNameRequest)
+            (Json.Decode.field "addTimezoneNameRequest" (Json.Decode.null ()))
+        , Json.Decode.map AddTimePeriodicallyListen
+            (Json.Decode.field "addTimePeriodicallyListen"
+                (Json.Decode.map (\ms -> { milliSeconds = ms })
+                    (Json.Decode.field "milliSeconds" Json.Decode.int)
+                )
+            )
+        , Json.Decode.map RemoveTimePeriodicallyListen
+            (Json.Decode.field "removeTimePeriodicallyListen"
+                (Json.Decode.map (\ms -> { milliSeconds = ms })
+                    (Json.Decode.field "milliSeconds" Json.Decode.int)
+                )
+            )
+        , Json.Decode.map AddRandomUnsignedIntsRequest
+            (Json.Decode.field "addRandomUnsignedIntsRequest" Json.Decode.int)
+        , Json.Decode.map AddConsoleLog
+            (Json.Decode.field "addConsoleLog" Json.Decode.string)
         , Json.Decode.map ReplaceDomNode
             (Json.Decode.field "replaceDomNode"
                 (Json.Decode.succeed (\path domNode -> { path = path, domNode = domNode })
@@ -1356,7 +1317,116 @@ interfaceDiffJsonDecoder =
             )
         , Json.Decode.map (\() -> RemoveDom)
             (Json.Decode.field "removeDom" (Json.Decode.null ()))
+        , Json.Decode.map AddHttpRequest
+            (Json.Decode.field "addHttpRequest" httpRequestIdJsonDecoder)
+        , Json.Decode.map RemoveHttpRequest
+            (Json.Decode.field "removeHttpRequest" httpRequestIdJsonDecoder)
+        , Json.Decode.map AddWindowEventListen
+            (Json.Decode.field "addWindowEventListen" Json.Decode.string)
+        , Json.Decode.map RemoveWindowEventListen
+            (Json.Decode.field "removeWindowEventListen" Json.Decode.string)
+        , Json.Decode.map (\() -> AddWindowAnimationFrameListen)
+            (Json.Decode.field "addWindowAnimationFrameListen" (Json.Decode.null ()))
+        , Json.Decode.map (\() -> RemoveWindowAnimationFrameListen)
+            (Json.Decode.field "removeWindowAnimationFrameListen" (Json.Decode.null ()))
+        , Json.Decode.map (\() -> AddNavigationUrlRequest)
+            (Json.Decode.field "addNavigationUrlRequest" (Json.Decode.null ()))
+        , Json.Decode.map AddDocumentEventListen
+            (Json.Decode.field "addDocumentEventListen" Json.Decode.string)
+        , Json.Decode.map RemoveDocumentEventListen
+            (Json.Decode.field "removeDocumentEventListen" Json.Decode.string)
+        , Json.Decode.map AddNavigationPushUrl
+            (Json.Decode.field "addNavigationPushUrl" Json.Decode.string)
+        , Json.Decode.map AddNavigationReplaceUrl
+            (Json.Decode.field "addNavigationReplaceUrl" Json.Decode.string)
+        , Json.Decode.map AddNavigationGo
+            (Json.Decode.field "addNavigationGo" Json.Decode.int)
+        , Json.Decode.map AddNavigationLoad
+            (Json.Decode.field "addNavigationLoad" Json.Decode.string)
+        , Json.Decode.map (\() -> AddNavigationReload)
+            (Json.Decode.field "addNavigationReload" (Json.Decode.null ()))
         ]
+
+
+httpRequestIdJsonDecoder : Json.Decode.Decoder HttpRequestId
+httpRequestIdJsonDecoder =
+    headersJsonDecoder
+        |> Json.Decode.andThen
+            (\headers ->
+                Json.Decode.succeed
+                    (\url method expect body timeout ->
+                        { url = url
+                        , method = method
+                        , headers = headers
+                        , expect = expect
+                        , body = body
+                        , timeout = timeout
+                        }
+                    )
+                    |> Json.Decode.Local.andMap (Json.Decode.field "url" Json.Decode.string)
+                    |> Json.Decode.Local.andMap (Json.Decode.field "method" Json.Decode.string)
+                    |> Json.Decode.Local.andMap (Json.Decode.field "expect" httpExpectIdJsonDecoder)
+                    |> Json.Decode.Local.andMap
+                        (Json.Decode.field "body"
+                            (headers
+                                |> listFirstJust
+                                    (\( name, value ) ->
+                                        case name of
+                                            "Content-Type" ->
+                                                value |> Just
+
+                                            _ ->
+                                                Nothing
+                                    )
+                                |> Maybe.map
+                                    (\mimeType ->
+                                        Json.Decode.succeed (\content -> HttpBodyString { mimeType = mimeType, content = content })
+                                            |> Json.Decode.Local.andMap Json.Decode.string
+                                    )
+                                |> Maybe.withDefault (HttpBodyEmpty |> Json.Decode.null)
+                            )
+                        )
+                    |> Json.Decode.Local.andMap (Json.Decode.field "timeout" httpTimeoutJsonDecoder)
+            )
+
+
+httpTimeoutJsonDecoder : Json.Decode.Decoder (Maybe Int)
+httpTimeoutJsonDecoder =
+    Json.Decode.nullable Json.Decode.int
+
+
+httpExpectIdJsonDecoder : Json.Decode.Decoder HttpExpectId
+httpExpectIdJsonDecoder =
+    Json.Decode.oneOf
+        [ Json.Decode.map (\() -> IdHttpExpectString) (jsonDecodeStringOnly "STRING")
+        , Json.Decode.map (\() -> IdHttpExpectJson) (jsonDecodeStringOnly "JSON")
+        , Json.Decode.map (\() -> IdHttpExpectWhatever) (jsonDecodeStringOnly "WHATEVER")
+        ]
+
+
+jsonDecodeStringOnly : String -> Json.Decode.Decoder ()
+jsonDecodeStringOnly constant =
+    Json.Decode.string
+        |> Json.Decode.andThen
+            (\string ->
+                if string == constant then
+                    () |> Json.Decode.succeed
+
+                else
+                    Json.Decode.fail ("not " ++ constant)
+            )
+
+
+headersJsonDecoder : Json.Decode.Decoder (List HttpHeader)
+headersJsonDecoder =
+    Json.Decode.list headerJsonDecoder
+
+
+headerJsonDecoder : Json.Decode.Decoder HttpHeader
+headerJsonDecoder =
+    Json.Decode.succeed (\name value -> ( name, value ))
+        |> Json.Decode.Local.andMap (Json.Decode.index 0 Json.Decode.string)
+        |> Json.Decode.Local.andMap (Json.Decode.index 1 Json.Decode.string)
 
 
 eventDataAndConstructStateJsonDecoder : InterfaceDiff -> InterfaceSingle state -> Maybe (Json.Decode.Decoder state)
@@ -1372,12 +1442,11 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 _ ->
                     Nothing
 
-        TimezoneRequest requestTimezone ->
+        TimezoneOffsetRequest requestTimezoneOffset ->
             case interfaceDiff of
-                AddTimezoneRequest ->
-                    Json.Decode.succeed requestTimezone
-                        |> Json.Decode.Local.andMap
-                            (Json.Decode.map (\offset -> Time.customZone offset []) Json.Decode.int)
+                AddTimezoneOffsetRequest ->
+                    Json.Decode.succeed requestTimezoneOffset
+                        |> Json.Decode.Local.andMap Json.Decode.int
                         |> Just
 
                 _ ->
@@ -1394,6 +1463,24 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                                 ]
                             )
                         |> Just
+
+                _ ->
+                    Nothing
+
+        TimePeriodicallyListen timePeriodicallyListen ->
+            case interfaceDiff of
+                AddTimePeriodicallyListen diffIntervalDuration ->
+                    if
+                        timePeriodicallyListen.intervalDurationMilliSeconds
+                            == diffIntervalDuration.milliSeconds
+                    then
+                        Json.Decode.succeed timePeriodicallyListen.on
+                            |> Json.Decode.Local.andMap
+                                (Json.Decode.map Time.millisToPosix Json.Decode.int)
+                            |> Just
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
@@ -1633,35 +1720,35 @@ httpErrorJsonDecoder httpRequest =
             )
 
 
-listFirstJust : (node -> Maybe found) -> List node -> Maybe found
-listFirstJust tryMapToFound list =
-    case list of
-        [] ->
-            Nothing
-
-        head :: tail ->
-            case tryMapToFound head of
-                Just b ->
-                    Just b
-
-                Nothing ->
-                    listFirstJust tryMapToFound tail
-
-
 domElementIdJsonDecoder : Json.Decode.Decoder DomElementId
 domElementIdJsonDecoder =
     Json.Decode.succeed
-        (\tag styles attributes eventListens subs ->
-            { tag = tag
+        (\namespace tag styles attributes attributesNamespaced eventListens subs ->
+            { namespace = namespace
+            , tag = tag
             , styles = styles
             , attributes = attributes
+            , attributesNamespaced = attributesNamespaced
             , eventListens = eventListens
             , subs = subs
             }
         )
+        |> Json.Decode.Local.andMap (Json.Decode.field "namespace" (Json.Decode.nullable Json.Decode.string))
         |> Json.Decode.Local.andMap (Json.Decode.field "tag" Json.Decode.string)
         |> Json.Decode.Local.andMap (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
         |> Json.Decode.Local.andMap (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
+        |> Json.Decode.Local.andMap
+            (Json.Decode.field "attributesNamespaced"
+                (Json.Decode.map Dict.fromList
+                    (Json.Decode.list
+                        (Json.Decode.succeed (\namespace key value -> ( ( namespace, key ), value ))
+                            |> Json.Decode.Local.andMap (Json.Decode.field "namespace" Json.Decode.string)
+                            |> Json.Decode.Local.andMap (Json.Decode.field "key" Json.Decode.string)
+                            |> Json.Decode.Local.andMap (Json.Decode.field "value" Json.Decode.string)
+                        )
+                    )
+                )
+            )
         |> Json.Decode.Local.andMap
             (Json.Decode.field "eventListens"
                 (Json.Decode.map Set.fromList (Json.Decode.list Json.Decode.string))
@@ -1726,9 +1813,11 @@ update appConfig =
 domElementToId : DomElement state_ -> DomElementId
 domElementToId =
     \domElement ->
-        { tag = domElement.tag
+        { namespace = domElement.namespace
+        , tag = domElement.tag
         , styles = domElement.styles
         , attributes = domElement.attributes
+        , attributesNamespaced = domElement.attributesNamespaced
         , eventListens =
             domElement.eventListens |> Dict.foldl (\k _ -> Set.insert k) Set.empty
         , subs =
@@ -1740,9 +1829,29 @@ domElementIdToJson : DomElementId -> Json.Encode.Value
 domElementIdToJson =
     \domElementId ->
         Json.Encode.object
-            [ ( "tag", domElementId.tag |> Json.Encode.string )
+            [ ( "namespace"
+              , case domElementId.namespace of
+                    Nothing ->
+                        Json.Encode.null
+
+                    Just namespace ->
+                        namespace |> Json.Encode.string
+              )
+            , ( "tag", domElementId.tag |> Json.Encode.string )
             , ( "styles", domElementId.styles |> Json.Encode.dict identity Json.Encode.string )
             , ( "attributes", domElementId.attributes |> Json.Encode.dict identity Json.Encode.string )
+            , ( "attributesNamespaced"
+              , domElementId.attributesNamespaced
+                    |> Dict.toList
+                    |> Json.Encode.list
+                        (\( ( namespace, key ), value ) ->
+                            Json.Encode.object
+                                [ ( "namespace", namespace |> Json.Encode.string )
+                                , ( "key", key |> Json.Encode.string )
+                                , ( "value", value |> Json.Encode.string )
+                                ]
+                        )
+              )
             , ( "eventListens", domElementId.eventListens |> Json.Encode.set Json.Encode.string )
             , ( "subs", domElementId.subs |> Json.Encode.array domNodeIdToJson )
             ]
@@ -1794,8 +1903,10 @@ type alias HttpMetadata =
 -}
 type InterfaceDiff
     = AddTimePosixRequest
-    | AddTimezoneRequest
+    | AddTimezoneOffsetRequest
     | AddTimezoneNameRequest
+    | AddTimePeriodicallyListen { milliSeconds : Int }
+    | RemoveTimePeriodicallyListen { milliSeconds : Int }
     | AddRandomUnsignedIntsRequest Int
     | AddConsoleLog String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
