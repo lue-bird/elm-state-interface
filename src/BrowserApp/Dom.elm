@@ -3,7 +3,7 @@ module BrowserApp.Dom exposing
     , text
     , element, elementNamespaced
     , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style, listenTo, modifierMap, modifierBatch, modifierNone
-    , render
+    , map, render
     )
 
 {-| Helpers for [DOM node types](BrowserApp#DomNode) as part of an [`Interface`](BrowserApp#Interface).
@@ -15,12 +15,12 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 @docs text
 @docs element, elementNamespaced
 @docs Modifier, ModifierSingle, attribute, attributeNamespaced, style, listenTo, modifierMap, modifierBatch, modifierNone
-@docs render
+@docs map, render
 
 -}
 
 import Array
-import BrowserApp exposing (DomNode)
+import BrowserApp exposing (DomElement, DomNode)
 import Dict
 import Json.Decode
 import Rope exposing (Rope)
@@ -45,37 +45,57 @@ render =
             |> Rope.singleton
 
 
+{-| Wire events from this [`DomNode`](BrowserApp#DomNode) to a specific event.
+
+    buttonUi "start"
+        |> BrowserApp.Dom.map (\Clicked -> StartButtonClicked)
+
+with e.g.
+
+    buttonUi : List (BrowserApp.DomNode ()) -> BrowserApp.DomNode ButtonEvent
+    buttonUi subs =
+        BrowserApp.Dom.element "button"
+            [ BrowserApp.Dom.listenTo "click"
+                |> BrowserApp.Dom.modifierMap (\_ -> Clicked)
+            ]
+            [ BrowserApp.Dom.text label ]
+
+    type ButtonEvent
+        = Clicked
+
+-}
+map : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
+map stateChange =
+    \domElementToMap ->
+        case domElementToMap of
+            BrowserApp.DomText string ->
+                BrowserApp.DomText string
+
+            BrowserApp.DomElement domElement ->
+                domElement |> elementMap stateChange |> BrowserApp.DomElement
+
+
+elementMap : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
+elementMap stateChange =
+    \domElementToMap ->
+        { namespace = domElementToMap.namespace
+        , tag = domElementToMap.tag
+        , styles = domElementToMap.styles
+        , attributes = domElementToMap.attributes
+        , attributesNamespaced = domElementToMap.attributesNamespaced
+        , eventListens =
+            domElementToMap.eventListens
+                |> Dict.map (\_ listen -> \event -> listen event |> stateChange)
+        , subs =
+            domElementToMap.subs |> Array.map (map stateChange)
+        }
+
+
 {-| Plain text [`DomNode`](BrowserApp#DomNode)
 -}
 text : String -> DomNode state_
 text =
     BrowserApp.DomText
-
-
-{-| Create a DOM element with a given tag, [`Modifier`](#Modifier)s and sub-[node](BrowserApp#DomNode)s.
-For example to get `<p>flying</p>`
-
-    BrowserApp.Dom.element "p"
-        []
-        [ BrowserApp.Dom.text "flying" ]
-
--}
-element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
-element tag modifiers subs =
-    elementWithMaybeNamespace Nothing tag modifiers subs
-
-
-{-| Create a DOM element with a given namespace, tag, [`Modifier`](#Modifier)s and sub-[node](BrowserApp#DomNode)s.
-For example, [`BrowserApp.Svg`](BrowserApp#Svg) defines its elements using
-
-    element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
-    element tag modifiers subs =
-        BrowserApp.Dom.elementNamespaced "http://www.w3.org/2000/svg" tag modifiers subs
-
--}
-elementNamespaced : String -> String -> List (Modifier state) -> List (DomNode state) -> DomNode state
-elementNamespaced namespace tag modifiers subs =
-    elementWithMaybeNamespace (namespace |> Just) tag modifiers subs
 
 
 elementWithMaybeNamespace : Maybe String -> String -> List (Modifier state) -> List (DomNode state) -> DomNode state
@@ -148,6 +168,32 @@ elementWithMaybeNamespace maybeNamespace tag modifiers subs =
     , subs = subs |> Array.fromList
     }
         |> BrowserApp.DomElement
+
+
+{-| Create a DOM element with a given tag, [`Modifier`](#Modifier)s and sub-[node](BrowserApp#DomNode)s.
+For example to get `<p>flying</p>`
+
+    BrowserApp.Dom.element "p"
+        []
+        [ BrowserApp.Dom.text "flying" ]
+
+-}
+element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+element tag modifiers subs =
+    elementWithMaybeNamespace Nothing tag modifiers subs
+
+
+{-| Create a DOM element with a given namespace, tag, [`Modifier`](#Modifier)s and sub-[node](BrowserApp#DomNode)s.
+For example, [`BrowserApp.Svg`](BrowserApp-Svg) defines its elements using
+
+    element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+    element tag modifiers subs =
+        BrowserApp.Dom.elementNamespaced "http://www.w3.org/2000/svg" tag modifiers subs
+
+-}
+elementNamespaced : String -> String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+elementNamespaced namespace tag modifiers subs =
+    elementWithMaybeNamespace (namespace |> Just) tag modifiers subs
 
 
 {-| Set the behavior of a [`BrowserApp.Dom.element`](BrowserApp-Dom#element).
