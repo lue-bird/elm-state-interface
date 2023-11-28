@@ -20,124 +20,66 @@ export interface ElmPorts {
 }
 
 export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
-    const interfaceImplementations: { on: string, run: (config: any, sendToElm: (v: any) => void) => void }[] = [
-        {
-            on: "addTimePosixRequest",
-            run: (_config, sendToElm) => {
-                sendToElm(Date.now())
-            },
+    const interfaceImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
+        "addTimePosixRequest": (_config, sendToElm) => {
+            sendToElm(Date.now())
         },
-        {
-            on: "addTimezoneOffsetRequest",
-            run: (_config, sendToElm) => {
-                // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
-                sendToElm(new Date().getTimezoneOffset())
+        "addTimezoneOffsetRequest": (_config, sendToElm) => {
+            // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
+            sendToElm(new Date().getTimezoneOffset())
+        },
+        "addTimezoneNameRequest": (_config, sendToElm) => {
+            sendToElm(getTimezoneName())
+        },
+        "addTimePeriodicallyListen": (config, sendToElm) => {
+            addTimePeriodicallyListen(config, sendToElm)
+        },
+        "removeTimePeriodicallyListen": (config, _sendToElm) => {
+            removeTimePeriodicallyListen(config)
+        },
+        "addRandomUnsignedIntsRequest": (config, sendToElm) => {
+            sendToElm(crypto.getRandomValues(new Uint32Array(config)))
+        },
+        "addConsoleLog": (config, _sendToElm) => {
+            console.log(config)
+        },
+        "replaceDomNode": (config, sendToElm) => {
+            renderDomNode(config.path, config.domNode, sendToElm)
+        },
+        "removeDomNode": (_config, _sendToElm) => {
+            appConfig.domElement.replaceChildren()
+        },
+        "addHttpRequest": (config, sendToElm) => {
+            const abortController = new AbortController()
+            httpRequestAbortControllers[config] = abortController
+            fetchAdapter.http(config, abortController).then(response => { sendToElm(response) })
+        },
+        "removeHttpRequest": (config, _sendToElm) => {
+            const maybeAbortController = httpRequestAbortControllers[config]
+            if (maybeAbortController) {
+                maybeAbortController.abort()
             }
         },
-        {
-            on: "addTimezoneNameRequest",
-            run: (_config, sendToElm) => {
-                sendToElm(getTimezoneName())
-            }
+        "addWindowEventListen": windowEventListenAdd,
+        "removeWindowEventListen": windowEventListenRemove,
+        "addWindowAnimationFrameListen": (_config, sendToElm) => {
+            addAnimationFrameListen(sendToElm)
         },
-        {
-            on: "addTimePeriodicallyListen",
-            run: (config, sendToElm) => { addTimePeriodicallyListen(config, sendToElm) }
+        "removeAnimationFrameListen": (_config, _sendToElm) => {
+            removeAnimationFrameListen()
         },
-        {
-            on: "removeTimePeriodicallyListen",
-            run: (config, _sendToElm) => { removeTimePeriodicallyListen(config) }
+        "addNavigationUrlRequest": (_config, sendToElm) => {
+            sendToElm(window.location.href)
         },
-        {
-            on: "addRandomUnsignedIntsRequest",
-            run: (config, sendToElm) => {
-                sendToElm(crypto.getRandomValues(new Uint32Array(config)))
-            }
-        },
-        {
-            on: "addConsoleLog",
-            run: (config, _sendToElm) => {
-                console.log(config)
-            },
-        },
-        {
-            on: "replaceDomNode",
-            run: (config, sendToElm) => {
-                renderDomNode(config.path, config.domNode, sendToElm)
-            }
-        },
-        {
-            on: "removeDom",
-            run: (_config, _sendToElm) => {
-                appConfig.domElement.replaceChildren()
-            }
-        },
-        {
-            on: "addHttpRequest",
-            run: (config, sendToElm) => {
-                const abortController = new AbortController()
-                httpRequestAbortControllers[config] = abortController
-                fetchAdapter.http(config, abortController).then(response => { sendToElm(response) })
-            }
-        },
-        {
-            on: "removeHttpRequest",
-            run: (config, _sendToElm) => {
-                const maybeAbortController = httpRequestAbortControllers[config]
-                if (maybeAbortController) {
-                    maybeAbortController.abort()
-                }
-            }
-        },
-        {
-            on: "addWindowEventListen",
-            run: windowEventListenAdd
-        },
-        {
-            on: "removeWindowEventListen",
-            run: windowEventListenRemove
-        },
-        {
-            on: "addWindowAnimationFrameListen",
-            run: (_config, sendToElm) => { addAnimationFrameListen(sendToElm) }
-        },
-        {
-            on: "removeAnimationFrameListen",
-            run: (_config, _sendToElm) => { removeAnimationFrameListen() }
-        },
-        {
-            on: "addNavigationUrlRequest",
-            run: (_config, sendToElm) => { sendToElm(window.location.href) }
-        },
-        {
-            on: "addDocumentEventListen",
-            run: documentEventListenAdd
-        },
-        {
-            on: "removeDocumentEventListen",
-            run: documentEventListenRemove
-        },
-        {
-            on: "addNavigationGo",
-            run: (config, _sendToElm) => { go(config) }
-        },
-        {
-            on: "addReplaceUrl",
-            run: (config, _sendToElm) => { replaceUrl(config) }
-        },
-        {
-            on: "addPushUrl",
-            run: (config, _sendToElm) => { pushUrl(config) }
-        },
-        {
-            on: "addLoad",
-            run: (config, _sendToElm) => { load(config) }
-        },
-        {
-            on: "addReload",
-            run: (_config, _sendToElm) => { reload() }
-        }
-    ]
+        "addDocumentEventListen": documentEventListenAdd,
+        "removeDocumentEventListen": documentEventListenRemove,
+        "addNavigationGo": (config, _sendToElm) => { go(config) },
+        "addReplaceUrl": (config, _sendToElm) => { replaceUrl(config) },
+        "addPushUrl": (config, _sendToElm) => { pushUrl(config) },
+        "addLoad": (config, _sendToElm) => { load(config) },
+        "addReload": (_config, _sendToElm) => { reload() }
+    }
+
 
     appConfig.ports.toJs.subscribe(function (fromElm) {
         // console.log("elm → js: ", fromElm)
@@ -146,12 +88,19 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
             appConfig.ports.fromJs.send(toElm)
             // console.log("js → elm: ", toElm)
         }
-
-        interfaceImplementations.forEach(interfaceImplementation => {
-            if (interfaceImplementation.on in fromElm) {
-                interfaceImplementation.run(fromElm[interfaceImplementation.on], sendToElm)
+        const diff: [string, unknown] | undefined = Object.entries(fromElm)[0]
+        if (diff) {
+            const [diffKind, diffConfig] = diff
+            const associatedFunction = interfaceImplementations[diffKind]
+            if (associatedFunction) {
+                associatedFunction(diffConfig, sendToElm)
+            } else {
+                console.log("Unknown message kind " + diffKind + " from elm. Maybe you have a typo? Otherwise the associated js function might be missing.")
             }
-        })
+        } else {
+            console.log("I the message {} from elm. I need a specific command as { actionToPerform : config }")
+        }
+
     });
 
     function renderDomNode(path: number[], node: any, sendToElm: (v: any) => void) {
