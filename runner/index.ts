@@ -46,7 +46,7 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
         "replaceDomNode": (config, sendToElm) => {
             renderDomNode(config.path, config.domNode, sendToElm)
         },
-        "removeDomNode": (_config, _sendToElm) => {
+        "removeDom": (_config, _sendToElm) => {
             appConfig.domElement.replaceChildren()
         },
         "addHttpRequest": (config, sendToElm) => {

@@ -877,7 +877,6 @@ interfaceDiffToCmds =
         [ interfaces.old
             |> KeysSet.except interfaceKeys
                 (interfaces.updated |> KeysSet.toKeys interfaceKeys)
-            |> KeysSet.remove interfaceKeys IdDomNodeRender
             |> KeysSet.toList interfaceKeys
             |> List.filterMap
                 (\interface ->
