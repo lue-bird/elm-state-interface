@@ -11,6 +11,7 @@ import Duration
 import Json.Decode
 import Json.Decode.Local
 import Json.Encode
+import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Time
 
 
@@ -22,7 +23,7 @@ main =
 app : BrowserApp.Config State
 app =
     { initialState =
-        State
+        StartingRoom
             { name = Nothing
             , counter = 0
             , mousePoint = { x = 0, y = 0 }
@@ -30,142 +31,36 @@ app =
             , timezone = Time.utc
             }
     , interface =
-        \(State state) ->
-            [ BrowserApp.Dom.element "div"
-                [ BrowserApp.Dom.listenTo "mousemove"
-                    |> BrowserApp.Dom.modifierMap
-                        (\mouseEvent ->
-                            mouseEvent
-                                |> Json.Decode.decodeValue
-                                    (Json.Decode.succeed (\x y -> { x = x, y = y })
-                                        |> Json.Decode.Local.andMap (Json.Decode.field "clientX" Json.Decode.int)
-                                        |> Json.Decode.Local.andMap (Json.Decode.field "clientY" Json.Decode.int)
-                                    )
-                                |> Result.withDefault { x = -1, y = -1 }
-                                |> MouseMovedTo
-                        )
-                , BrowserApp.Dom.style "font-size" "2em"
-                , BrowserApp.Dom.style "padding-top" "50px"
-                , BrowserApp.Dom.style "padding-left" "80px"
-                , BrowserApp.Dom.style "padding-right" "80px"
-                , BrowserApp.Dom.style "height" "100vh"
-                , BrowserApp.Dom.style "background-color" "#000000"
-                , BrowserApp.Dom.style "color" "#FFFFFF"
-                ]
-                [ "You find yourself trapped in a state-interface. The old clock on the wall shows " |> BrowserApp.Dom.text
-                , clockUi { posix = state.posix, timezone = state.timezone }
-                , ". Countless questions rush through in your mind:" |> BrowserApp.Dom.text
-                , BrowserApp.Dom.element "ul"
-                    []
-                    [ BrowserApp.Dom.element "li"
-                        []
-                        [ "\"How did you get here?\"" |> BrowserApp.Dom.text ]
-                    , BrowserApp.Dom.element "li"
-                        []
-                        [ "\"Why do I know that you're exactly at "
-                            ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
-                            ++ "?\""
-                            |> BrowserApp.Dom.text
-                        ]
-                    , BrowserApp.Dom.element "li"
-                        []
-                        [ "\"How do I know your name " |> BrowserApp.Dom.text
-                        , textInputUi |> BrowserApp.Dom.map NameChanged
-                        , "?\"" |> BrowserApp.Dom.text
-                        ]
-                    , BrowserApp.Dom.element "li"
-                        []
-                        [ "Why is there a tutl?" |> BrowserApp.Dom.text
-                        , BrowserApp.Svg.element "svg"
-                            [ BrowserApp.Dom.attribute "viewBox" "0 0 96 40"
-                            , BrowserApp.Dom.attribute "width" "96"
-                            , BrowserApp.Dom.attribute "height" "96"
-                            ]
-                            [ BrowserApp.Svg.element "image"
-                                [ BrowserApp.Dom.attribute "width" "96"
-                                , BrowserApp.Dom.attribute "height" "96"
-                                , BrowserApp.Dom.attribute "href" "https://elm-lang.org/images/turtle.gif"
-                                ]
-                                []
-                            ]
-                        ]
-                    ]
-                , "\"Don't worry\", a soft voice says. \"I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3\"" |> BrowserApp.Dom.text
-                , BrowserApp.Dom.element "br" [] []
-                , "The voice repeats: \"Don't worry\". My pockets are deep, "
-                    ++ (case state.name of
-                            Nothing ->
-                                "so take"
+        \stateChoice ->
+            case stateChoice of
+                StartingRoom startingRoomState ->
+                    startingRoomState
+                        |> startingRoomInterface
 
-                            Just name ->
-                                name ++ ". Take"
-                       )
-                    ++ " as many 💎 you want:"
-                    |> BrowserApp.Dom.text
-                , BrowserApp.Dom.element "div"
-                    []
-                    [ buttonUi
-                        [ "+" |> BrowserApp.Dom.text ]
-                        |> BrowserApp.Dom.map (\() -> CounterIncreaseClicked)
-                    , BrowserApp.Dom.element "b"
-                        [ BrowserApp.Dom.style "padding" "15px 15px"
-                        ]
-                        [ "💎" ++ (state.counter |> String.fromInt) |> BrowserApp.Dom.text ]
-                    , buttonUi
-                        [ "-" |> BrowserApp.Dom.text ]
-                        |> BrowserApp.Dom.map (\() -> CounterDecreaseClicked)
-                    ]
-                ]
-                |> BrowserApp.Dom.render
-            , BrowserApp.Time.zoneRequest |> BrowserApp.map TimeZoneReceived
-            , BrowserApp.Time.periodicallyListen Duration.second |> BrowserApp.map TimePassed
-            ]
-                |> BrowserApp.batch
-                |> BrowserApp.map
-                    (\event ->
-                        case event of
-                            MouseMovedTo newMousePoint ->
-                                State { state | mousePoint = newMousePoint }
-
-                            CounterDecreaseClicked ->
-                                State { state | counter = state.counter - 1 }
-
-                            CounterIncreaseClicked ->
-                                State { state | counter = state.counter + 1 }
-
-                            TimePassed newTime ->
-                                State { state | posix = newTime }
-
-                            TimeZoneReceived timezone ->
-                                State { state | timezone = timezone }
-
-                            NameChanged (Err jsonError) ->
-                                State { state | name = jsonError |> Json.Decode.errorToString |> Just }
-
-                            NameChanged (Ok name) ->
-                                State
-                                    { state
-                                        | name =
-                                            case name |> String.trimLeft of
-                                                "" ->
-                                                    Nothing
-
-                                                nonBlankName ->
-                                                    nonBlankName |> Just
-                                    }
-                    )
+                AtSign atSignState ->
+                    BrowserApp.none
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
 
 type State
-    = State
+    = StartingRoom StartingRoomState
+    | AtSign AtSignState
+
+
+type alias StartingRoomState =
+    RecordWithoutConstructorFunction
         { name : Maybe String
         , counter : Int
         , mousePoint : { x : Int, y : Int }
         , timezone : Time.Zone
         , posix : Time.Posix
         }
+
+
+type alias AtSignState =
+    RecordWithoutConstructorFunction
+        { name : String }
 
 
 type Event
@@ -175,25 +70,192 @@ type Event
     | CounterIncreaseClicked
     | TimePassed Time.Posix
     | TimeZoneReceived Time.Zone
+    | WalkToSignClicked
+
+
+startingRoomInterface : StartingRoomState -> BrowserApp.Interface State
+startingRoomInterface =
+    \state ->
+        [ BrowserApp.Dom.element "div"
+            [ BrowserApp.Dom.listenTo "mousemove"
+                |> BrowserApp.Dom.modifierMap
+                    (\mouseEvent ->
+                        mouseEvent
+                            |> Json.Decode.decodeValue
+                                (Json.Decode.succeed (\x y -> { x = x, y = y })
+                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientX" Json.Decode.int)
+                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientY" Json.Decode.int)
+                                )
+                            |> Result.withDefault { x = -1, y = -1 }
+                            |> MouseMovedTo
+                    )
+            , BrowserApp.Dom.style "font-size" "2em"
+            , BrowserApp.Dom.style "padding-top" "50px"
+            , BrowserApp.Dom.style "padding-left" "80px"
+            , BrowserApp.Dom.style "padding-right" "80px"
+            , BrowserApp.Dom.style "height" "100vh"
+            , BrowserApp.Dom.style "background-color" "#000000"
+            , BrowserApp.Dom.style "color" "#FFFFFF"
+            ]
+            [ "You find yourself trapped in a state-interface. The old clock on the wall shows " |> BrowserApp.Dom.text
+            , clockUi { posix = state.posix, timezone = state.timezone }
+            , ". Countless questions rush through your mind:" |> BrowserApp.Dom.text
+            , BrowserApp.Dom.element "ul"
+                []
+                [ BrowserApp.Dom.element "li"
+                    []
+                    [ "\"How did you get here?\"" |> BrowserApp.Dom.text ]
+                , BrowserApp.Dom.element "li"
+                    []
+                    [ "\"Why do I know that you're exactly at "
+                        ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
+                        ++ "?\""
+                        |> BrowserApp.Dom.text
+                    ]
+                , BrowserApp.Dom.element "li"
+                    []
+                    [ "\"How do I know your name " |> BrowserApp.Dom.text
+                    , textInputUi |> BrowserApp.Dom.map NameChanged
+                    , "?\"" |> BrowserApp.Dom.text
+                    ]
+                , BrowserApp.Dom.element "li"
+                    []
+                    [ "Why is there a tutl?" |> BrowserApp.Dom.text
+                    , BrowserApp.Svg.element "svg"
+                        [ BrowserApp.Dom.attribute "viewBox" "0 0 96 40"
+                        , BrowserApp.Dom.attribute "width" "96"
+                        , BrowserApp.Dom.attribute "height" "96"
+                        ]
+                        [ BrowserApp.Svg.element "image"
+                            [ BrowserApp.Dom.attribute "width" "96"
+                            , BrowserApp.Dom.attribute "height" "96"
+                            , BrowserApp.Dom.attribute "href" "https://elm-lang.org/images/turtle.gif"
+                            ]
+                            []
+                        ]
+                    ]
+                ]
+            , "\"Don't worry\", I say. \"I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3\"" |> BrowserApp.Dom.text
+            , BrowserApp.Dom.element "br" [] []
+            , "The voice repeats: \"Don't worry. Here,  take a couple 💎 if you want"
+                ++ (case state.name of
+                        Nothing ->
+                            ""
+
+                        Just name ->
+                            ", " ++ name
+                   )
+                ++ ":\""
+                |> BrowserApp.Dom.text
+            , BrowserApp.Dom.element "div"
+                [ BrowserApp.Dom.style "padding-top" "30px"
+                , BrowserApp.Dom.style "padding-bottom" "30px"
+                ]
+                [ buttonUi
+                    [ BrowserApp.Dom.style "height" "60px"
+                    , BrowserApp.Dom.style "width" "60px"
+                    , BrowserApp.Dom.style "text-align" "center"
+                    ]
+                    [ "+" |> BrowserApp.Dom.text ]
+                    |> BrowserApp.Dom.map (\() -> CounterIncreaseClicked)
+                , BrowserApp.Dom.element "b"
+                    [ BrowserApp.Dom.style "padding" "15px 15px"
+                    ]
+                    [ "💎" ++ (state.counter |> String.fromInt) |> BrowserApp.Dom.text ]
+                , buttonUi
+                    [ BrowserApp.Dom.style "height" "60px"
+                    , BrowserApp.Dom.style "width" "60px"
+                    , BrowserApp.Dom.style "text-align" "center"
+                    ]
+                    [ "-" |> BrowserApp.Dom.text ]
+                    |> BrowserApp.Dom.map (\() -> CounterDecreaseClicked)
+                ]
+            , buttonUi
+                []
+                [ "walk towards the sign as "
+                    ++ (case state.name of
+                            Nothing ->
+                                "nameless"
+
+                            Just name ->
+                                name
+                       )
+                    |> BrowserApp.Dom.text
+                ]
+                |> BrowserApp.Dom.map (\() -> WalkToSignClicked)
+            ]
+            |> BrowserApp.Dom.render
+        , BrowserApp.Time.zoneRequest |> BrowserApp.map TimeZoneReceived
+        , BrowserApp.Time.periodicallyListen Duration.second |> BrowserApp.map TimePassed
+        ]
+            |> BrowserApp.batch
+            |> BrowserApp.map
+                (\event ->
+                    case event of
+                        MouseMovedTo newMousePoint ->
+                            StartingRoom { state | mousePoint = newMousePoint }
+
+                        CounterDecreaseClicked ->
+                            StartingRoom { state | counter = state.counter - 1 }
+
+                        CounterIncreaseClicked ->
+                            StartingRoom { state | counter = state.counter + 1 }
+
+                        TimePassed newTime ->
+                            StartingRoom { state | posix = newTime }
+
+                        TimeZoneReceived timezone ->
+                            StartingRoom { state | timezone = timezone }
+
+                        NameChanged (Err jsonError) ->
+                            StartingRoom { state | name = jsonError |> Json.Decode.errorToString |> Just }
+
+                        NameChanged (Ok name) ->
+                            StartingRoom
+                                { state
+                                    | name =
+                                        case name |> String.trimLeft of
+                                            "" ->
+                                                Nothing
+
+                                            nonBlankName ->
+                                                nonBlankName |> Just
+                                }
+
+                        WalkToSignClicked ->
+                            AtSign
+                                { name =
+                                    case state.name of
+                                        Nothing ->
+                                            "nameless"
+
+                                        Just name ->
+                                            name
+                                }
+                )
 
 
 
 -- Ui
 
 
-buttonUi : List (BrowserApp.DomNode ()) -> BrowserApp.DomNode ()
-buttonUi subs =
+buttonUi : List (BrowserApp.Dom.Modifier ()) -> List (BrowserApp.DomNode ()) -> BrowserApp.DomNode ()
+buttonUi modifiers subs =
     BrowserApp.Dom.element "button"
-        [ BrowserApp.Dom.listenTo "click"
+        ([ BrowserApp.Dom.listenTo "click"
             |> BrowserApp.Dom.modifierMap (\_ -> ())
-        , BrowserApp.Dom.style "background-color" "#000000"
-        , BrowserApp.Dom.style "border" "none"
-        , BrowserApp.Dom.style "color" "#FFFFFF"
-        , BrowserApp.Dom.style "padding" "15px 15px"
-        , BrowserApp.Dom.style "text-align" "center"
-        , BrowserApp.Dom.style "display" "inline-block"
-        , BrowserApp.Dom.style "font-size" "2em"
-        ]
+         , BrowserApp.Dom.style "background-color" "#000000"
+         , BrowserApp.Dom.style "border" "3px solid"
+         , BrowserApp.Dom.style "border-radius" "50px"
+         , BrowserApp.Dom.style "color" "#FFFFFF"
+         , BrowserApp.Dom.style "padding" "5px 15px"
+         , BrowserApp.Dom.style "text-align" "center"
+         , BrowserApp.Dom.style "display" "inline-block"
+         , BrowserApp.Dom.style "font-size" "1em"
+         , BrowserApp.Dom.style "font-family" "inherit"
+         ]
+            ++ modifiers
+        )
         subs
 
 
@@ -215,6 +277,7 @@ textInputUi =
         , BrowserApp.Dom.style "border-left" "none"
         , BrowserApp.Dom.style "border-right" "none"
         , BrowserApp.Dom.style "color" "#FFFFFF"
+        , BrowserApp.Dom.style "font-family" "inherit"
         ]
         []
 
