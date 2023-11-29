@@ -144,6 +144,7 @@ type InterfaceSingle state
     | ConsoleLog String
     | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
+    | WindowSizeRequest ({ width : Int, height : Int } -> state)
     | WindowEventListen { eventName : String, on : Json.Decode.Value -> state }
     | WindowAnimationFrameListen (Time.Posix -> state)
     | NavigationUrlRequest (String -> state)
@@ -260,6 +261,7 @@ type InterfaceSingleId
     | IdConsoleLog String
     | IdDomNodeRender
     | IdHttpRequest HttpRequestId
+    | IdWindowSizeRequest
     | IdWindowEventListen String
     | IdWindowAnimationFrameListen
     | IdNavigationUrlRequest
@@ -419,6 +421,10 @@ interfaceSingleMap stateChange =
                 httpRequest
                     |> httpRequestMap stateChange
                     |> HttpRequest
+
+            WindowSizeRequest toState ->
+                (\event -> toState event |> stateChange)
+                    |> WindowSizeRequest
 
             WindowEventListen listen ->
                 { eventName = listen.eventName, on = \value -> listen.on value |> stateChange }
@@ -659,6 +665,9 @@ interfaceSingleToId =
             HttpRequest httpRequest ->
                 httpRequest |> httpRequestToId |> IdHttpRequest
 
+            WindowSizeRequest _ ->
+                IdWindowSizeRequest
+
             WindowEventListen listen ->
                 IdWindowEventListen listen.eventName
 
@@ -737,6 +746,9 @@ interfaceSingleIdToComparable =
                     [ ComparableString "IdHttpRequest"
                     , request |> httpRequestIdToComparable
                     ]
+
+            IdWindowSizeRequest ->
+                ComparableString "IdWindowSizeRequest"
 
             IdWindowEventListen eventName ->
                 ComparableList
@@ -907,6 +919,9 @@ interfaceDiffToCmds =
                         DomNodeRender _ ->
                             RemoveDom |> Just
 
+                        WindowSizeRequest _ ->
+                            Nothing
+
                         WindowEventListen listen ->
                             RemoveWindowEventListen listen.eventName |> Just
 
@@ -967,6 +982,9 @@ interfaceDiffToCmds =
 
                         HttpRequest httpRequest ->
                             AddHttpRequest (httpRequest |> httpRequestToId) |> Just
+
+                        WindowSizeRequest _ ->
+                            AddWindowSizeRequest |> Just
 
                         WindowEventListen listen ->
                             AddWindowEventListen listen.eventName |> Just
@@ -1085,6 +1103,9 @@ interfaceDiffToJson =
 
                 RemoveHttpRequest httpRequestId ->
                     ( "removeHttpRequest", httpRequestId |> httpRequestIdToJson )
+
+                AddWindowSizeRequest ->
+                    ( "addWindowSizeRequest", Json.Encode.null )
 
                 AddWindowEventListen eventName ->
                     ( "addWindowEventListen", eventName |> Json.Encode.string )
@@ -1549,6 +1570,17 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                 _ ->
                     Nothing
 
+        WindowSizeRequest toState ->
+            case interfaceDiff of
+                AddWindowSizeRequest ->
+                    Json.Decode.succeed (\width height -> toState { width = width, height = height })
+                        |> Json.Decode.Local.andMap (Json.Decode.field "width" Json.Decode.int)
+                        |> Json.Decode.Local.andMap (Json.Decode.field "height" Json.Decode.int)
+                        |> Just
+
+                _ ->
+                    Nothing
+
         WindowEventListen listen ->
             case interfaceDiff of
                 AddWindowEventListen addedEventName ->
@@ -1912,6 +1944,7 @@ type InterfaceDiff
     | AddHttpRequest HttpRequestId
     | RemoveHttpRequest HttpRequestId
     | RemoveDom
+    | AddWindowSizeRequest
     | AddWindowEventListen String
     | RemoveWindowEventListen String
     | AddWindowAnimationFrameListen

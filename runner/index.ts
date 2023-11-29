@@ -60,6 +60,9 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
                 maybeAbortController.abort()
             }
         },
+        "addWindowSizeRequest": (_config, sendToElm) => {
+            sendToElm({ width: window.innerWidth, height: window.innerHeight })
+        },
         "addWindowEventListen": windowEventListenAdd,
         "removeWindowEventListen": windowEventListenRemove,
         "addWindowAnimationFrameListen": (_config, sendToElm) => {

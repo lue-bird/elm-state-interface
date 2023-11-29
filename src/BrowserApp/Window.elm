@@ -1,12 +1,12 @@
 module BrowserApp.Window exposing
     ( animationFrameListen
-    , eventListen, resizeListen
+    , sizeRequest, eventListen, resizeListen
     )
 
 {-| Helpers for `window` interaction as part of an [`Interface`](BrowserApp#Interface)
 
 @docs animationFrameListen
-@docs eventListen, resizeListen
+@docs sizeRequest, eventListen, resizeListen
 
 -}
 
@@ -22,6 +22,15 @@ import Time
 eventListen : String -> BrowserApp.Interface Json.Decode.Value
 eventListen eventName =
     BrowserApp.WindowEventListen { eventName = eventName, on = identity }
+        |> Rope.singleton
+
+
+{-| An [`Interface`](BrowserApp#Interface) for getting the inner window width and height in pixels,
+not including toolbars/scrollbars.
+-}
+sizeRequest : BrowserApp.Interface { width : Int, height : Int }
+sizeRequest =
+    BrowserApp.WindowSizeRequest identity
         |> Rope.singleton
 
 
