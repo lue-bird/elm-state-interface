@@ -3,17 +3,12 @@
 The Elm Architecture with its model, view, msg, update, sub, cmd, task
 can be reduced down to state and interface, making it simpler, safer and more declarative.
 
-#### the ideas
-- cmds, tasks, subs and view are combined into one view/subscriptions-like
-  `state -> Interface state`.
-  Now actions are not tied to a specific event happening but to a specific state
-- Instead of the update casing on the relevant state+event combination,
-  the event itself holds all the relevant state.
-  Don't worry, even if the interface responds late, the state information will be up to date
+cmds, tasks, subs and view are combined into one view/subscriptions-like `state -> Interface state`
+which means
 
-#### the extras
-- an event type only exists as an optional intermediate type (still highly recommended, though most of the time)
-- update is part of the interface via [`BrowserApp.map`](https://package.elm-lang.org/packages/lue-bird/elm-state-interface/1.0.0/BrowserApp#map)
+- actions (like changing the url) aren't tied to a specific event happening but to a specific state
+- update is part of the interface (having an intermediate event type is optional but often useful)
+- when updating based on an event, there's no need to case on the relevant state. (Either use the state from the `case` in the interface in an inner update, or safely include the state in the event)
 
 The classic counter example:
 
@@ -82,7 +77,7 @@ BrowserApp.start({
 })
 ```
 
-Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) 🌱 for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) as _the_ motivation to make a package out of it.
+Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) 🌱 for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) as the motivation to make a package out of it.
 
 > The complete example and more in [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
 
