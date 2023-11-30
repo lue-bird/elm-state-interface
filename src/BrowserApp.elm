@@ -54,6 +54,8 @@ Types used by [`BrowserApp.Http`](BrowserApp-Http)
 
 -}
 
+import AppUrl exposing (AppUrl)
+import AppUrl.Local
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Emptiable exposing (Emptiable)
@@ -71,6 +73,7 @@ import Rope exposing (Rope)
 import Set exposing (Set)
 import Time
 import Typed
+import Url exposing (Url)
 
 
 {-| Ignore the specific fields, this is just exposed so can annotate a program state like in
@@ -147,12 +150,12 @@ type InterfaceSingle state
     | WindowSizeRequest ({ width : Int, height : Int } -> state)
     | WindowEventListen { eventName : String, on : Json.Decode.Value -> state }
     | WindowAnimationFrameListen (Time.Posix -> state)
-    | NavigationUrlRequest (String -> state)
+    | NavigationUrlRequest (AppUrl -> state)
     | DocumentEventListen { eventName : String, on : Json.Decode.Value -> state }
-    | NavigationReplaceUrl String
-    | NavigationPushUrl String
+    | NavigationReplaceUrl AppUrl
+    | NavigationPushUrl AppUrl
     | NavigationGo Int
-    | NavigationLoad String
+    | NavigationLoad Url
     | NavigationReload
 
 
@@ -266,10 +269,10 @@ type InterfaceSingleId
     | IdWindowAnimationFrameListen
     | IdNavigationUrlRequest
     | IdDocumentEventListen String
-    | IdNavigationReplaceUrl String
-    | IdNavigationPushUrl String
+    | IdNavigationReplaceUrl AppUrl
+    | IdNavigationPushUrl AppUrl
     | IdNavigationGo Int
-    | IdNavigationLoad String
+    | IdNavigationLoad Url
     | IdNavigationReload
 
 
@@ -771,13 +774,13 @@ interfaceSingleIdToComparable =
             IdNavigationReplaceUrl url ->
                 ComparableList
                     [ ComparableString "IdNavigationReplaceUrl"
-                    , ComparableString url
+                    , ComparableString (url |> AppUrl.toString)
                     ]
 
             IdNavigationPushUrl url ->
                 ComparableList
                     [ ComparableString "IdNavigationPushUrl"
-                    , ComparableString url
+                    , ComparableString (url |> AppUrl.toString)
                     ]
 
             IdNavigationGo urlSteps ->
@@ -789,7 +792,7 @@ interfaceSingleIdToComparable =
             IdNavigationLoad url ->
                 ComparableList
                     [ ComparableString "IdNavigationLoad"
-                    , ComparableString url
+                    , ComparableString (url |> Url.toString)
                     ]
 
             IdNavigationReload ->
@@ -1129,16 +1132,16 @@ interfaceDiffToJson =
                     ( "removeDocumentEventListen", eventName |> Json.Encode.string )
 
                 AddNavigationPushUrl url ->
-                    ( "addNavigationPushUrl", url |> Json.Encode.string )
+                    ( "addNavigationPushUrl", url |> AppUrl.toString |> Json.Encode.string )
 
                 AddNavigationReplaceUrl url ->
-                    ( "addNavigationReplaceUrl", url |> Json.Encode.string )
+                    ( "addNavigationReplaceUrl", url |> AppUrl.toString |> Json.Encode.string )
 
                 AddNavigationGo urlSteps ->
                     ( "addNavigationGo", urlSteps |> Json.Encode.int )
 
                 AddNavigationLoad url ->
-                    ( "addNavigationLoad", url |> Json.Encode.string )
+                    ( "addNavigationLoad", url |> Url.toString |> Json.Encode.string )
 
                 AddNavigationReload ->
                     ( "addNavigationReload", Json.Encode.null )
@@ -1356,13 +1359,25 @@ interfaceDiffJsonDecoder =
         , Json.Decode.map RemoveDocumentEventListen
             (Json.Decode.field "removeDocumentEventListen" Json.Decode.string)
         , Json.Decode.map AddNavigationPushUrl
-            (Json.Decode.field "addNavigationPushUrl" Json.Decode.string)
+            (Json.Decode.field "addNavigationPushUrl" AppUrl.Local.jsonDecoder)
         , Json.Decode.map AddNavigationReplaceUrl
-            (Json.Decode.field "addNavigationReplaceUrl" Json.Decode.string)
+            (Json.Decode.field "addNavigationReplaceUrl" AppUrl.Local.jsonDecoder)
         , Json.Decode.map AddNavigationGo
             (Json.Decode.field "addNavigationGo" Json.Decode.int)
         , Json.Decode.map AddNavigationLoad
-            (Json.Decode.field "addNavigationLoad" Json.Decode.string)
+            (Json.Decode.field "addNavigationLoad"
+                (Json.Decode.string
+                    |> Json.Decode.andThen
+                        (\urlString ->
+                            case urlString |> Url.fromString of
+                                Nothing ->
+                                    "invalid URL" |> Json.Decode.fail
+
+                                Just url ->
+                                    url |> Json.Decode.succeed
+                        )
+                )
+            )
         , Json.Decode.map (\() -> AddNavigationReload)
             (Json.Decode.field "addNavigationReload" (Json.Decode.null ()))
         ]
@@ -1606,7 +1621,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
         NavigationUrlRequest toState ->
             case interfaceDiff of
                 AddNavigationUrlRequest ->
-                    Json.Decode.string |> Json.Decode.map toState |> Just
+                    AppUrl.Local.jsonDecoder |> Json.Decode.map toState |> Just
 
                 _ ->
                     Nothing
@@ -1952,10 +1967,10 @@ type InterfaceDiff
     | AddNavigationUrlRequest
     | AddDocumentEventListen String
     | RemoveDocumentEventListen String
-    | AddNavigationReplaceUrl String
-    | AddNavigationPushUrl String
+    | AddNavigationReplaceUrl AppUrl
+    | AddNavigationPushUrl AppUrl
     | AddNavigationGo Int
-    | AddNavigationLoad String
+    | AddNavigationLoad Url
     | AddNavigationReload
 
 

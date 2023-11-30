@@ -10,12 +10,13 @@ which means
 - update is part of the interface (having an intermediate event type is optional but often useful)
 - when updating based on an event, there's no need to case on the relevant state. (Either use the state from the `case` in the interface in an inner update, or safely include the state in the event)
 
-The classic counter example:
+The classic counter example including changing url:
 
 ```elm
 import BrowserApp
 import BrowserApp.Dom as Ui
-import Json.Encode
+import AppUrl -- lydell/elm-app-url
+import Json.Encode -- elm/json
 
 type alias State =
     Int
@@ -23,13 +24,14 @@ type alias State =
 type Event
     = DecreaseClicked
     | IncreaseClicked
+    | UserWentToUrl AppUrl
 
 app : BrowserApp.Config State
 app =
     { initialState = 0
     , interface =
         \counter ->
-            Ui.element "div"
+            [ Ui.element "div"
                 []
                 [ Ui.element "button"
                     [ Ui.listenTo "click" |> Ui.modifierMap (\_ -> IncreaseClicked) ]
@@ -42,6 +44,15 @@ app =
                     [ "-" |> Ui.text ]
                 ]
                 |> Ui.render
+            , BrowserApp.Navigation.pushUrl
+                { path = []
+                , queryParameters = Dict.singleton "counter" [ counter |> String.fromInt ]
+                , fragment = Nothing
+                }
+            , BrowserApp.Navigation.urlRequest |> BrowserApp.map UserWentToUrl
+            , BrowserApp.Navigation.byUserListen |> BrowserApp.map UserWentToUrl
+            ]
+                |> BrowserApp.batch
                 |> BrowserApp.map
                     (\event ->
                         case event of
@@ -50,6 +61,13 @@ app =
                             
                             IncreaseClicked ->
                                 counter + 1
+                            
+                            UserWentToUrl newUrl ->
+                                newUrl.queryParameters
+                                    |> Dict.get "counter"
+                                    |> Maybe.andThen List.head
+                                    |> Maybe.map String.fromInt
+                                    |> Maybe.withDefault 0
                     )
     , ports = { fromJs = fromJs, toJs = toJs }
     }

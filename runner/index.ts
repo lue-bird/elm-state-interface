@@ -77,10 +77,10 @@ export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
         "addDocumentEventListen": documentEventListenAdd,
         "removeDocumentEventListen": documentEventListenRemove,
         "addNavigationGo": (config, _sendToElm) => { go(config) },
-        "addReplaceUrl": (config, _sendToElm) => { replaceUrl(config) },
-        "addPushUrl": (config, _sendToElm) => { pushUrl(config) },
-        "addLoad": (config, _sendToElm) => { load(config) },
-        "addReload": (_config, _sendToElm) => { reload() }
+        "addNavigationReplaceUrl": (config, _sendToElm) => { replaceUrl(config) },
+        "addNavigationPushUrl": (config, _sendToElm) => { pushUrl(config) },
+        "addNavigationLoad": (config, _sendToElm) => { load(config) },
+        "addNavigationReload": (_config, _sendToElm) => { reload() }
     }
 
 
@@ -227,11 +227,11 @@ function documentEventListenRemove(eventName: string) {
 function go(urlSteps: number) {
     history.go(urlSteps);
 }
-function pushUrl(url: string) {
-    history.pushState({ url: url }, "", url);
+function pushUrl(appUrl: string) {
+    history.pushState({ appUrl: appUrl }, "", window.location.origin + appUrl);
 }
-function replaceUrl(url: string) {
-    history.replaceState({ url: url }, "", url);
+function replaceUrl(appUrl: string) {
+    history.replaceState({ appUrl: appUrl }, "", window.location.origin + appUrl);
 }
 
 function reload() {

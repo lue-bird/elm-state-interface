@@ -14,9 +14,12 @@ module BrowserApp.Navigation exposing
 
 -- elm/browser on "How do I manage URL from a Browser.element?" https://github.com/elm/browser/blob/master/notes/navigation-in-elements.md
 
+import AppUrl exposing (AppUrl)
+import AppUrl.Local
 import BrowserApp
 import Json.Decode
 import Rope
+import Url exposing (Url)
 
 
 {-| An [`Interface`](BrowserApp#Interface) for getting the current page's url.
@@ -25,13 +28,13 @@ Is usually used while starting up the app.
 Note: Uses [`window.location.href`](https://developer.mozilla.org/en-US/docs/Web/API/Window/location)
 
 -}
-urlRequest : BrowserApp.Interface String
+urlRequest : BrowserApp.Interface AppUrl
 urlRequest =
     BrowserApp.NavigationUrlRequest identity
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that changes the URL,
+{-| An [`Interface`](BrowserApp#Interface) that changes the [aüü-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/),
 but neither triggers a page load nor adds a new entry to the browser history.
 
 This can be useful if you have search box and you want the ?search=hats in the URL to match without adding a history entry for every single key stroke. Imagine how annoying it would be to click back thirty times and still be on the same page!
@@ -39,21 +42,22 @@ This can be useful if you have search box and you want the ?search=hats in the U
 Replacement for [`Browser.Navigation.replaceUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#replaceUrl)
 
 -}
-replaceUrl : String -> BrowserApp.Interface state_
-replaceUrl url =
-    BrowserApp.NavigationReplaceUrl url
+replaceUrl : AppUrl -> BrowserApp.Interface state_
+replaceUrl appUrl =
+    BrowserApp.NavigationReplaceUrl appUrl
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that changes the URL and adds a new entry to the browser history,
+{-| An [`Interface`](BrowserApp#Interface) that changes the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/)
+and adds a new entry to the browser history,
 but does not trigger a page load.
 
 Replacement for [`Browser.Navigation.pushUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#pushUrl)
 
 -}
-pushUrl : String -> BrowserApp.Interface state_
-pushUrl url =
-    BrowserApp.NavigationPushUrl url
+pushUrl : AppUrl -> BrowserApp.Interface state_
+pushUrl appUrl =
+    BrowserApp.NavigationPushUrl appUrl
         |> Rope.singleton
 
 
@@ -84,7 +88,7 @@ back urlSteps =
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that leaves the current page and loads the given URL.
+{-| An [`Interface`](BrowserApp#Interface) that leaves the current page and loads the given [URL](https://dark.elm.dmy.fr/packages/elm/url/latest/).
 This always results in a page load, even if the provided URL is the same as the current one.
 
     gotoElmWebsite : BrowserApp.Interface state_
@@ -94,7 +98,7 @@ This always results in a page load, even if the provided URL is the same as the 
 Replacement for [`Browser.Navigation.load`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#load)
 
 -}
-load : String -> BrowserApp.Interface state_
+load : Url -> BrowserApp.Interface state_
 load url =
     BrowserApp.NavigationLoad url
         |> Rope.singleton
@@ -123,12 +127,12 @@ Note: When the app itself initiates a url change, like with [`pushUrl`](#pushUrl
 , no such event is triggered
 
 -}
-byUserListen : BrowserApp.Interface (Result Json.Decode.Error String)
+byUserListen : BrowserApp.Interface (Result Json.Decode.Error AppUrl)
 byUserListen =
     BrowserApp.WindowEventListen
         { eventName = "popstate"
         , on =
             Json.Decode.decodeValue
-                (Json.Decode.field "url" Json.Decode.string)
+                (Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder)
         }
         |> Rope.singleton
