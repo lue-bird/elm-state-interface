@@ -1,4 +1,4 @@
-module BrowserApp exposing
+module Web exposing
     ( Config
     , toProgram, State(..), Event(..)
     , init, subscriptions, update
@@ -34,14 +34,14 @@ If you just want to replace a part of your elm app with this architecture. Make 
 
 ## DOM
 
-Types used by [`BrowserApp.Dom`](BrowserApp-Dom)
+Types used by [`Web.Dom`](Web-Dom)
 
 @docs DomNode, DomElement
 
 
 ## HTTP
 
-Types used by [`BrowserApp.Http`](BrowserApp-Http)
+Types used by [`Web.Http`](Web-Http)
 
 @docs HttpRequest, HttpHeader, HttpBody, HttpExpect, HttpError, HttpMetadata
 
@@ -78,9 +78,9 @@ import Url exposing (Url)
 
 {-| Ignore the specific fields, this is just exposed so can annotate a program state like in
 
-    main : Program () (BrowserApp.State YourState) (BrowserApp.Event YourState)
+    main : Program () (Web.State YourState) (Web.Event YourState)
     main =
-        BrowserApp.toProgram ...
+        Web.toProgram ...
 
 -}
 type State appState
@@ -111,7 +111,7 @@ type InterfaceSingleToIdTag
 {-| What's needed to create a state-interface program.
 
   - `state` is what elm calls the model
-  - An [`Interface`](#Interface) can be created using the helpers in `BrowserApp.Time`, `BrowserApp.Dom`, `BrowserApp.Http` etc.
+  - An [`Interface`](#Interface) can be created using the helpers in `Web.Time`, `Web.Dom`, `Web.Http` etc.
 
 -}
 type alias Config state =
@@ -126,9 +126,9 @@ type alias Config state =
 
 
 {-| Incoming and outgoing effects.
-To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
+To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
 
-To combine multiple, use [`BrowserApp.batch`](#batch) and [`BrowserApp.none`](#none)
+To combine multiple, use [`Web.batch`](#batch) and [`Web.none`](#none)
 
 -}
 type alias Interface state =
@@ -136,7 +136,7 @@ type alias Interface state =
 
 
 {-| An "non-batched" [`Interface`](#Interface).
-To create one, use the helpers in `BrowserApp.Time`, `.Dom`, `.Http` etc.
+To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
 -}
 type InterfaceSingle state
     = TimePosixRequest (Time.Posix -> state)
@@ -195,13 +195,13 @@ type HttpExpect state
   - `HttpBodyEmpty`: Create an empty body for your request.
     This is useful for `GET` requests and `POST` requests where you are not sending any data.
 
-  - `HttpBodyString`: Put a `String` in the body of your request. Defining `BrowserApp.Http.jsonBody` looks like this:
+  - `HttpBodyString`: Put a `String` in the body of your request. Defining `Web.Http.jsonBody` looks like this:
 
         import Json.Encode
 
-        jsonBody : Json.Encode.Value -> BrowserApp.HttpBody
+        jsonBody : Json.Encode.Value -> Web.HttpBody
         jsonBody value =
-            BrowserApp.HttpBodyString "application/json" (Json.Encode.encode 0 value)
+            Web.HttpBodyString "application/json" (Json.Encode.encode 0 value)
 
     The first argument is a [MIME type](https://en.wikipedia.org/wiki/Media_type) of the body.
 
@@ -306,11 +306,11 @@ batch =
 
 {-| Doing nothing as an [`Interface`](#Interface). These two examples are equivalent:
 
-    BrowserApp.batch [ a, BrowserApp.none, b ]
+    Web.batch [ a, Web.none, b ]
 
 and
 
-    BrowserApp.batch
+    Web.batch
         (List.filterMap identity
             [ a |> Just, Nothing, b |> Just ]
         )
@@ -325,13 +325,13 @@ none =
 
 In practice, this is sometimes used like a kind of event-config pattern:
 
-    BrowserApp.Time.posixRequest
-        |> BrowserApp.map (\timeNow -> TimeReceived timeNow)
+    Web.Time.posixRequest
+        |> Web.map (\timeNow -> TimeReceived timeNow)
 
 sometimes like elm's `update`
 
     ...
-        |> BrowserApp.map
+        |> Web.map
             (\event ->
                 case event of
                     MouseMovedTo newMousePoint ->
@@ -354,10 +354,10 @@ and sometimes like elm's `Cmd.map/Task.map/Sub.map/...`:
     interface state =
         case state of
             MenuState menuState ->
-                BrowserApp.map MenuState (Menu.interface menuState)
+                Web.map MenuState (Menu.interface menuState)
 
             PlayingState playingState ->
-                BrowserApp.map PlayingState (Playing.interface playingState)
+                Web.map PlayingState (Playing.interface playingState)
 
 In all these examples, you end up converting the narrow state representation of part of the interface to a broader representation for
 the parent interface
@@ -498,9 +498,9 @@ domElementMap stateChange =
 
 {-| Ignore the specific variants, this is just exposed so can annotate a program event like in
 
-    main : Program () (BrowserApp.State YourState) (BrowserApp.Event YourState)
+    main : Program () (Web.State YourState) (Web.Event YourState)
     main =
-        BrowserApp.toProgram ...
+        Web.toProgram ...
 
 -}
 type Event appState
@@ -1975,12 +1975,12 @@ type InterfaceDiff
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
-with a given [`BrowserApp.Config`](#Config). Short for
+with a given [`Web.Config`](#Config). Short for
 
     Platform.worker
-        { init = \() -> BrowserApp.init yourAppConfig
-        , update = BrowserApp.update yourAppConfig
-        , subscriptions = BrowserApp.subscriptions yourAppConfig
+        { init = \() -> Web.init yourAppConfig
+        , update = Web.update yourAppConfig
+        , subscriptions = Web.subscriptions yourAppConfig
         }
 
 -}

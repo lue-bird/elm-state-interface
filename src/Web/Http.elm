@@ -1,11 +1,11 @@
-module BrowserApp.Http exposing
+module Web.Http exposing
     ( expectJson, expectString, expectWhatever
     , bodyJson
     , get, post
     , request
     )
 
-{-| Helpers for [HTTP types](BrowserApp#HttpRequest) as part of an [`Interface`](BrowserApp#Interface)
+{-| Helpers for [HTTP types](Web#HttpRequest) as part of an [`Interface`](Web#Interface)
 
 @docs expectJson, expectString, expectWhatever
 @docs bodyJson
@@ -15,17 +15,17 @@ module BrowserApp.Http exposing
 
 -}
 
-import BrowserApp exposing (HttpBody, HttpError, HttpExpect, HttpHeader, HttpRequest)
 import Json.Decode
 import Json.Encode
 import Rope
+import Web exposing (HttpBody, HttpError, HttpExpect, HttpHeader, HttpRequest)
 
 
 {-| Put some JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
 -}
 bodyJson : Json.Encode.Value -> HttpBody
 bodyJson value =
-    BrowserApp.HttpBodyString { mimeType = "application/json", content = Json.Encode.encode 0 value }
+    Web.HttpBodyString { mimeType = "application/json", content = Json.Encode.encode 0 value }
 
 
 
@@ -36,28 +36,28 @@ bodyJson value =
 -}
 expectJson : HttpExpect (Result HttpError Json.Decode.Value)
 expectJson =
-    BrowserApp.HttpExpectJson identity
+    Web.HttpExpectJson identity
 
 
 {-| Expect the response body to be a `String`.
 -}
 expectString : HttpExpect (Result HttpError String)
 expectString =
-    BrowserApp.HttpExpectString identity
+    Web.HttpExpectString identity
 
 
 {-| Discard the response body.
 -}
 expectWhatever : HttpExpect (Result HttpError ())
 expectWhatever =
-    BrowserApp.HttpExpectWhatever identity
+    Web.HttpExpectWhatever identity
 
 
 
 -- request
 
 
-{-| Create a `GET` [`HttpRequest`](BrowserApp#HttpRequest)
+{-| Create a `GET` [`HttpRequest`](Web#HttpRequest)
 -}
 get :
     { url : String
@@ -70,13 +70,13 @@ get options =
     { url = options.url
     , method = "GET"
     , headers = options.headers
-    , body = BrowserApp.HttpBodyEmpty
+    , body = Web.HttpBodyEmpty
     , expect = options.expect
     , timeout = options.timeout
     }
 
 
-{-| Create a `POST` [`HttpRequest`](BrowserApp#HttpRequest)
+{-| Create a `POST` [`HttpRequest`](Web#HttpRequest)
 -}
 post :
     { url : String
@@ -96,10 +96,10 @@ post options =
     }
 
 
-{-| An [`Interface`](BrowserApp#Interface) for handling an [`HttpRequest`](BrowserApp#HttpRequest)
+{-| An [`Interface`](Web#Interface) for handling an [`HttpRequest`](Web#HttpRequest)
 using the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
 -}
-request : HttpRequest state -> BrowserApp.Interface state
+request : HttpRequest state -> Web.Interface state
 request =
     \httpRequest ->
-        httpRequest |> BrowserApp.HttpRequest |> Rope.singleton
+        httpRequest |> Web.HttpRequest |> Rope.singleton

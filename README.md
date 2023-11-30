@@ -13,8 +13,8 @@ which means
 The classic counter example including changing url:
 
 ```elm
-import BrowserApp
-import BrowserApp.Dom as Ui
+import Web
+import Web.Dom
 import AppUrl -- lydell/elm-app-url
 import Json.Encode -- elm/json
 
@@ -26,34 +26,34 @@ type Event
     | IncreaseClicked
     | UserWentToUrl AppUrl
 
-app : BrowserApp.Config State
+app : Web.Config State
 app =
     { initialState = 0
     , interface =
         \counter ->
-            [ Ui.element "div"
+            [ Web.Dom.element "div"
                 []
-                [ Ui.element "button"
-                    [ Ui.listenTo "click" |> Ui.modifierMap (\_ -> IncreaseClicked) ]
-                    [ "+" |> Ui.text ]
-                , Ui.element "div"
+                [ Web.Dom.element "button"
+                    [ Web.Dom.listenTo "click" |> Web.Dom.modifierMap (\_ -> IncreaseClicked) ]
+                    [ "+" |> Web.Dom.text ]
+                , Web.Dom.element "div"
                     []
-                    [ counter |> String.fromInt |> Ui.text ]
-                , Ui.element "button"
-                    [ Ui.listenTo "click" |> Ui.modifierMap (\_ -> DecreaseClicked) ]
-                    [ "-" |> Ui.text ]
+                    [ counter |> String.fromInt |> Web.Dom.text ]
+                , Web.Dom.element "button"
+                    [ Web.Dom.listenTo "click" |> Web.Dom.modifierMap (\_ -> DecreaseClicked) ]
+                    [ "-" |> Web.Dom.text ]
                 ]
-                |> Ui.render
-            , BrowserApp.Navigation.pushUrl
+                |> Web.Dom.render
+            , Web.Navigation.pushUrl
                 { path = []
                 , queryParameters = Dict.singleton "counter" [ counter |> String.fromInt ]
                 , fragment = Nothing
                 }
-            , BrowserApp.Navigation.urlRequest |> BrowserApp.map UserWentToUrl
-            , BrowserApp.Navigation.byUserListen |> BrowserApp.map UserWentToUrl
+            , Web.Navigation.urlRequest |> Web.map UserWentToUrl
+            , Web.Navigation.byUserListen |> Web.map UserWentToUrl
             ]
-                |> BrowserApp.batch
-                |> BrowserApp.map
+                |> Web.batch
+                |> Web.map
                     (\event ->
                         case event of
                             DecreaseClicked ->
@@ -72,9 +72,9 @@ app =
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
-main : Program () (BrowserApp.State State) (BrowserApp.Event State)
+main : Program () (Web.State State) (Web.Event State)
 main =
-    app |> BrowserApp.toProgram
+    app |> Web.toProgram
 
 port toJs : Json.Encode.Value -> Cmd event_
 port fromJs : (Json.Encode.Value -> event) -> Sub event
@@ -86,10 +86,10 @@ npm install @lue-bird/elm-state-interface
 ```
 in js
 ```js
-import * as BrowserApp from "@lue-bird/elm-state-interface"
+import * as Web from "@lue-bird/elm-state-interface"
 
 const elmApp = Elm.Main.init({});
-BrowserApp.start({
+Web.start({
     elmPorts : elmApp.ports,
     domElement : document.getElementById("your-app-element")
 })
@@ -160,19 +160,19 @@ type alias State =
             _ ->
                 [ case state.icon of
                     Ok _ ->
-                        BrowserApp.none
+                        Web.none
                     Err _ ->
                         Http.request { url = "...", decoder = Image.jsonDecoder }
-                            |> BrowserApp.map (\result -> { state | icon = result })
+                            |> Web.map (\result -> { state | icon = result })
                 , case state.content of
                     Ok _ ->
-                        BrowserApp.none
+                        Web.none
                     Err _ ->
                         Http.request { url = "...", decoder = Json.Decode.string }
-                            |> BrowserApp.map (\result -> { state | content = result })
+                            |> Web.map (\result -> { state | content = result })
                 , ..error ui..
                 ]
-                    |> BrowserApp.batch
+                    |> Web.batch
 }
 ```
 which feels a bit more explicit, declarative and less wiring-heavy at least.

@@ -1,4 +1,4 @@
-module BrowserApp.Dom exposing
+module Web.Dom exposing
     ( documentEventListen
     , text
     , element, elementNamespaced
@@ -6,7 +6,7 @@ module BrowserApp.Dom exposing
     , map, render
     )
 
-{-| Helpers for [DOM node types](BrowserApp#DomNode) as part of an [`Interface`](BrowserApp#Interface).
+{-| Helpers for [DOM node types](Web#DomNode) as part of an [`Interface`](Web#Interface).
 
 These are primitives used for svg and html.
 Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
@@ -20,45 +20,45 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 -}
 
 import Array
-import BrowserApp exposing (DomElement, DomNode)
 import Dict
 import Json.Decode
 import Rope exposing (Rope)
+import Web exposing (DomElement, DomNode)
 
 
-{-| An [`Interface`](BrowserApp#Interface) that listens for a specific `document` event
+{-| An [`Interface`](Web#Interface) that listens for a specific `document` event
 like like keypress, keydown, keyup, click, mousemove, mousedown, mouseup
 -}
-documentEventListen : String -> BrowserApp.Interface Json.Decode.Value
+documentEventListen : String -> Web.Interface Json.Decode.Value
 documentEventListen eventName =
-    BrowserApp.DocumentEventListen { eventName = eventName, on = identity }
+    Web.DocumentEventListen { eventName = eventName, on = identity }
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) for displaying a given [`DomNode`](BrowserApp#DomNode).
+{-| An [`Interface`](Web#Interface) for displaying a given [`DomNode`](Web#DomNode).
 -}
-render : DomNode state -> BrowserApp.Interface state
+render : DomNode state -> Web.Interface state
 render =
     \domNode ->
         domNode
-            |> BrowserApp.DomNodeRender
+            |> Web.DomNodeRender
             |> Rope.singleton
 
 
-{-| Wire events from this [`DomNode`](BrowserApp#DomNode) to a specific event.
+{-| Wire events from this [`DomNode`](Web#DomNode) to a specific event.
 
     buttonUi "start"
-        |> BrowserApp.Dom.map (\Clicked -> StartButtonClicked)
+        |> Web.Dom.map (\Clicked -> StartButtonClicked)
 
 with e.g.
 
-    buttonUi : List (BrowserApp.DomNode ()) -> BrowserApp.DomNode ButtonEvent
+    buttonUi : List (Web.DomNode ()) -> Web.DomNode ButtonEvent
     buttonUi subs =
-        BrowserApp.Dom.element "button"
-            [ BrowserApp.Dom.listenTo "click"
-                |> BrowserApp.Dom.modifierMap (\_ -> Clicked)
+        Web.Dom.element "button"
+            [ Web.Dom.listenTo "click"
+                |> Web.Dom.modifierMap (\_ -> Clicked)
             ]
-            [ BrowserApp.Dom.text label ]
+            [ Web.Dom.text label ]
 
     type ButtonEvent
         = Clicked
@@ -68,11 +68,11 @@ map : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
 map stateChange =
     \domElementToMap ->
         case domElementToMap of
-            BrowserApp.DomText string ->
-                BrowserApp.DomText string
+            Web.DomText string ->
+                Web.DomText string
 
-            BrowserApp.DomElement domElement ->
-                domElement |> elementMap stateChange |> BrowserApp.DomElement
+            Web.DomElement domElement ->
+                domElement |> elementMap stateChange |> Web.DomElement
 
 
 elementMap : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
@@ -91,11 +91,11 @@ elementMap stateChange =
         }
 
 
-{-| Plain text [`DomNode`](BrowserApp#DomNode)
+{-| Plain text [`DomNode`](Web#DomNode)
 -}
 text : String -> DomNode state_
 text =
-    BrowserApp.DomText
+    Web.DomText
 
 
 elementWithMaybeNamespace : Maybe String -> String -> List (Modifier state) -> List (DomNode state) -> DomNode state
@@ -167,15 +167,15 @@ elementWithMaybeNamespace maybeNamespace tag modifiers subs =
             |> Dict.fromList
     , subs = subs |> Array.fromList
     }
-        |> BrowserApp.DomElement
+        |> Web.DomElement
 
 
-{-| Create a DOM element with a given tag, [`Modifier`](#Modifier)s and sub-[node](BrowserApp#DomNode)s.
+{-| Create a DOM element with a given tag, [`Modifier`](#Modifier)s and sub-[node](Web#DomNode)s.
 For example to get `<p>flying</p>`
 
-    BrowserApp.Dom.element "p"
+    Web.Dom.element "p"
         []
-        [ BrowserApp.Dom.text "flying" ]
+        [ Web.Dom.text "flying" ]
 
 -}
 element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
@@ -183,12 +183,12 @@ element tag modifiers subs =
     elementWithMaybeNamespace Nothing tag modifiers subs
 
 
-{-| Create a DOM element with a given namespace, tag, [`Modifier`](#Modifier)s and sub-[node](BrowserApp#DomNode)s.
-For example, [`BrowserApp.Svg`](BrowserApp-Svg) defines its elements using
+{-| Create a DOM element with a given namespace, tag, [`Modifier`](#Modifier)s and sub-[node](Web#DomNode)s.
+For example, [`Web.Svg`](Web-Svg) defines its elements using
 
     element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
     element tag modifiers subs =
-        BrowserApp.Dom.elementNamespaced "http://www.w3.org/2000/svg" tag modifiers subs
+        Web.Dom.elementNamespaced "http://www.w3.org/2000/svg" tag modifiers subs
 
 -}
 elementNamespaced : String -> String -> List (Modifier state) -> List (DomNode state) -> DomNode state
@@ -196,15 +196,15 @@ elementNamespaced namespace tag modifiers subs =
     elementWithMaybeNamespace (namespace |> Just) tag modifiers subs
 
 
-{-| Set the behavior of a [`BrowserApp.Dom.element`](BrowserApp-Dom#element).
+{-| Set the behavior of a [`Web.Dom.element`](Web-Dom#element).
 To create one, use [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo).
-To combine multiple, use [`BrowserApp.Dom.modifierBatch`](#modifierBatch) and [`BrowserApp.Dom.modifierNone`](#modifierNone)
+To combine multiple, use [`Web.Dom.modifierBatch`](#modifierBatch) and [`Web.Dom.modifierNone`](#modifierNone)
 
 For example to get `<a href="https://elm-lang.org">elm</a>`
 
-    BrowserApp.Dom.element "a"
-        [ BrowserApp.Dom.attribute "href" "https://elm-lang.org" ]
-        [ BrowserApp.Dom.text "elm" ]
+    Web.Dom.element "a"
+        [ Web.Dom.attribute "href" "https://elm-lang.org" ]
+        [ Web.Dom.text "elm" ]
 
 Btw: If you can think of a nicer name for this like "customization", "characteristic" or "aspect",
 please [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new)!
@@ -223,12 +223,12 @@ modifierBatch =
 
 {-| Doing nothing as a [`Modifier`](#Modifier). These two examples are equivalent:
 
-    BrowserApp.Dom.modifierBatch
-        [ a, BrowserApp.Dom.modifierNone, b ]
+    Web.Dom.modifierBatch
+        [ a, Web.Dom.modifierNone, b ]
 
 and
 
-    BrowserApp.Dom.modifierBatch
+    Web.Dom.modifierBatch
         (List.filterMap identity
             [ a |> Just, Nothing, b |> Just ]
         )
@@ -260,7 +260,7 @@ For example, you could define an SVG xlink href attribute as
 
     attributeXlinkHref : String -> Modifier msg
     attributeXlinkHref value =
-        BrowserApp.Dom.attributeNamespaced "http://www.w3.org/1999/xlink" "xlink:href" value
+        Web.Dom.attributeNamespaced "http://www.w3.org/1999/xlink" "xlink:href" value
 
 -}
 attributeNamespaced : String -> String -> String -> Modifier state_
@@ -275,7 +275,7 @@ style key value =
     { key = key, value = value } |> Style |> Rope.singleton
 
 
-{-| Listen for a specific DOM event on the [`DomElement`](BrowserApp#DomElement).
+{-| Listen for a specific DOM event on the [`DomElement`](Web#DomElement).
 Use [`modifierMap`](#modifierMap) to wire this to a specific event.
 -}
 listenTo : String -> Modifier Json.Decode.Value
@@ -285,7 +285,7 @@ listenTo eventName =
 
 {-| Wire events from this [`Modifier`](#Modifier) to a specific event.
 
-    BrowserApp.Dom.listen "click" |> BrowserApp.Dom.modifierMap (\_ -> ButtonClicked)
+    Web.Dom.listen "click" |> Web.Dom.modifierMap (\_ -> ButtonClicked)
 
 -}
 modifierMap : (state -> mappedState) -> (Modifier state -> Modifier mappedState)

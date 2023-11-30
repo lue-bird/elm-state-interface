@@ -5,15 +5,15 @@
     "license": "MIT",
     "version": "1.0.0",
     "exposed-modules": [
-        "BrowserApp",
-        "BrowserApp.Http",
-        "BrowserApp.Dom",
-        "BrowserApp.Svg",
-        "BrowserApp.Time",
-        "BrowserApp.Console",
-        "BrowserApp.Window",
-        "BrowserApp.Navigation",
-        "BrowserApp.Random"
+        "Web",
+        "Web.Http",
+        "Web.Dom",
+        "Web.Svg",
+        "Web.Time",
+        "Web.Console",
+        "Web.Window",
+        "Web.Navigation",
+        "Web.Random"
     ],
     "elm-version": "0.19.1 <= v < 20.0.0",
     "dependencies": {

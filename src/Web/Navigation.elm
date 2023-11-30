@@ -1,10 +1,10 @@
-module BrowserApp.Navigation exposing
+module Web.Navigation exposing
     ( urlRequest, byUserListen
     , forward, back, pushUrl, replaceUrl
     , load, reload
     )
 
-{-| Helpers for `history` interaction as part of an [`Interface`](BrowserApp#Interface)
+{-| Helpers for `history` interaction as part of an [`Interface`](Web#Interface)
 
 @docs urlRequest, byUserListen
 @docs forward, back, pushUrl, replaceUrl
@@ -16,25 +16,25 @@ module BrowserApp.Navigation exposing
 
 import AppUrl exposing (AppUrl)
 import AppUrl.Local
-import BrowserApp
 import Json.Decode
 import Rope
 import Url exposing (Url)
+import Web
 
 
-{-| An [`Interface`](BrowserApp#Interface) for getting the current page's url.
+{-| An [`Interface`](Web#Interface) for getting the current page's url.
 Is usually used while starting up the app.
 
 Note: Uses [`window.location.href`](https://developer.mozilla.org/en-US/docs/Web/API/Window/location)
 
 -}
-urlRequest : BrowserApp.Interface AppUrl
+urlRequest : Web.Interface AppUrl
 urlRequest =
-    BrowserApp.NavigationUrlRequest identity
+    Web.NavigationUrlRequest identity
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that changes the [aüü-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/),
+{-| An [`Interface`](Web#Interface) that changes the [aüü-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/),
 but neither triggers a page load nor adds a new entry to the browser history.
 
 This can be useful if you have search box and you want the ?search=hats in the URL to match without adding a history entry for every single key stroke. Imagine how annoying it would be to click back thirty times and still be on the same page!
@@ -42,26 +42,26 @@ This can be useful if you have search box and you want the ?search=hats in the U
 Replacement for [`Browser.Navigation.replaceUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#replaceUrl)
 
 -}
-replaceUrl : AppUrl -> BrowserApp.Interface state_
+replaceUrl : AppUrl -> Web.Interface state_
 replaceUrl appUrl =
-    BrowserApp.NavigationReplaceUrl appUrl
+    Web.NavigationReplaceUrl appUrl
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that changes the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/)
+{-| An [`Interface`](Web#Interface) that changes the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/)
 and adds a new entry to the browser history,
 but does not trigger a page load.
 
 Replacement for [`Browser.Navigation.pushUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#pushUrl)
 
 -}
-pushUrl : AppUrl -> BrowserApp.Interface state_
+pushUrl : AppUrl -> Web.Interface state_
 pushUrl appUrl =
-    BrowserApp.NavigationPushUrl appUrl
+    Web.NavigationPushUrl appUrl
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that goes forward a given number of pages.
+{-| An [`Interface`](Web#Interface) that goes forward a given number of pages.
 If there are no more pages in the future, this will do nothing.
 
 Note: You only manage the browser history that you created.
@@ -69,42 +69,42 @@ Note: You only manage the browser history that you created.
 Replacement for [`Browser.Navigation.forward`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#forward)
 
 -}
-forward : Int -> BrowserApp.Interface state_
+forward : Int -> Web.Interface state_
 forward urlSteps =
-    BrowserApp.NavigationGo urlSteps
+    Web.NavigationGo urlSteps
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that goes back a given number of pages.
+{-| An [`Interface`](Web#Interface) that goes back a given number of pages.
 
 Note: You only manage the browser history that you created.
 
 Replacement for [`Browser.Navigation.back`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#back)
 
 -}
-back : Int -> BrowserApp.Interface state_
+back : Int -> Web.Interface state_
 back urlSteps =
-    BrowserApp.NavigationGo urlSteps
+    Web.NavigationGo urlSteps
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that leaves the current page and loads the given [URL](https://dark.elm.dmy.fr/packages/elm/url/latest/).
+{-| An [`Interface`](Web#Interface) that leaves the current page and loads the given [URL](https://dark.elm.dmy.fr/packages/elm/url/latest/).
 This always results in a page load, even if the provided URL is the same as the current one.
 
-    gotoElmWebsite : BrowserApp.Interface state_
+    gotoElmWebsite : Web.Interface state_
     gotoElmWebsite =
-        BrowserApp.Navigation.load "https://elm-lang.org"
+        Web.Navigation.load "https://elm-lang.org"
 
 Replacement for [`Browser.Navigation.load`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#load)
 
 -}
-load : Url -> BrowserApp.Interface state_
+load : Url -> Web.Interface state_
 load url =
-    BrowserApp.NavigationLoad url
+    Web.NavigationLoad url
         |> Rope.singleton
 
 
-{-| An [`Interface`](BrowserApp#Interface) that reloads the current page.
+{-| An [`Interface`](Web#Interface) that reloads the current page.
 This always results in a page load!
 
 Note: This may grab resources from the browser cache.
@@ -112,9 +112,9 @@ Note: This may grab resources from the browser cache.
 Replacement for [`Browser.Navigation.reload`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#reload)
 
 -}
-reload : BrowserApp.Interface state_
+reload : Web.Interface state_
 reload =
-    BrowserApp.NavigationReload
+    Web.NavigationReload
         |> Rope.singleton
 
 
@@ -127,9 +127,9 @@ Note: When the app itself initiates a url change, like with [`pushUrl`](#pushUrl
 , no such event is triggered
 
 -}
-byUserListen : BrowserApp.Interface (Result Json.Decode.Error AppUrl)
+byUserListen : Web.Interface (Result Json.Decode.Error AppUrl)
 byUserListen =
-    BrowserApp.WindowEventListen
+    Web.WindowEventListen
         { eventName = "popstate"
         , on =
             Json.Decode.decodeValue
