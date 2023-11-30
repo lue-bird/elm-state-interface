@@ -22,7 +22,7 @@ import Url exposing (Url)
 import Web
 
 
-{-| An [`Interface`](Web#Interface) for getting the current page's url.
+{-| An [`Interface`](Web#Interface) for getting the current page's [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/).
 Is usually used while starting up the app.
 
 Note: Uses [`window.location.href`](https://developer.mozilla.org/en-US/docs/Web/API/Window/location)
@@ -34,7 +34,7 @@ urlRequest =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that changes the [aüü-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/),
+{-| An [`Interface`](Web#Interface) that changes the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/),
 but neither triggers a page load nor adds a new entry to the browser history.
 
 This can be useful if you have search box and you want the ?search=hats in the URL to match without adding a history entry for every single key stroke. Imagine how annoying it would be to click back thirty times and still be on the same page!
