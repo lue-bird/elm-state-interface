@@ -39,7 +39,7 @@ sizeRequest =
 resizeListen : Web.Interface (Result Json.Decode.Error { width : Int, height : Int })
 resizeListen =
     eventListen "resize"
-        |> Web.map
+        |> Web.interfaceMap
             (\value ->
                 value
                     |> Json.Decode.decodeValue

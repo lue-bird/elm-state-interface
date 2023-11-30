@@ -1,8 +1,8 @@
 module Web exposing
-    ( Config
-    , toProgram, State(..), Event(..)
-    , init, subscriptions, update
-    , Interface, InterfaceSingle(..), batch, none, map
+    ( ProgramConfig
+    , program, ProgramState(..), ProgramEvent(..)
+    , programInit, programUpdate, programSubscriptions
+    , Interface, InterfaceSingle(..), interfaceBatch, interfaceNone, interfaceMap
     , DomNode(..), DomElement
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceDiff(..)
@@ -12,24 +12,24 @@ module Web exposing
 
 {-| A state-interface program running in the browser
 
-@docs Config
+@docs ProgramConfig
 
 
-## Program
+## as elm Program
 
-@docs toProgram, State, Event
+@docs program, ProgramState, ProgramEvent
 
 
 ## embed
 
 If you just want to replace a part of your elm app with this architecture. Make sure to wire in all 3:
 
-@docs init, subscriptions, update
+@docs programInit, programUpdate, programSubscriptions
 
 
 # interface types
 
-@docs Interface, InterfaceSingle, batch, none, map
+@docs Interface, InterfaceSingle, interfaceBatch, interfaceNone, interfaceMap
 
 
 ## DOM
@@ -83,7 +83,7 @@ import Url exposing (Url)
         Web.toProgram ...
 
 -}
-type State appState
+type ProgramState appState
     = State
         { interface : Emptiable (KeysSet (InterfaceSingle appState) (InterfaceSingleKeys appState) N1) Possibly
         , appState : appState
@@ -114,13 +114,13 @@ type InterfaceSingleToIdTag
   - An [`Interface`](#Interface) can be created using the helpers in `Web.Time`, `Web.Dom`, `Web.Http` etc.
 
 -}
-type alias Config state =
+type alias ProgramConfig state =
     RecordWithoutConstructorFunction
         { initialState : state
         , interface : state -> Interface state
         , ports :
             { toJs : Json.Encode.Value -> Cmd Never
-            , fromJs : (Json.Encode.Value -> Event state) -> Sub (Event state)
+            , fromJs : (Json.Encode.Value -> ProgramEvent state) -> Sub (ProgramEvent state)
             }
         }
 
@@ -128,7 +128,7 @@ type alias Config state =
 {-| Incoming and outgoing effects.
 To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
 
-To combine multiple, use [`Web.batch`](#batch) and [`Web.none`](#none)
+To combine multiple, use [`Web.interfaceBatch`](#interfaceBatch) and [`Web.interfaceNone`](#interfaceNone)
 
 -}
 type alias Interface state =
@@ -299,25 +299,25 @@ type DomNodeId
 
 {-| Combine multiple [`Interface`](#Interface)s into one.
 -}
-batch : List (Interface state) -> Interface state
-batch =
+interfaceBatch : List (Interface state) -> Interface state
+interfaceBatch =
     \interfaces -> interfaces |> Rope.fromList |> Rope.concat
 
 
 {-| Doing nothing as an [`Interface`](#Interface). These two examples are equivalent:
 
-    Web.batch [ a, Web.none, b ]
+    Web.interfaceBatch [ a, Web.interfaceNone, b ]
 
 and
 
-    Web.batch
+    Web.interfaceBatch
         (List.filterMap identity
             [ a |> Just, Nothing, b |> Just ]
         )
 
 -}
-none : Interface state_
-none =
+interfaceNone : Interface state_
+interfaceNone =
     Rope.empty
 
 
@@ -326,12 +326,12 @@ none =
 In practice, this is sometimes used like a kind of event-config pattern:
 
     Web.Time.posixRequest
-        |> Web.map (\timeNow -> TimeReceived timeNow)
+        |> Web.interfaceMap (\timeNow -> TimeReceived timeNow)
 
 sometimes like elm's `update`
 
     ...
-        |> Web.map
+        |> Web.interfaceMap
             (\event ->
                 case event of
                     MouseMovedTo newMousePoint ->
@@ -354,17 +354,17 @@ and sometimes like elm's `Cmd.map/Task.map/Sub.map/...`:
     interface state =
         case state of
             MenuState menuState ->
-                Web.map MenuState (Menu.interface menuState)
+                Web.interfaceMap MenuState (Menu.interface menuState)
 
             PlayingState playingState ->
-                Web.map PlayingState (Playing.interface playingState)
+                Web.interfaceMap PlayingState (Playing.interface playingState)
 
 In all these examples, you end up converting the narrow state representation of part of the interface to a broader representation for
 the parent interface
 
 -}
-map : (state -> mappedState) -> (Interface state -> Interface mappedState)
-map stateChange =
+interfaceMap : (state -> mappedState) -> (Interface state -> Interface mappedState)
+interfaceMap stateChange =
     \interface ->
         interface
             |> Rope.toList
@@ -503,7 +503,7 @@ domElementMap stateChange =
         Web.toProgram ...
 
 -}
-type Event appState
+type ProgramEvent appState
     = InterfaceDiffFailedToDecode Json.Decode.Error
     | InterfaceEventDataFailedToDecode Json.Decode.Error
     | InterfaceEventIgnored
@@ -1224,8 +1224,8 @@ httpBodyToJson =
 
 {-| The "init" part for an embedded program
 -}
-init : Config state -> ( State state, Cmd (Event state) )
-init appConfig =
+programInit : ProgramConfig state -> ( ProgramState state, Cmd (ProgramEvent state) )
+programInit appConfig =
     let
         initialInterface : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
         initialInterface =
@@ -1263,8 +1263,8 @@ listFirstJust tryMapToFound list =
 
 {-| The "subscriptions" part for an embedded program
 -}
-subscriptions : Config state -> (State state -> Sub (Event state))
-subscriptions appConfig =
+programSubscriptions : ProgramConfig state -> (ProgramState state -> Sub (ProgramEvent state))
+programSubscriptions appConfig =
     \(State state) ->
         -- re-associate event based on current interface
         appConfig.ports.fromJs
@@ -1805,8 +1805,8 @@ domElementIdJsonDecoder =
 
 {-| The "update" part for an embedded program
 -}
-update : Config state -> (Event state -> State state -> ( State state, Cmd (Event state) ))
-update appConfig =
+programUpdate : ProgramConfig state -> (ProgramEvent state -> ProgramState state -> ( ProgramState state, Cmd (ProgramEvent state) ))
+programUpdate appConfig =
     \event ->
         case event of
             InterfaceEventIgnored ->
@@ -1975,19 +1975,19 @@ type InterfaceDiff
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
-with a given [`Web.Config`](#Config). Short for
+with a given [`Web.ProgramConfig`](#ProgramConfig). Short for
 
     Platform.worker
-        { init = \() -> Web.init yourAppConfig
-        , update = Web.update yourAppConfig
-        , subscriptions = Web.subscriptions yourAppConfig
+        { init = \() -> Web.programInit yourAppConfig
+        , update = Web.programUpdate yourAppConfig
+        , subscriptions = Web.programSubscriptions yourAppConfig
         }
 
 -}
-toProgram : Config state -> Program () (State state) (Event state)
-toProgram appConfig =
+program : ProgramConfig state -> Program () (ProgramState state) (ProgramEvent state)
+program appConfig =
     Platform.worker
-        { init = \() -> init appConfig
-        , update = update appConfig
-        , subscriptions = subscriptions appConfig
+        { init = \() -> programInit appConfig
+        , update = programUpdate appConfig
+        , subscriptions = programSubscriptions appConfig
         }

@@ -10,38 +10,40 @@ which means
 - update is part of the interface (having an intermediate event type is optional but often useful)
 - when updating based on an event, there's no need to case on the relevant state. (Either use the state from the `case` in the interface in an inner update, or safely include the state in the event)
 
-The classic counter example including changing url:
+The classic counter example including managing the url:
 
 ```elm
 import Web
 import Web.Dom
-import AppUrl -- lydell/elm-app-url
+import AppUrl exposing (AppUrl) -- lydell/elm-app-url
 import Json.Encode -- elm/json
 
 type alias State =
     Int
 
 type Event
-    = DecreaseClicked
-    | IncreaseClicked
+    = MinusClicked
+    | PlusClicked
     | UserWentToUrl AppUrl
 
-app : Web.Config State
-app =
+programConfig : Web.ProgramConfig State
+programConfig =
     { initialState = 0
     , interface =
         \counter ->
             [ Web.Dom.element "div"
                 []
                 [ Web.Dom.element "button"
-                    [ Web.Dom.listenTo "click" |> Web.Dom.modifierMap (\_ -> IncreaseClicked) ]
+                    [ Web.Dom.listenTo "click" ]
                     [ "+" |> Web.Dom.text ]
+                    |> Web.Dom.map (\_ -> PlusClicked)
                 , Web.Dom.element "div"
                     []
                     [ counter |> String.fromInt |> Web.Dom.text ]
                 , Web.Dom.element "button"
-                    [ Web.Dom.listenTo "click" |> Web.Dom.modifierMap (\_ -> DecreaseClicked) ]
+                    [ Web.Dom.listenTo "click" ]
                     [ "-" |> Web.Dom.text ]
+                    |> Web.Dom.map (\_ -> MinusClicked)
                 ]
                 |> Web.Dom.render
             , Web.Navigation.pushUrl
@@ -49,17 +51,17 @@ app =
                 , queryParameters = Dict.singleton "counter" [ counter |> String.fromInt ]
                 , fragment = Nothing
                 }
-            , Web.Navigation.urlRequest |> Web.map UserWentToUrl
-            , Web.Navigation.byUserListen |> Web.map UserWentToUrl
+            , Web.Navigation.urlRequest |> Web.interfaceMap UserWentToUrl
+            , Web.Navigation.byUserListen |> Web.interfaceMap UserWentToUrl
             ]
-                |> Web.batch
-                |> Web.map
+                |> Web.interfaceBatch
+                |> Web.interfaceMap
                     (\event ->
                         case event of
-                            DecreaseClicked ->
+                            MinusClicked ->
                                 counter - 1
                             
-                            IncreaseClicked ->
+                            PlusClicked ->
                                 counter + 1
                             
                             UserWentToUrl newUrl ->
@@ -72,9 +74,9 @@ app =
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
-main : Program () (Web.State State) (Web.Event State)
+main : Program () (Web.ProgramState State) (Web.ProgramEvent State)
 main =
-    app |> Web.toProgram
+    Web.program programConfig
 
 port toJs : Json.Encode.Value -> Cmd event_
 port fromJs : (Json.Encode.Value -> event) -> Sub event
@@ -89,7 +91,7 @@ in js
 import * as Web from "@lue-bird/elm-state-interface"
 
 const elmApp = Elm.Main.init({});
-Web.start({
+Web.programStart({
     elmPorts : elmApp.ports,
     domElement : document.getElementById("your-app-element")
 })
@@ -160,19 +162,19 @@ type alias State =
             _ ->
                 [ case state.icon of
                     Ok _ ->
-                        Web.none
+                        Web.interfaceNone
                     Err _ ->
                         Http.request { url = "...", decoder = Image.jsonDecoder }
-                            |> Web.map (\result -> { state | icon = result })
+                            |> Web.interfaceMap (\result -> { state | icon = result })
                 , case state.content of
                     Ok _ ->
-                        Web.none
+                        Web.interfaceNone
                     Err _ ->
                         Http.request { url = "...", decoder = Json.Decode.string }
-                            |> Web.map (\result -> { state | content = result })
+                            |> Web.interfaceMap (\result -> { state | content = result })
                 , ..error ui..
                 ]
-                    |> Web.batch
+                    |> Web.interfaceBatch
 }
 ```
 which feels a bit more explicit, declarative and less wiring-heavy at least.

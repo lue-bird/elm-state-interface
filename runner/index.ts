@@ -19,7 +19,7 @@ export interface ElmPorts {
     fromJs: { send: (toElm: any) => void };
 }
 
-export function start(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
+export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
     const interfaceImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
         "addTimePosixRequest": (_config, sendToElm) => {
             sendToElm(Date.now())
