@@ -208,7 +208,7 @@ For now, I also left out some more niche interfaces like [`Browser.Dom.setViewpo
 
   - 🧩 add [example](https://github.com/lue-bird/elm-state-interface/tree/main/example) projects. Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
   - 🔊 add audio interface similar to [`MartinSStewart/elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/)
-  - 🔋 The we API you miss the most
+  - 🔋 The web API you miss the most
   - 🗃️ only with help: basic `node` APIs
 
 If you have knowledge in any of these fields on the js side, have pointers or already 
