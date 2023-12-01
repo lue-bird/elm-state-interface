@@ -80,7 +80,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addNavigationReplaceUrl": (config, _sendToElm) => { replaceUrl(config) },
         "addNavigationPushUrl": (config, _sendToElm) => { pushUrl(config) },
         "addNavigationLoad": (config, _sendToElm) => { load(config) },
-        "addNavigationReload": (_config, _sendToElm) => { reload() }
+        "addNavigationReload": (_config, _sendToElm) => { reload() },
+        "addFileDownloadBytes": (config, _sendToElm) => { fileDownloadBytes(config) }
     }
 
 
@@ -263,4 +264,24 @@ function removeAnimationFrameListen() {
         window.cancelAnimationFrame(runningAnimationFrameLoopId)
         runningAnimationFrameLoopId = undefined
     }
+}
+
+function fileDownloadBytes(config: { mimeType: string, name: string, content: number[] }) {
+    const temporaryAnchorDomElement: HTMLAnchorElement = window.document.createElement('a')
+    const blob = new Blob(
+        [new Uint8Array(config.content)],
+        { type: config.mimeType }
+    )
+    const objectUrl = URL.createObjectURL(blob)
+    temporaryAnchorDomElement.href = objectUrl
+    temporaryAnchorDomElement.download = config.name
+    const event = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true
+    })
+    document.body.appendChild(temporaryAnchorDomElement)
+    temporaryAnchorDomElement.dispatchEvent(event)
+    document.body.removeChild(temporaryAnchorDomElement)
+    URL.revokeObjectURL(objectUrl)
 }

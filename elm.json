@@ -13,7 +13,8 @@
         "Web.Console",
         "Web.Window",
         "Web.Navigation",
-        "Web.Random"
+        "Web.Random",
+        "Web.FileDownload"
     ],
     "elm-version": "0.19.1 <= v < 20.0.0",
     "dependencies": {
@@ -23,6 +24,7 @@
         "elm/url": "1.0.0 <= v < 2.0.0",
         "ianmackenzie/elm-units": "2.10.0 <= v < 3.0.0",
         "lue-bird/elm-allowable-state": "1.0.2 <= v < 2.0.0",
+        "lue-bird/elm-bits": "9.0.2 <= v < 10.0.0",
         "lue-bird/elm-bounded-nat": "35.0.0 <= v < 36.0.0",
         "lue-bird/elm-emptiness-typed": "9.2.1 <= v < 10.0.0",
         "lue-bird/elm-keysset": "5.0.2 <= v < 6.0.0",

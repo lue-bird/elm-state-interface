@@ -57,6 +57,7 @@ Types used by [`Web.Http`](Web-Http)
 import AppUrl exposing (AppUrl)
 import AppUrl.Local
 import Array exposing (Array)
+import Bit exposing (Bit)
 import Dict exposing (Dict)
 import Emptiable exposing (Emptiable)
 import Json.Decode
@@ -157,6 +158,7 @@ type InterfaceSingle state
     | NavigationGo Int
     | NavigationLoad Url
     | NavigationReload
+    | FileDownloadBits { mimeType : String, name : String, content : List Bit }
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -274,6 +276,7 @@ type InterfaceSingleId
     | IdNavigationGo Int
     | IdNavigationLoad Url
     | IdNavigationReload
+    | IdFileDownloadBits { mimeType : String, name : String, content : List Bit }
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -457,6 +460,9 @@ interfaceSingleMap stateChange =
 
             NavigationReload ->
                 NavigationReload
+
+            FileDownloadBits config ->
+                FileDownloadBits config
 
 
 httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
@@ -698,6 +704,9 @@ interfaceSingleToId =
             NavigationReload ->
                 IdNavigationReload
 
+            FileDownloadBits config ->
+                IdFileDownloadBits config
+
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
@@ -797,6 +806,26 @@ interfaceSingleIdToComparable =
 
             IdNavigationReload ->
                 ComparableString "IdNavigationReload"
+
+            IdFileDownloadBits config ->
+                ComparableList
+                    [ ComparableString config.name
+                    , ComparableString config.mimeType
+                    , config.content
+                        |> List.map (\bit -> bit |> bitToString |> ComparableString)
+                        |> ComparableList
+                    ]
+
+
+bitToString : Bit -> String
+bitToString =
+    \bit ->
+        case bit of
+            Bit.O ->
+                "0"
+
+            Bit.I ->
+                "1"
 
 
 httpRequestIdToComparable : HttpRequestId -> Comparable
@@ -951,96 +980,97 @@ interfaceDiffToCmds =
 
                         NavigationReload ->
                             Nothing
+
+                        FileDownloadBits _ ->
+                            Nothing
                 )
         , interfaces.updated
             |> KeysSet.except interfaceKeys
                 (interfaces.old |> KeysSet.toKeys interfaceKeys)
-            |> KeysSet.remove interfaceKeys IdDomNodeRender
             |> KeysSet.toList interfaceKeys
-            |> List.filterMap
+            |> List.concatMap
                 (\interface ->
                     case interface of
                         TimePosixRequest _ ->
-                            AddTimePosixRequest |> Just
+                            AddTimePosixRequest |> List.singleton
 
                         TimezoneOffsetRequest _ ->
-                            AddTimezoneOffsetRequest |> Just
+                            AddTimezoneOffsetRequest |> List.singleton
 
                         TimezoneNameRequest _ ->
-                            AddTimezoneNameRequest |> Just
+                            AddTimezoneNameRequest |> List.singleton
 
                         TimePeriodicallyListen timePeriodicallyListen ->
                             AddTimePeriodicallyListen
                                 { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-                                |> Just
+                                |> List.singleton
 
                         RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-                            AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> Just
+                            AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> List.singleton
 
                         ConsoleLog string ->
-                            AddConsoleLog string |> Just
+                            AddConsoleLog string |> List.singleton
 
-                        DomNodeRender _ ->
-                            Nothing
+                        DomNodeRender domElementToRender ->
+                            case interfaces.old |> KeysSet.element interfaceKeys IdDomNodeRender of
+                                Emptiable.Filled (DomNodeRender domElementPreviouslyRendered) ->
+                                    ( domElementPreviouslyRendered, domElementToRender )
+                                        |> domNodeDiff []
+                                        |> List.map
+                                            (\subDiff ->
+                                                ReplaceDomNode
+                                                    { path = subDiff.path
+                                                    , domNode = subDiff.replacementDomNode |> domNodeToId
+                                                    }
+                                            )
+
+                                Emptiable.Filled _ ->
+                                    -- bug
+                                    []
+
+                                Emptiable.Empty _ ->
+                                    [ ReplaceDomNode
+                                        { path = []
+                                        , domNode = domElementToRender |> domNodeToId
+                                        }
+                                    ]
 
                         HttpRequest httpRequest ->
-                            AddHttpRequest (httpRequest |> httpRequestToId) |> Just
+                            AddHttpRequest (httpRequest |> httpRequestToId) |> List.singleton
 
                         WindowSizeRequest _ ->
-                            AddWindowSizeRequest |> Just
+                            AddWindowSizeRequest |> List.singleton
 
                         WindowEventListen listen ->
-                            AddWindowEventListen listen.eventName |> Just
+                            AddWindowEventListen listen.eventName |> List.singleton
 
                         WindowAnimationFrameListen _ ->
-                            AddWindowAnimationFrameListen |> Just
+                            AddWindowAnimationFrameListen |> List.singleton
 
                         NavigationUrlRequest _ ->
-                            AddNavigationUrlRequest |> Just
+                            AddNavigationUrlRequest |> List.singleton
 
                         DocumentEventListen listen ->
-                            AddDocumentEventListen listen.eventName |> Just
+                            AddDocumentEventListen listen.eventName |> List.singleton
 
                         NavigationReplaceUrl url ->
-                            AddNavigationReplaceUrl url |> Just
+                            AddNavigationReplaceUrl url |> List.singleton
 
                         NavigationPushUrl url ->
-                            AddNavigationPushUrl url |> Just
+                            AddNavigationPushUrl url |> List.singleton
 
                         NavigationGo urlSteps ->
-                            AddNavigationGo urlSteps |> Just
+                            AddNavigationGo urlSteps |> List.singleton
 
                         NavigationLoad url ->
-                            url |> AddNavigationLoad |> Just
+                            url |> AddNavigationLoad |> List.singleton
 
                         NavigationReload ->
-                            AddNavigationReload |> Just
+                            AddNavigationReload |> List.singleton
+
+                        FileDownloadBits config ->
+                            AddFileDownloadBits config |> List.singleton
                 )
-        , case ( interfaces.old |> KeysSet.element interfaceKeys IdDomNodeRender, interfaces.updated |> KeysSet.element interfaceKeys IdDomNodeRender ) of
-            ( Emptiable.Filled (DomNodeRender domElementPreviouslyRendered), Emptiable.Filled (DomNodeRender domElementToRender) ) ->
-                ( domElementPreviouslyRendered, domElementToRender )
-                    |> domNodeDiff []
-                    |> List.map
-                        (\subDiff ->
-                            ReplaceDomNode
-                                { path = subDiff.path
-                                , domNode = subDiff.replacementDomNode |> domNodeToId
-                                }
-                        )
-
-            ( Emptiable.Empty _, Emptiable.Filled (DomNodeRender replacementDomNode) ) ->
-                [ ReplaceDomNode
-                    { path = []
-                    , domNode = replacementDomNode |> domNodeToId
-                    }
-                ]
-
-            ( Emptiable.Filled (DomNodeRender _), _ ) ->
-                -- already handles earlier
-                []
-
-            _ ->
-                []
         ]
             |> List.concat
 
@@ -1145,7 +1175,69 @@ interfaceDiffToJson =
 
                 AddNavigationReload ->
                     ( "addNavigationReload", Json.Encode.null )
+
+                AddFileDownloadBits config ->
+                    ( "addFileDownloadBits"
+                    , Json.Encode.object
+                        [ ( "name", config.name |> Json.Encode.string )
+                        , ( "mimeType", config.mimeType |> Json.Encode.string )
+                        , ( "content"
+                          , config.content
+                                |> listToChunksOf8
+                                |> Json.Encode.list (\bits8 -> bits8 |> bitsToUnsignedInt |> Json.Encode.int)
+                          )
+                        ]
+                    )
             ]
+
+
+listToChunksOf8 : List element -> List (List element)
+listToChunksOf8 =
+    \list ->
+        let
+            chunked : { remainderLength : Int, fullChunks : List (List element), remainder : List element }
+            chunked =
+                list
+                    |> List.foldl
+                        (\bit soFar ->
+                            if soFar.remainderLength >= 8 then
+                                { remainder = []
+                                , remainderLength = 0
+                                , fullChunks =
+                                    soFar.fullChunks
+                                        |> (::) (soFar.remainder |> List.reverse)
+                                }
+
+                            else
+                                { remainder = soFar.remainder |> (::) bit
+                                , remainderLength = soFar.remainderLength + 1
+                                , fullChunks = soFar.fullChunks
+                                }
+                        )
+                        { remainderLength = 0, remainder = [], fullChunks = [] }
+        in
+        (chunked.remainder :: chunked.fullChunks)
+            |> List.reverse
+
+
+bitsToUnsignedInt : List Bit -> Int
+bitsToUnsignedInt =
+    \bits ->
+        bits
+            |> List.foldr
+                (\bit soFar ->
+                    { power = soFar.power + 1
+                    , total =
+                        case bit of
+                            Bit.O ->
+                                soFar.total
+
+                            Bit.I ->
+                                soFar.total + (2 ^ soFar.power)
+                    }
+                )
+                { power = 0, total = 0 }
+            |> .total
 
 
 httpRequestIdToJson : HttpRequestId -> Json.Encode.Value
@@ -1653,6 +1745,9 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
         NavigationReload ->
             Nothing
 
+        FileDownloadBits _ ->
+            Nothing
+
 
 domElementAtReversePath : List Int -> (DomNode state -> Maybe (DomNode state))
 domElementAtReversePath path domNode =
@@ -1972,6 +2067,7 @@ type InterfaceDiff
     | AddNavigationGo Int
     | AddNavigationLoad Url
     | AddNavigationReload
+    | AddFileDownloadBits { mimeType : String, name : String, content : List Bit }
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
