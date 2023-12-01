@@ -148,10 +148,10 @@ type InterfaceSingle state
     | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
     | WindowSizeRequest ({ width : Int, height : Int } -> state)
-    | WindowEventListen { eventName : String, on : Json.Decode.Value -> state }
+    | WindowEventListen { eventName : String, on : Json.Decode.Decoder state }
     | WindowAnimationFrameListen (Time.Posix -> state)
     | NavigationUrlRequest (AppUrl -> state)
-    | DocumentEventListen { eventName : String, on : Json.Decode.Value -> state }
+    | DocumentEventListen { eventName : String, on : Json.Decode.Decoder state }
     | NavigationReplaceUrl AppUrl
     | NavigationPushUrl AppUrl
     | NavigationGo Int
@@ -430,7 +430,7 @@ interfaceSingleMap stateChange =
                     |> WindowSizeRequest
 
             WindowEventListen listen ->
-                { eventName = listen.eventName, on = \value -> listen.on value |> stateChange }
+                { eventName = listen.eventName, on = listen.on |> Json.Decode.map stateChange }
                     |> WindowEventListen
 
             WindowAnimationFrameListen toState ->
@@ -440,7 +440,7 @@ interfaceSingleMap stateChange =
                 (\event -> toState event |> stateChange) |> NavigationUrlRequest
 
             DocumentEventListen listen ->
-                { eventName = listen.eventName, on = \value -> listen.on value |> stateChange }
+                { eventName = listen.eventName, on = listen.on |> Json.Decode.map stateChange }
                     |> DocumentEventListen
 
             NavigationReplaceUrl url ->
@@ -1600,7 +1600,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             case interfaceDiff of
                 AddWindowEventListen addedEventName ->
                     if addedEventName == listen.eventName then
-                        Json.Decode.value |> Json.Decode.map listen.on |> Just
+                        listen.on |> Just
 
                     else
                         Nothing
@@ -1630,7 +1630,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             case interfaceDiff of
                 AddDocumentEventListen addedEventName ->
                     if addedEventName == listen.eventName then
-                        Json.Decode.value |> Json.Decode.map listen.on |> Just
+                        listen.on |> Just
 
                     else
                         Nothing

@@ -21,7 +21,7 @@ import Web
 -}
 eventListen : String -> Web.Interface Json.Decode.Value
 eventListen eventName =
-    Web.WindowEventListen { eventName = eventName, on = identity }
+    Web.WindowEventListen { eventName = eventName, on = Json.Decode.value }
         |> Rope.singleton
 
 
@@ -36,20 +36,18 @@ sizeRequest =
 
 {-| An [`Interface`](Web#Interface) that listens for changes to the inner window width and height.
 -}
-resizeListen : Web.Interface (Result Json.Decode.Error { width : Int, height : Int })
+resizeListen : Web.Interface { width : Int, height : Int }
 resizeListen =
-    eventListen "resize"
-        |> Web.interfaceMap
-            (\value ->
-                value
-                    |> Json.Decode.decodeValue
-                        (Json.Decode.field "target"
-                            (Json.Decode.succeed (\width height -> { width = width, height = height })
-                                |> Json.Decode.Local.andMap (Json.Decode.field "innerWidth" Json.Decode.int)
-                                |> Json.Decode.Local.andMap (Json.Decode.field "innerHeight" Json.Decode.int)
-                            )
-                        )
-            )
+    Web.WindowEventListen
+        { eventName = "resize"
+        , on =
+            Json.Decode.field "target"
+                (Json.Decode.succeed (\width height -> { width = width, height = height })
+                    |> Json.Decode.Local.andMap (Json.Decode.field "innerWidth" Json.Decode.int)
+                    |> Json.Decode.Local.andMap (Json.Decode.field "innerHeight" Json.Decode.int)
+                )
+        }
+        |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) that continuously listens for an animation frame.

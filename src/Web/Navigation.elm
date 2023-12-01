@@ -127,12 +127,10 @@ Note: When the app itself initiates a url change, like with [`pushUrl`](#pushUrl
 , no such event is triggered
 
 -}
-byUserListen : Web.Interface (Result Json.Decode.Error AppUrl)
+byUserListen : Web.Interface AppUrl
 byUserListen =
     Web.WindowEventListen
         { eventName = "popstate"
-        , on =
-            Json.Decode.decodeValue
-                (Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder)
+        , on = Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder
         }
         |> Rope.singleton

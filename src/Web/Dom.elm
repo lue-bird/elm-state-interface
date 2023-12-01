@@ -31,7 +31,7 @@ like like keypress, keydown, keyup, click, mousemove, mousedown, mouseup
 -}
 documentEventListen : String -> Web.Interface Json.Decode.Value
 documentEventListen eventName =
-    Web.DocumentEventListen { eventName = eventName, on = identity }
+    Web.DocumentEventListen { eventName = eventName, on = Json.Decode.value }
         |> Rope.singleton
 
 
