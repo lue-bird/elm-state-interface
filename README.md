@@ -18,10 +18,11 @@ import Web.Dom
 import AppUrl exposing (AppUrl) -- lydell/elm-app-url
 import Json.Encode -- elm/json
 
-type alias State =
-    Int
+type State
+    = Counter Int
+    | WaitingForInitialUrl
 
-type Event
+type CounterEvent
     = MinusClicked
     | PlusClicked
     | UserWentToUrl AppUrl
@@ -31,48 +32,59 @@ programConfig =
     { initialState = 0
     , interface =
         \counter ->
-            [ Web.Dom.element "div"
-                []
-                [ Web.Dom.element "button"
-                    [ Web.Dom.listenTo "click" ]
-                    [ "+" |> Web.Dom.text ]
-                    |> Web.Dom.map (\_ -> PlusClicked)
-                , Web.Dom.element "div"
-                    []
-                    [ counter |> String.fromInt |> Web.Dom.text ]
-                , Web.Dom.element "button"
-                    [ Web.Dom.listenTo "click" ]
-                    [ "-" |> Web.Dom.text ]
-                    |> Web.Dom.map (\_ -> MinusClicked)
-                ]
-                |> Web.Dom.render
-            , Web.Navigation.pushUrl
-                { path = []
-                , queryParameters = Dict.singleton "counter" [ counter |> String.fromInt ]
-                , fragment = Nothing
-                }
-            , Web.Navigation.urlRequest |> Web.interfaceMap UserWentToUrl
-            , Web.Navigation.byUserListen |> Web.interfaceMap UserWentToUrl
-            ]
-                |> Web.interfaceBatch
-                |> Web.interfaceMap
-                    (\event ->
-                        case event of
-                            MinusClicked ->
-                                counter - 1
-                            
-                            PlusClicked ->
-                                counter + 1
-                            
-                            UserWentToUrl newUrl ->
-                                newUrl.queryParameters
-                                    |> Dict.get "counter"
-                                    |> Maybe.andThen List.head
-                                    |> Maybe.map String.fromInt
-                                    |> Maybe.withDefault 0
-                    )
+            case state of
+                Counter counter ->
+                    [ Web.Dom.element "div"
+                        []
+                        [ Web.Dom.element "button"
+                            [ Web.Dom.listenTo "click" ]
+                            [ "+" |> Web.Dom.text ]
+                            |> Web.Dom.map (\_ -> PlusClicked)
+                        , Web.Dom.element "div"
+                            []
+                            [ counter |> String.fromInt |> Web.Dom.text ]
+                        , Web.Dom.element "button"
+                            [ Web.Dom.listenTo "click" ]
+                            [ "-" |> Web.Dom.text ]
+                            |> Web.Dom.map (\_ -> MinusClicked)
+                        ]
+                        |> Web.Dom.render
+                    , Web.Navigation.pushUrl
+                        { path = []
+                        , queryParameters = Dict.singleton "counter" [ counter |> String.fromInt ]
+                        , fragment = Nothing
+                        }
+                    , Web.Navigation.byUserListen |> Web.interfaceMap UserWentToUrl
+                    ]
+                        |> Web.interfaceBatch
+                        |> Web.interfaceMap
+                            (\event ->
+                                case event of
+                                    MinusClicked ->
+                                        Counter (counter - 1)
+                                    
+                                    PlusClicked ->
+                                        Counter (counter + 1)
+                                    
+                                    UserWentToUrl newUrl ->
+                                        Counter (newUrl |> counterUrlParse |> Maybe.withDefault counter)
+                            )
+                
+                WaitingForInitialUrl ->
+                    Web.Navigation.urlRequest
+                        |> Web.interfaceMap
+                            (\initialUrl ->
+                                Counter (initialUrl |> counterUrlParse |> Maybe.withDefault 0)
+                            )
     , ports = { fromJs = fromJs, toJs = toJs }
     }
+
+counterUrlParse : AppUrl -> Maybe Int
+counterUrlParse appUrl =
+    appUrl.queryParameters
+        |> Dict.get "counter"
+        |> Maybe.andThen List.head
+        |> Maybe.map String.fromInt
 
 main : Program () (Web.ProgramState State) (Web.ProgramEvent State)
 main =
@@ -182,6 +194,12 @@ which feels a bit more explicit, declarative and less wiring-heavy at least.
 Note: This example is only supposed to show differences in architecture.
 Unlike [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/), `elm-state-interface` does not allow custom tasks/interfaces.
 Instead, the goal of this package is to publish more browser APIs like webstorage instead of users doing the work only for their own projects. Since I'm a noob in the js world, feedback and contributions are super welcome ❀
+
+## TODO before publish
+- Convert Interface (Result Error ...) to without possible error
+    - Web.Navigation.byUserListen
+    - Web.Window.resizeListen
+    - ModifierEventListener add preventDefault
 
 ## the 1.0.0 release
 
