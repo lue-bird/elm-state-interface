@@ -197,6 +197,7 @@ Instead, the goal of this package is to publish more browser APIs like webstorag
 
 ## TODO before publish
 - ModifierEventListener add option to preventDefault
+- publish using npm publish --access public
 
 ## the 1.0.0 release
 
