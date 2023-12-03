@@ -1074,10 +1074,10 @@ interfaceDiffToJson =
     \interfaceDiff ->
         case interfaceDiff of
             InterfaceWithReceiveDiff addOrReplaceDiff ->
-                addOrReplaceDiff |> interfaceAddOrReplaceDiffToJson
+                addOrReplaceDiff |> interfaceWithReceiveDiffToJson
 
             InterfaceWithoutReceiveDiff removeDiff ->
-                removeDiff |> interfaceRemoveDiffToJson
+                removeDiff |> interfaceWithoutReceiveDiffToJson
 
 
 domNodeIdToJson : DomNodeId -> Json.Encode.Value
@@ -1169,8 +1169,8 @@ httpBodyToJson =
                 Json.Encode.null
 
 
-interfaceAddOrReplaceDiffToJson : InterfaceWithReceiveDiff -> Json.Encode.Value
-interfaceAddOrReplaceDiffToJson =
+interfaceWithReceiveDiffToJson : InterfaceWithReceiveDiff -> Json.Encode.Value
+interfaceWithReceiveDiffToJson =
     \interfaceAddOrReplaceDiff ->
         Json.Encode.object
             [ case interfaceAddOrReplaceDiff of
@@ -1219,8 +1219,8 @@ interfaceAddOrReplaceDiffToJson =
             ]
 
 
-interfaceRemoveDiffToJson : InterfaceWithoutReceiveDiff -> Json.Encode.Value
-interfaceRemoveDiffToJson =
+interfaceWithoutReceiveDiffToJson : InterfaceWithoutReceiveDiff -> Json.Encode.Value
+interfaceWithoutReceiveDiffToJson =
     \interfaceRemoveDiff ->
         Json.Encode.object
             [ case interfaceRemoveDiff of
@@ -1322,7 +1322,7 @@ programSubscriptions appConfig =
         -- re-associate event based on current interface
         appConfig.ports.fromJs
             (\interfaceJson ->
-                case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "diff" interfaceDiffJsonDecoder) of
+                case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "diff" interfaceDiffWithReceiveJsonDecoder) of
                     Ok interfaceDiff ->
                         case
                             state.interface
@@ -1359,8 +1359,8 @@ domNodeIdJsonDecoder =
         ]
 
 
-interfaceDiffJsonDecoder : Json.Decode.Decoder InterfaceWithReceiveDiff
-interfaceDiffJsonDecoder =
+interfaceDiffWithReceiveJsonDecoder : Json.Decode.Decoder InterfaceWithReceiveDiff
+interfaceDiffWithReceiveJsonDecoder =
     Json.Decode.oneOf
         [ Json.Decode.map (\() -> AddTimePosixRequest)
             (Json.Decode.field "addTimePosixRequest" (Json.Decode.null ()))
@@ -1385,6 +1385,8 @@ interfaceDiffJsonDecoder =
             )
         , Json.Decode.map AddHttpRequest
             (Json.Decode.field "addHttpRequest" httpRequestIdJsonDecoder)
+        , Json.Decode.map (\() -> AddWindowSizeRequest)
+            (Json.Decode.field "addWindowSizeRequest" (Json.Decode.null ()))
         , Json.Decode.map AddWindowEventListen
             (Json.Decode.field "addWindowEventListen" Json.Decode.string)
         , Json.Decode.map (\() -> AddWindowAnimationFrameListen)
