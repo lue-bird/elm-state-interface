@@ -1599,7 +1599,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                                     Just (DomElement foundDomElement) ->
                                         case foundDomElement.eventListens |> Dict.get specificEvent.name of
                                             Nothing ->
-                                                Json.Decode.fail ("received event for element without listen " ++ Debug.toString foundDomElement)
+                                                Json.Decode.fail "received event for element without listen"
 
                                             Just eventListen ->
                                                 eventListen specificEvent.event |> Json.Decode.succeed
