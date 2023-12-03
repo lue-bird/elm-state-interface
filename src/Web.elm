@@ -5,7 +5,7 @@ module Web exposing
     , Interface, InterfaceSingle(..), interfaceBatch, interfaceNone, interfaceMap
     , DomNode(..), DomElement
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
-    , InterfaceDiff(..)
+    , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..)
     , InterfaceSingleKeys, InterfaceSingleIdOrderTag
     , InterfaceSingleId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
@@ -48,7 +48,7 @@ Types used by [`Web.Http`](Web-Http)
 
 ## internals, safe to ignore
 
-@docs InterfaceDiff
+@docs InterfaceDiff, InterfaceWithReceiveDiff, InterfaceWithoutReceiveDiff
 @docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
 @docs InterfaceSingleId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
@@ -933,12 +933,13 @@ interfaceOldAndOrUpdatedDiffs =
                                 , domNode = subDiff.replacementDomNode |> domNodeToId
                                 }
                         )
+                    |> List.map InterfaceWithReceiveDiff
 
             AndOr.Both _ ->
                 []
 
             AndOr.Only (Or.First onlyOld) ->
-                case onlyOld of
+                (case onlyOld of
                     TimePosixRequest _ ->
                         []
 
@@ -997,71 +998,86 @@ interfaceOldAndOrUpdatedDiffs =
 
                     FileDownloadUnsignedInt8List _ ->
                         []
+                )
+                    |> List.map InterfaceWithoutReceiveDiff
 
             AndOr.Only (Or.Second onlyUpdated) ->
-                case onlyUpdated of
+                (case onlyUpdated of
                     TimePosixRequest _ ->
-                        AddTimePosixRequest |> List.singleton
+                        AddTimePosixRequest |> InterfaceWithReceiveDiff
 
                     TimezoneOffsetRequest _ ->
-                        AddTimezoneOffsetRequest |> List.singleton
+                        AddTimezoneOffsetRequest |> InterfaceWithReceiveDiff
 
                     TimezoneNameRequest _ ->
-                        AddTimezoneNameRequest |> List.singleton
+                        AddTimezoneNameRequest |> InterfaceWithReceiveDiff
 
                     TimePeriodicallyListen timePeriodicallyListen ->
                         AddTimePeriodicallyListen
                             { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-                            |> List.singleton
+                            |> InterfaceWithReceiveDiff
 
                     RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-                        AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> List.singleton
+                        AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> InterfaceWithReceiveDiff
 
                     ConsoleLog string ->
-                        AddConsoleLog string |> List.singleton
+                        AddConsoleLog string |> InterfaceWithoutReceiveDiff
 
                     DomNodeRender domElementToRender ->
-                        [ ReplaceDomNode
+                        ReplaceDomNode
                             { path = []
                             , domNode = domElementToRender |> domNodeToId
                             }
-                        ]
+                            |> InterfaceWithReceiveDiff
 
                     HttpRequest httpRequest ->
-                        AddHttpRequest (httpRequest |> httpRequestToId) |> List.singleton
+                        AddHttpRequest (httpRequest |> httpRequestToId) |> InterfaceWithReceiveDiff
 
                     WindowSizeRequest _ ->
-                        AddWindowSizeRequest |> List.singleton
+                        AddWindowSizeRequest |> InterfaceWithReceiveDiff
 
                     WindowEventListen listen ->
-                        AddWindowEventListen listen.eventName |> List.singleton
+                        AddWindowEventListen listen.eventName |> InterfaceWithReceiveDiff
 
                     WindowAnimationFrameListen _ ->
-                        AddWindowAnimationFrameListen |> List.singleton
+                        AddWindowAnimationFrameListen |> InterfaceWithReceiveDiff
 
                     NavigationUrlRequest _ ->
-                        AddNavigationUrlRequest |> List.singleton
+                        AddNavigationUrlRequest |> InterfaceWithReceiveDiff
 
                     DocumentEventListen listen ->
-                        AddDocumentEventListen listen.eventName |> List.singleton
+                        AddDocumentEventListen listen.eventName |> InterfaceWithReceiveDiff
 
                     NavigationReplaceUrl url ->
-                        AddNavigationReplaceUrl url |> List.singleton
+                        AddNavigationReplaceUrl url |> InterfaceWithoutReceiveDiff
 
                     NavigationPushUrl url ->
-                        AddNavigationPushUrl url |> List.singleton
+                        AddNavigationPushUrl url |> InterfaceWithoutReceiveDiff
 
                     NavigationGo urlSteps ->
-                        AddNavigationGo urlSteps |> List.singleton
+                        AddNavigationGo urlSteps |> InterfaceWithoutReceiveDiff
 
                     NavigationLoad url ->
-                        url |> AddNavigationLoad |> List.singleton
+                        url |> AddNavigationLoad |> InterfaceWithoutReceiveDiff
 
                     NavigationReload ->
-                        AddNavigationReload |> List.singleton
+                        AddNavigationReload |> InterfaceWithoutReceiveDiff
 
                     FileDownloadUnsignedInt8List config ->
-                        AddFileDownloadUnsignedInt8List config |> List.singleton
+                        AddFileDownloadUnsignedInt8List config |> InterfaceWithoutReceiveDiff
+                )
+                    |> List.singleton
+
+
+interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
+interfaceDiffToJson =
+    \interfaceDiff ->
+        case interfaceDiff of
+            InterfaceWithReceiveDiff addOrReplaceDiff ->
+                addOrReplaceDiff |> interfaceAddOrReplaceDiffToJson
+
+            InterfaceWithoutReceiveDiff removeDiff ->
+                removeDiff |> interfaceRemoveDiffToJson
 
 
 domNodeIdToJson : DomNodeId -> Json.Encode.Value
@@ -1075,105 +1091,6 @@ domNodeIdToJson =
                 DomElementId element ->
                     ( "element"
                     , element |> domElementIdToJson
-                    )
-            ]
-
-
-interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
-interfaceDiffToJson =
-    \interfaceDiff ->
-        Json.Encode.object
-            [ case interfaceDiff of
-                AddTimePosixRequest ->
-                    ( "addTimePosixRequest", Json.Encode.null )
-
-                AddTimezoneOffsetRequest ->
-                    ( "addTimezoneOffsetRequest", Json.Encode.null )
-
-                AddTimezoneNameRequest ->
-                    ( "addTimezoneNameRequest", Json.Encode.null )
-
-                AddTimePeriodicallyListen intervalDuration ->
-                    ( "addTimePeriodicallyListen"
-                    , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
-                    )
-
-                RemoveTimePeriodicallyListen intervalDuration ->
-                    ( "removeTimePeriodicallyListen"
-                    , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
-                    )
-
-                AddRandomUnsignedIntsRequest count ->
-                    ( "addRandomUnsignedIntsRequest", count |> Json.Encode.int )
-
-                AddConsoleLog string ->
-                    ( "addConsoleLog", string |> Json.Encode.string )
-
-                ReplaceDomNode domElementToAdd ->
-                    ( "replaceDomNode"
-                    , Json.Encode.object
-                        [ ( "path", domElementToAdd.path |> Json.Encode.list Json.Encode.int )
-                        , ( "domNode", domElementToAdd.domNode |> domNodeIdToJson )
-                        ]
-                    )
-
-                RemoveDom ->
-                    ( "removeDom", Json.Encode.null )
-
-                AddHttpRequest httpRequestId ->
-                    ( "addHttpRequest", httpRequestId |> httpRequestIdToJson )
-
-                RemoveHttpRequest httpRequestId ->
-                    ( "removeHttpRequest", httpRequestId |> httpRequestIdToJson )
-
-                AddWindowSizeRequest ->
-                    ( "addWindowSizeRequest", Json.Encode.null )
-
-                AddWindowEventListen eventName ->
-                    ( "addWindowEventListen", eventName |> Json.Encode.string )
-
-                RemoveWindowEventListen eventName ->
-                    ( "removeWindowEventListen", eventName |> Json.Encode.string )
-
-                AddWindowAnimationFrameListen ->
-                    ( "addWindowAnimationFrameListen", Json.Encode.null )
-
-                RemoveWindowAnimationFrameListen ->
-                    ( "removeWindowAnimationFrameListen", Json.Encode.null )
-
-                AddNavigationUrlRequest ->
-                    ( "addNavigationUrlRequest", Json.Encode.null )
-
-                AddDocumentEventListen eventName ->
-                    ( "addDocumentEventListen", eventName |> Json.Encode.string )
-
-                RemoveDocumentEventListen eventName ->
-                    ( "removeDocumentEventListen", eventName |> Json.Encode.string )
-
-                AddNavigationPushUrl url ->
-                    ( "addNavigationPushUrl", url |> AppUrl.toString |> Json.Encode.string )
-
-                AddNavigationReplaceUrl url ->
-                    ( "addNavigationReplaceUrl", url |> AppUrl.toString |> Json.Encode.string )
-
-                AddNavigationGo urlSteps ->
-                    ( "addNavigationGo", urlSteps |> Json.Encode.int )
-
-                AddNavigationLoad url ->
-                    ( "addNavigationLoad", url |> Url.toString |> Json.Encode.string )
-
-                AddNavigationReload ->
-                    ( "addNavigationReload", Json.Encode.null )
-
-                AddFileDownloadUnsignedInt8List config ->
-                    ( "addFileDownloadUnsignedInt8List"
-                    , Json.Encode.object
-                        [ ( "name", config.name |> Json.Encode.string )
-                        , ( "mimeType", config.mimeType |> Json.Encode.string )
-                        , ( "content"
-                          , config.content |> Json.Encode.list Json.Encode.int
-                          )
-                        ]
                     )
             ]
 
@@ -1250,6 +1167,112 @@ httpBodyToJson =
 
             HttpBodyEmpty ->
                 Json.Encode.null
+
+
+interfaceAddOrReplaceDiffToJson : InterfaceWithReceiveDiff -> Json.Encode.Value
+interfaceAddOrReplaceDiffToJson =
+    \interfaceAddOrReplaceDiff ->
+        Json.Encode.object
+            [ case interfaceAddOrReplaceDiff of
+                AddTimePosixRequest ->
+                    ( "addTimePosixRequest", Json.Encode.null )
+
+                AddTimezoneOffsetRequest ->
+                    ( "addTimezoneOffsetRequest", Json.Encode.null )
+
+                AddTimezoneNameRequest ->
+                    ( "addTimezoneNameRequest", Json.Encode.null )
+
+                AddTimePeriodicallyListen intervalDuration ->
+                    ( "addTimePeriodicallyListen"
+                    , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
+                    )
+
+                AddRandomUnsignedIntsRequest count ->
+                    ( "addRandomUnsignedIntsRequest", count |> Json.Encode.int )
+
+                ReplaceDomNode domElementToAdd ->
+                    ( "replaceDomNode"
+                    , Json.Encode.object
+                        [ ( "path", domElementToAdd.path |> Json.Encode.list Json.Encode.int )
+                        , ( "domNode", domElementToAdd.domNode |> domNodeIdToJson )
+                        ]
+                    )
+
+                AddHttpRequest httpRequestId ->
+                    ( "addHttpRequest", httpRequestId |> httpRequestIdToJson )
+
+                AddWindowSizeRequest ->
+                    ( "addWindowSizeRequest", Json.Encode.null )
+
+                AddWindowEventListen eventName ->
+                    ( "addWindowEventListen", eventName |> Json.Encode.string )
+
+                AddWindowAnimationFrameListen ->
+                    ( "addWindowAnimationFrameListen", Json.Encode.null )
+
+                AddNavigationUrlRequest ->
+                    ( "addNavigationUrlRequest", Json.Encode.null )
+
+                AddDocumentEventListen eventName ->
+                    ( "addDocumentEventListen", eventName |> Json.Encode.string )
+            ]
+
+
+interfaceRemoveDiffToJson : InterfaceWithoutReceiveDiff -> Json.Encode.Value
+interfaceRemoveDiffToJson =
+    \interfaceRemoveDiff ->
+        Json.Encode.object
+            [ case interfaceRemoveDiff of
+                AddConsoleLog string ->
+                    ( "addConsoleLog", string |> Json.Encode.string )
+
+                AddNavigationPushUrl url ->
+                    ( "addNavigationPushUrl", url |> AppUrl.toString |> Json.Encode.string )
+
+                AddNavigationReplaceUrl url ->
+                    ( "addNavigationReplaceUrl", url |> AppUrl.toString |> Json.Encode.string )
+
+                AddNavigationGo urlSteps ->
+                    ( "addNavigationGo", urlSteps |> Json.Encode.int )
+
+                AddNavigationLoad url ->
+                    ( "addNavigationLoad", url |> Url.toString |> Json.Encode.string )
+
+                AddNavigationReload ->
+                    ( "addNavigationReload", Json.Encode.null )
+
+                AddFileDownloadUnsignedInt8List config ->
+                    ( "addFileDownloadUnsignedInt8List"
+                    , Json.Encode.object
+                        [ ( "name", config.name |> Json.Encode.string )
+                        , ( "mimeType", config.mimeType |> Json.Encode.string )
+                        , ( "content"
+                          , config.content |> Json.Encode.list Json.Encode.int
+                          )
+                        ]
+                    )
+
+                RemoveTimePeriodicallyListen intervalDuration ->
+                    ( "removeTimePeriodicallyListen"
+                    , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
+                    )
+
+                RemoveDom ->
+                    ( "removeDom", Json.Encode.null )
+
+                RemoveHttpRequest httpRequestId ->
+                    ( "removeHttpRequest", httpRequestId |> httpRequestIdToJson )
+
+                RemoveWindowEventListen eventName ->
+                    ( "removeWindowEventListen", eventName |> Json.Encode.string )
+
+                RemoveWindowAnimationFrameListen ->
+                    ( "removeWindowAnimationFrameListen", Json.Encode.null )
+
+                RemoveDocumentEventListen eventName ->
+                    ( "removeDocumentEventListen", eventName |> Json.Encode.string )
+            ]
 
 
 {-| The "init" part for an embedded program
@@ -1336,7 +1359,7 @@ domNodeIdJsonDecoder =
         ]
 
 
-interfaceDiffJsonDecoder : Json.Decode.Decoder InterfaceDiff
+interfaceDiffJsonDecoder : Json.Decode.Decoder InterfaceWithReceiveDiff
 interfaceDiffJsonDecoder =
     Json.Decode.oneOf
         [ Json.Decode.map (\() -> AddTimePosixRequest)
@@ -1351,16 +1374,8 @@ interfaceDiffJsonDecoder =
                     (Json.Decode.field "milliSeconds" Json.Decode.int)
                 )
             )
-        , Json.Decode.map RemoveTimePeriodicallyListen
-            (Json.Decode.field "removeTimePeriodicallyListen"
-                (Json.Decode.map (\ms -> { milliSeconds = ms })
-                    (Json.Decode.field "milliSeconds" Json.Decode.int)
-                )
-            )
         , Json.Decode.map AddRandomUnsignedIntsRequest
             (Json.Decode.field "addRandomUnsignedIntsRequest" Json.Decode.int)
-        , Json.Decode.map AddConsoleLog
-            (Json.Decode.field "addConsoleLog" Json.Decode.string)
         , Json.Decode.map ReplaceDomNode
             (Json.Decode.field "replaceDomNode"
                 (Json.Decode.succeed (\path domNode -> { path = path, domNode = domNode })
@@ -1368,59 +1383,16 @@ interfaceDiffJsonDecoder =
                     |> Json.Decode.Local.andMap (Json.Decode.field "domNode" domNodeIdJsonDecoder)
                 )
             )
-        , Json.Decode.map (\() -> RemoveDom)
-            (Json.Decode.field "removeDom" (Json.Decode.null ()))
         , Json.Decode.map AddHttpRequest
             (Json.Decode.field "addHttpRequest" httpRequestIdJsonDecoder)
-        , Json.Decode.map RemoveHttpRequest
-            (Json.Decode.field "removeHttpRequest" httpRequestIdJsonDecoder)
         , Json.Decode.map AddWindowEventListen
             (Json.Decode.field "addWindowEventListen" Json.Decode.string)
-        , Json.Decode.map RemoveWindowEventListen
-            (Json.Decode.field "removeWindowEventListen" Json.Decode.string)
         , Json.Decode.map (\() -> AddWindowAnimationFrameListen)
             (Json.Decode.field "addWindowAnimationFrameListen" (Json.Decode.null ()))
-        , Json.Decode.map (\() -> RemoveWindowAnimationFrameListen)
-            (Json.Decode.field "removeWindowAnimationFrameListen" (Json.Decode.null ()))
         , Json.Decode.map (\() -> AddNavigationUrlRequest)
             (Json.Decode.field "addNavigationUrlRequest" (Json.Decode.null ()))
         , Json.Decode.map AddDocumentEventListen
             (Json.Decode.field "addDocumentEventListen" Json.Decode.string)
-        , Json.Decode.map RemoveDocumentEventListen
-            (Json.Decode.field "removeDocumentEventListen" Json.Decode.string)
-        , Json.Decode.map AddNavigationPushUrl
-            (Json.Decode.field "addNavigationPushUrl" AppUrl.Local.jsonDecoder)
-        , Json.Decode.map AddNavigationReplaceUrl
-            (Json.Decode.field "addNavigationReplaceUrl" AppUrl.Local.jsonDecoder)
-        , Json.Decode.map AddNavigationGo
-            (Json.Decode.field "addNavigationGo" Json.Decode.int)
-        , Json.Decode.map AddNavigationLoad
-            (Json.Decode.field "addNavigationLoad"
-                (Json.Decode.string
-                    |> Json.Decode.andThen
-                        (\urlString ->
-                            case urlString |> Url.fromString of
-                                Nothing ->
-                                    "invalid URL" |> Json.Decode.fail
-
-                                Just url ->
-                                    url |> Json.Decode.succeed
-                        )
-                )
-            )
-        , Json.Decode.map (\() -> AddNavigationReload)
-            (Json.Decode.field "addNavigationReload" (Json.Decode.null ()))
-        , Json.Decode.map AddFileDownloadUnsignedInt8List
-            (Json.Decode.field "addFileDownloadUnsignedInt8List"
-                (Json.Decode.succeed
-                    (\name mimeType content ->
-                        { name = name, mimeType = mimeType, content = content }
-                    )
-                    |> Json.Decode.Local.andMap (Json.Decode.field "name" Json.Decode.string)
-                    |> Json.Decode.Local.andMap (Json.Decode.field "mimeType" Json.Decode.string)
-                    |> Json.Decode.Local.andMap (Json.Decode.field "content" (Json.Decode.list Json.Decode.int))
-                )
-            )
         ]
 
 
@@ -1505,11 +1477,11 @@ headerJsonDecoder =
         |> Json.Decode.Local.andMap (Json.Decode.index 1 Json.Decode.string)
 
 
-eventDataAndConstructStateJsonDecoder : InterfaceDiff -> InterfaceSingle state -> Maybe (Json.Decode.Decoder state)
-eventDataAndConstructStateJsonDecoder interfaceDiff interface =
+eventDataAndConstructStateJsonDecoder : InterfaceWithReceiveDiff -> InterfaceSingle state -> Maybe (Json.Decode.Decoder state)
+eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
     case interface of
         TimePosixRequest requestTimeNow ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddTimePosixRequest ->
                     Json.Decode.succeed requestTimeNow
                         |> Json.Decode.Local.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
@@ -1519,7 +1491,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         TimezoneOffsetRequest requestTimezoneOffset ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddTimezoneOffsetRequest ->
                     Json.Decode.succeed requestTimezoneOffset
                         |> Json.Decode.Local.andMap Json.Decode.int
@@ -1529,7 +1501,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         TimezoneNameRequest requestTimezoneName ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddTimezoneNameRequest ->
                     Json.Decode.succeed requestTimezoneName
                         |> Json.Decode.Local.andMap
@@ -1544,7 +1516,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         TimePeriodicallyListen timePeriodicallyListen ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddTimePeriodicallyListen diffIntervalDuration ->
                     if
                         timePeriodicallyListen.intervalDurationMilliSeconds
@@ -1562,7 +1534,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddRandomUnsignedIntsRequest diffCount ->
                     if randomUnsignedIntsRequest.count == diffCount then
                         Json.Decode.succeed randomUnsignedIntsRequest.on
@@ -1580,7 +1552,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
             Nothing
 
         DomNodeRender domElementToRender ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 ReplaceDomNode domNodeReplacement ->
                     (Json.Decode.succeed (\innerPath name event -> { innerPath = innerPath, name = name, event = event })
                         |> Json.Decode.Local.andMap (Json.Decode.field "innerPath" (Json.Decode.list Json.Decode.int))
@@ -1611,7 +1583,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         HttpRequest httpRequest ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddHttpRequest addedHttpRequestId ->
                     if (httpRequest |> httpRequestToId) == addedHttpRequestId then
                         Json.Decode.oneOf
@@ -1627,7 +1599,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         WindowSizeRequest toState ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddWindowSizeRequest ->
                     Json.Decode.succeed (\width height -> toState { width = width, height = height })
                         |> Json.Decode.Local.andMap (Json.Decode.field "width" Json.Decode.int)
@@ -1638,7 +1610,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         WindowEventListen listen ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddWindowEventListen addedEventName ->
                     if addedEventName == listen.eventName then
                         listen.on |> Just
@@ -1650,7 +1622,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         WindowAnimationFrameListen toState ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddWindowAnimationFrameListen ->
                     Json.Decode.map Time.millisToPosix Json.Decode.int
                         |> Json.Decode.map toState
@@ -1660,7 +1632,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         NavigationUrlRequest toState ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddNavigationUrlRequest ->
                     AppUrl.Local.jsonDecoder |> Json.Decode.map toState |> Just
 
@@ -1668,7 +1640,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                     Nothing
 
         DocumentEventListen listen ->
-            case interfaceDiff of
+            case interfaceAddDiff of
                 AddDocumentEventListen addedEventName ->
                     if addedEventName == listen.eventName then
                         listen.on |> Just
@@ -1864,6 +1836,7 @@ programUpdate appConfig =
                         ++ (jsonError |> Json.Decode.errorToString)
                       )
                         |> AddConsoleLog
+                        |> InterfaceWithoutReceiveDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
                         |> Cmd.map never
@@ -1876,6 +1849,7 @@ programUpdate appConfig =
                         ++ (jsonError |> Json.Decode.errorToString)
                       )
                         |> AddConsoleLog
+                        |> InterfaceWithoutReceiveDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
                         |> Cmd.map never
@@ -1992,31 +1966,43 @@ type alias HttpMetadata =
 {-| Safe to ignore. Individual messages to js. Also used to identify responses with the same part in the interface
 -}
 type InterfaceDiff
-    = AddTimePosixRequest
-    | AddTimezoneOffsetRequest
-    | AddTimezoneNameRequest
-    | AddTimePeriodicallyListen { milliSeconds : Int }
-    | RemoveTimePeriodicallyListen { milliSeconds : Int }
-    | AddRandomUnsignedIntsRequest Int
-    | AddConsoleLog String
-    | ReplaceDomNode { path : List Int, domNode : DomNodeId }
-    | AddHttpRequest HttpRequestId
-    | RemoveHttpRequest HttpRequestId
-    | RemoveDom
-    | AddWindowSizeRequest
-    | AddWindowEventListen String
-    | RemoveWindowEventListen String
-    | AddWindowAnimationFrameListen
-    | RemoveWindowAnimationFrameListen
-    | AddNavigationUrlRequest
-    | AddDocumentEventListen String
-    | RemoveDocumentEventListen String
+    = InterfaceWithReceiveDiff InterfaceWithReceiveDiff
+    | InterfaceWithoutReceiveDiff InterfaceWithoutReceiveDiff
+
+
+{-| Actions that will never notify elm again
+-}
+type InterfaceWithoutReceiveDiff
+    = AddConsoleLog String
     | AddNavigationReplaceUrl AppUrl
     | AddNavigationPushUrl AppUrl
     | AddNavigationGo Int
     | AddNavigationLoad Url
     | AddNavigationReload
     | AddFileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
+    | RemoveTimePeriodicallyListen { milliSeconds : Int }
+    | RemoveHttpRequest HttpRequestId
+    | RemoveDom
+    | RemoveWindowEventListen String
+    | RemoveWindowAnimationFrameListen
+    | RemoveDocumentEventListen String
+
+
+{-| Actions that will notify elm some time in the future
+-}
+type InterfaceWithReceiveDiff
+    = AddTimePosixRequest
+    | AddTimezoneOffsetRequest
+    | AddTimezoneNameRequest
+    | AddTimePeriodicallyListen { milliSeconds : Int }
+    | AddRandomUnsignedIntsRequest Int
+    | AddDocumentEventListen String
+    | ReplaceDomNode { path : List Int, domNode : DomNodeId }
+    | AddHttpRequest HttpRequestId
+    | AddWindowSizeRequest
+    | AddWindowEventListen String
+    | AddWindowAnimationFrameListen
+    | AddNavigationUrlRequest
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
