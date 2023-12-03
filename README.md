@@ -113,6 +113,59 @@ Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/pa
 
 > The complete example and more in [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
 
+## `Interface` for an action ≠ `Cmd`
+```elm
+Web.Console.log "Hello world"
+```
+when will it print to the console? All the time? Every time the state changes?
+
+Here's where an `Interface` is different from a `Cmd` and similar imperative code.
+There are two triggers for execution of js code:
+  - the updated `Interface` has an interface the old `Interface` didn't.
+    E.g. we include logging each individual internal warning from the state in the `Interface`
+    → log whenever a new warning is added
+  - a previously existing interface is absent in the updated `Interface`.
+    E.g. we don't include a HTTP GET request that we once had in the `Interface`
+    → the request gets canceled if it's still active
+
+## `Interface` that requests ≠ `Interface` that listens
+Elm uses `Cmd`/`Task` types for one and `Sub` types for the other.
+In state-interface land, these 2 look identical:
+```elm
+Web.Window.sizeRequest : Interface { width : Int, height : Int }
+Web.Window.resizeListen : Interface { width : Int, height : Int }
+```
+"-Listen" is equivalent to elms `Sub`, "-Request" is roughly like `Cmd`/`Task`.
+So, trying to use `sizeRequest` to keep your window size state updated is not going to work.
+```elm
+Web.Window.sizeRequest
+    |> Web.interfaceMap (\windowSize -> { state | windowSize = windowSize })
+```
+As discussed in the previous section, the request will only be executed once.
+
+So the full solution to always get the current window size is
+```elm
+[ Web.Window.sizeRequest, Web.Window.resizeListen ]
+    |> Web.interfaceBatch
+    |> Web.interfaceMap (\windowSize -> { state | windowSize = windowSize })
+```
+  - `sizeRequest` will send you the initial window size first, then never again
+  - `resizeListen` sends you all the changes to the size
+    (for as long as you have it in your interface)
+
+Why can't we do the same in the counter + url example above?
+```elm
+[ Navigation.urlRequest, Web.Navigation.byUserListen ]
+    |> Web.interfaceBatch
+    |> Web.interfaceMap UserWentToUrl
+```
+In combination with editing the url programmatically
+you have to keep one thing in mind:
+It could happen that you push a new url before the requested initial url is sent to you
+in which case you'll receive the url pushed by you.
+
+Whenever **order of actions** is important, let your **state** represent that!
+
 ## state-interface as an alternative to tasks
 
 Simplified examples.
