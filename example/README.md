@@ -1,3 +1,5 @@
+Mini showcase. Contains rooms with for example counter, real-time clock, snake game.
+
 Run with
 ```bash
 npm run start

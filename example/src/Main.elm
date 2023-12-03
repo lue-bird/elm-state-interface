@@ -1,11 +1,6 @@
 port module Main exposing (main)
 
 import Array
-import BrowserApp
-import BrowserApp.Dom
-import BrowserApp.Svg
-import BrowserApp.Time
-import BrowserApp.Window
 import Color
 import Dict exposing (Dict)
 import Duration
@@ -15,15 +10,22 @@ import Json.Encode
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Set
 import Time
+import Url
+import Web
+import Web.Dom
+import Web.Navigation
+import Web.Svg
+import Web.Time
+import Web.Window
 
 
-main : Program () (BrowserApp.State State) (BrowserApp.Event State)
+main : Program () (Web.ProgramState State) (Web.ProgramEvent State)
 main =
-    app |> BrowserApp.toProgram
+    Web.program programConfig
 
 
-app : BrowserApp.Config State
-app =
+programConfig : Web.ProgramConfig State
+programConfig =
     { initialState =
         StartingRoom
             { name = Nothing
@@ -43,6 +45,9 @@ app =
 
                 PickingApples pickingApplesState ->
                     pickingApplesState |> pickApplesInterface
+
+                ShowingMapWithExit ->
+                    mapWithExitInterface
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
@@ -51,6 +56,7 @@ type State
     = StartingRoom StartingRoomState
     | AtSign AtSignState
     | PickingApples PickApplesState
+    | ShowingMapWithExit
 
 
 type alias StartingRoomState =
@@ -65,7 +71,7 @@ type alias StartingRoomState =
 
 type StartingRoomEvent
     = NameChanged (Result Json.Decode.Error String)
-    | MouseMovedTo { x : Int, y : Int }
+    | MouseMovedTo (Result Json.Decode.Error { x : Int, y : Int })
     | GemCountDecreaseClicked
     | GemCountIncreaseClicked
     | TimePassed Time.Posix
@@ -73,12 +79,12 @@ type StartingRoomEvent
     | WalkToSignClicked
 
 
-startingRoomInterface : StartingRoomState -> BrowserApp.Interface State
+startingRoomInterface : StartingRoomState -> Web.Interface State
 startingRoomInterface =
     \state ->
-        [ uiFrame
-            [ BrowserApp.Dom.listenTo "mousemove"
-                |> BrowserApp.Dom.modifierMap
+        [ narrativeUiFrame
+            [ Web.Dom.listenTo "mousemove"
+                |> Web.Dom.modifierMap
                     (\mouseEvent ->
                         mouseEvent
                             |> Json.Decode.decodeValue
@@ -86,50 +92,49 @@ startingRoomInterface =
                                     |> Json.Decode.Local.andMap (Json.Decode.field "clientX" Json.Decode.int)
                                     |> Json.Decode.Local.andMap (Json.Decode.field "clientY" Json.Decode.int)
                                 )
-                            |> Result.withDefault { x = -1, y = -1 }
                             |> MouseMovedTo
                     )
             ]
-            [ "You find yourself trapped in a state-interface. The old clock on the wall shows " |> BrowserApp.Dom.text
+            [ "You find yourself trapped in a state-interface. The old clock on the wall shows " |> Web.Dom.text
             , clockUi { posix = state.posix, timezone = state.timezone }
-            , ". Countless questions rush through your mind:" |> BrowserApp.Dom.text
-            , BrowserApp.Dom.element "ul"
+            , ". Countless questions rush through your head:" |> Web.Dom.text
+            , Web.Dom.element "ul"
                 []
-                [ BrowserApp.Dom.element "li"
+                [ Web.Dom.element "li"
                     []
-                    [ "\"How did you get here?\"" |> BrowserApp.Dom.text ]
-                , BrowserApp.Dom.element "li"
+                    [ "\"How did you get here?\"" |> Web.Dom.text ]
+                , Web.Dom.element "li"
                     []
                     [ "\"Why do I know that you're exactly at "
                         ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
                         ++ "?\""
-                        |> BrowserApp.Dom.text
+                        |> Web.Dom.text
                     ]
-                , BrowserApp.Dom.element "li"
+                , Web.Dom.element "li"
                     []
-                    [ "\"How do I know your name " |> BrowserApp.Dom.text
-                    , textInputUi |> BrowserApp.Dom.map NameChanged
-                    , "?\"" |> BrowserApp.Dom.text
+                    [ "\"How do I know your name " |> Web.Dom.text
+                    , textInputUi |> Web.Dom.map NameChanged
+                    , "?\"" |> Web.Dom.text
                     ]
-                , BrowserApp.Dom.element "li"
+                , Web.Dom.element "li"
                     []
-                    [ "Why is there a tutl?" |> BrowserApp.Dom.text
-                    , BrowserApp.Svg.element "svg"
-                        [ BrowserApp.Dom.attribute "viewBox" "0 12 96 40"
-                        , BrowserApp.Dom.attribute "width" "96"
-                        , BrowserApp.Dom.attribute "height" "40"
+                    [ "Why is there a tutl?" |> Web.Dom.text
+                    , Web.Svg.element "svg"
+                        [ Web.Dom.attribute "viewBox" "0 12 96 40"
+                        , Web.Dom.attribute "width" "96"
+                        , Web.Dom.attribute "height" "40"
                         ]
-                        [ BrowserApp.Svg.element "image"
-                            [ BrowserApp.Dom.attribute "width" "72"
-                            , BrowserApp.Dom.attribute "height" "72"
-                            , BrowserApp.Dom.attribute "href" "https://elm-lang.org/images/turtle.gif"
+                        [ Web.Svg.element "image"
+                            [ Web.Dom.attribute "width" "72"
+                            , Web.Dom.attribute "height" "72"
+                            , Web.Dom.attribute "href" "https://elm-lang.org/images/turtle.gif"
                             ]
                             []
                         ]
                     ]
                 ]
-            , "\"Don't worry\", I say. \"I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3\"" |> BrowserApp.Dom.text
-            , BrowserApp.Dom.element "br" [] []
+            , "\"Don't worry\", I say. \"I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3\"" |> Web.Dom.text
+            , Web.Dom.element "br" [] []
             , "The voice repeats: \"Don't worry. Here,  take a couple 💎 if you want"
                 ++ (case state.name of
                         Nothing ->
@@ -139,29 +144,29 @@ startingRoomInterface =
                             ", " ++ name
                    )
                 ++ ":\""
-                |> BrowserApp.Dom.text
-            , BrowserApp.Dom.element "div"
-                [ BrowserApp.Dom.style "padding-top" "30px"
-                , BrowserApp.Dom.style "padding-bottom" "30px"
+                |> Web.Dom.text
+            , Web.Dom.element "div"
+                [ Web.Dom.style "padding-top" "30px"
+                , Web.Dom.style "padding-bottom" "30px"
                 ]
                 [ buttonUi
-                    [ BrowserApp.Dom.style "height" "60px"
-                    , BrowserApp.Dom.style "width" "60px"
-                    , BrowserApp.Dom.style "text-align" "center"
+                    [ Web.Dom.style "height" "60px"
+                    , Web.Dom.style "width" "60px"
+                    , Web.Dom.style "text-align" "center"
                     ]
-                    [ "+" |> BrowserApp.Dom.text ]
-                    |> BrowserApp.Dom.map (\() -> GemCountIncreaseClicked)
-                , BrowserApp.Dom.element "b"
-                    [ BrowserApp.Dom.style "padding" "15px 15px"
+                    [ "+" |> Web.Dom.text ]
+                    |> Web.Dom.map (\() -> GemCountIncreaseClicked)
+                , Web.Dom.element "b"
+                    [ Web.Dom.style "padding" "15px 15px"
                     ]
-                    [ "💎" ++ (state.gemCount |> String.fromInt) |> BrowserApp.Dom.text ]
+                    [ "💎" ++ (state.gemCount |> String.fromInt) |> Web.Dom.text ]
                 , buttonUi
-                    [ BrowserApp.Dom.style "height" "60px"
-                    , BrowserApp.Dom.style "width" "60px"
-                    , BrowserApp.Dom.style "text-align" "center"
+                    [ Web.Dom.style "height" "60px"
+                    , Web.Dom.style "width" "60px"
+                    , Web.Dom.style "text-align" "center"
                     ]
-                    [ "-" |> BrowserApp.Dom.text ]
-                    |> BrowserApp.Dom.map (\() -> GemCountDecreaseClicked)
+                    [ "-" |> Web.Dom.text ]
+                    |> Web.Dom.map (\() -> GemCountDecreaseClicked)
                 ]
             , buttonUi []
                 [ "walk towards the sign as "
@@ -172,20 +177,23 @@ startingRoomInterface =
                             Just name ->
                                 name
                        )
-                    |> BrowserApp.Dom.text
+                    |> Web.Dom.text
                 ]
-                |> BrowserApp.Dom.map (\() -> WalkToSignClicked)
+                |> Web.Dom.map (\() -> WalkToSignClicked)
             ]
-            |> BrowserApp.Dom.render
-        , BrowserApp.Time.zoneRequest |> BrowserApp.map TimeZoneReceived
-        , BrowserApp.Time.periodicallyListen Duration.second |> BrowserApp.map TimePassed
+            |> Web.Dom.render
+        , Web.Time.zoneRequest |> Web.interfaceMap TimeZoneReceived
+        , Web.Time.periodicallyListen Duration.second |> Web.interfaceMap TimePassed
         ]
-            |> BrowserApp.batch
-            |> BrowserApp.map
+            |> Web.interfaceBatch
+            |> Web.interfaceMap
                 (\event ->
                     case event of
-                        MouseMovedTo newMousePoint ->
+                        MouseMovedTo (Ok newMousePoint) ->
                             StartingRoom { state | mousePoint = newMousePoint }
+
+                        MouseMovedTo (Err _) ->
+                            StartingRoom state
 
                         GemCountDecreaseClicked ->
                             StartingRoom { state | gemCount = state.gemCount - 1 }
@@ -224,6 +232,8 @@ startingRoomInterface =
                                         Just name ->
                                             name
                                 , gemCount = state.gemCount
+                                , appleCount = 0
+                                , birdConversationState = WaitingForTalk
                                 }
                 )
 
@@ -231,63 +241,173 @@ startingRoomInterface =
 type alias AtSignState =
     RecordWithoutConstructorFunction
         { gemCount : Int
+        , appleCount : Int
         , name : String
+        , birdConversationState : ConversationWithBirdState
         }
+
+
+type ConversationWithBirdState
+    = WaitingForTalk
+    | GreetingAndAskingForWhatYouWant
+    | BirdTellAboutItself
+    | AskedBirdForMap
+    | TooHungryToSell
 
 
 type AtSignEvent
     = TalkToBirdClicked
     | PickApplesClicked
+    | BirdTellAboutYourselfClicked
+    | BuyMapClicked
+    | OpenMapClicked
 
 
-atSignInterface : AtSignState -> BrowserApp.Interface State
+atSignInterface : AtSignState -> Web.Interface State
 atSignInterface =
     \state ->
-        [ uiFrame []
-            [ BrowserApp.Dom.element "p"
+        [ narrativeUiFrame []
+            [ Web.Dom.element "p"
                 []
-                [ "\"And there we are, " ++ state.name ++ "!\"" |> BrowserApp.Dom.text ]
-            , BrowserApp.Dom.element "div"
-                [ BrowserApp.Dom.style "text-align" "center"
-                , BrowserApp.Dom.style "width" "50%"
+                [ "\"And there we are, " ++ state.name ++ "!\"" |> Web.Dom.text ]
+            , Web.Dom.element "div"
+                [ Web.Dom.style "text-align" "center"
+                , Web.Dom.style "width" "50%"
                 ]
-                [ "🕊️" |> BrowserApp.Dom.text ]
-            , BrowserApp.Dom.element "div"
-                [ BrowserApp.Dom.style "text-align" "center"
-                , BrowserApp.Dom.style "width" "50%"
+                [ "🕊️" |> Web.Dom.text ]
+            , Web.Dom.element "div"
+                [ Web.Dom.style "text-align" "center"
+                , Web.Dom.style "width" "50%"
                 ]
-                [ "🎏" |> BrowserApp.Dom.text ]
-            , BrowserApp.Dom.element "p"
+                [ "🎏" |> Web.Dom.text ]
+            , Web.Dom.element "p"
                 []
-                [ "\"Don't you think the bird looks a bit hungry...\"" |> BrowserApp.Dom.text ]
-            , BrowserApp.Dom.element "div"
-                [ BrowserApp.Dom.style "padding" "17px" ]
-                [ buttonUi []
-                    [ "talk to the bird" |> BrowserApp.Dom.text
-                    ]
-                    |> BrowserApp.Dom.map (\() -> TalkToBirdClicked)
-                , " or " |> BrowserApp.Dom.text
-                , buttonUi []
-                    [ "pick some 🍎s" |> BrowserApp.Dom.text
-                    ]
-                    |> BrowserApp.Dom.map (\() -> PickApplesClicked)
+                [ (case state.appleCount of
+                    0 ->
+                        "\"Don't you think the bird looks a bit hungry...\""
+
+                    non0AppleCount ->
+                        "You've already picked "
+                            ++ (non0AppleCount |> String.fromInt)
+                            ++ " 🍎s"
+                  )
+                    |> Web.Dom.text
                 ]
+            , case state.birdConversationState of
+                WaitingForTalk ->
+                    Web.Dom.element "div"
+                        []
+                        [ buttonUi []
+                            [ "talk to the bird" |> Web.Dom.text
+                            ]
+                            |> Web.Dom.map (\() -> TalkToBirdClicked)
+                        , " or " |> Web.Dom.text
+                        , buttonUi []
+                            [ (case state.appleCount of
+                                0 ->
+                                    "pick some 🍎s"
+
+                                _ ->
+                                    "pick even more 🍎s"
+                              )
+                                |> Web.Dom.text
+                            ]
+                            |> Web.Dom.map (\() -> PickApplesClicked)
+                        ]
+
+                GreetingAndAskingForWhatYouWant ->
+                    Web.Dom.element "div"
+                        []
+                        [ "\"chirp chirp. Thanks for coming by!"
+                            ++ " I usually sell for 💎 but since your new here, a couple of 🍎s would make me happy as well :)\" "
+                            |> Web.Dom.text
+                        , buttonUi []
+                            [ "Ask for an introduction" |> Web.Dom.text
+                            ]
+                            |> Web.Dom.map (\() -> BirdTellAboutYourselfClicked)
+                        , " or " |> Web.Dom.text
+                        , buttonUi []
+                            [ "Buy map with the exit" |> Web.Dom.text
+                            ]
+                            |> Web.Dom.map (\() -> BuyMapClicked)
+                        ]
+
+                BirdTellAboutItself ->
+                    Web.Dom.element "div"
+                        []
+                        [ "Jo jo. I'm the map and info dealer in this village since I fly around a lot."
+                            ++ " If you want to catch me to suggest some offers I could make you, write me a "
+                            |> Web.Dom.text
+                        , Web.Dom.element "a"
+                            [ Web.Dom.attribute "href" "https://github.com/lue-bird/elm-state-interface/discussions/new/choose"
+                            , Web.Dom.style "color" "inherit"
+                            ]
+                            [ "letter" |> Web.Dom.text ]
+                        , buttonUi []
+                            [ "Buy map with the exit" |> Web.Dom.text
+                            ]
+                            |> Web.Dom.map (\() -> BuyMapClicked)
+                        ]
+
+                AskedBirdForMap ->
+                    Web.Dom.element "div"
+                        []
+                        [ "\"Hope you'll come by again!\" says the bird, looking a bit down"
+                            |> Web.Dom.text
+                        , buttonUi []
+                            [ "Open the map" |> Web.Dom.text
+                            ]
+                            |> Web.Dom.map (\() -> OpenMapClicked)
+                        ]
+
+                TooHungryToSell ->
+                    Web.Dom.element "div"
+                        []
+                        [ "\"Nah, I'm hungry, I will need more of these fresh 🍎s\""
+                            |> Web.Dom.text
+                        , buttonUi []
+                            [ "pick 🍎s" |> Web.Dom.text
+                            ]
+                            |> Web.Dom.map (\() -> PickApplesClicked)
+                        ]
             ]
-            |> BrowserApp.Dom.render
+            |> Web.Dom.render
         ]
-            |> BrowserApp.batch
-            |> BrowserApp.map
+            |> Web.interfaceBatch
+            |> Web.interfaceMap
                 (\event ->
                     case event of
                         TalkToBirdClicked ->
-                            AtSign state
+                            AtSign { state | birdConversationState = GreetingAndAskingForWhatYouWant }
+
+                        BuyMapClicked ->
+                            if state.appleCount <= 9 then
+                                AtSign { state | birdConversationState = TooHungryToSell }
+
+                            else
+                                AtSign
+                                    { state
+                                        | birdConversationState = AskedBirdForMap
+                                        , appleCount = state.appleCount - 10
+                                    }
+
+                        BirdTellAboutYourselfClicked ->
+                            AtSign { state | birdConversationState = BirdTellAboutItself }
+
+                        OpenMapClicked ->
+                            ShowingMapWithExit
 
                         PickApplesClicked ->
                             PickingApples
-                                { headDirection = Right
+                                { name = state.name
+                                , gemCount = state.gemCount
+                                , windowSize = { width = 1920, height = 1080 }
+                                , headDirection = Right
                                 , headLocation = { x = 4, y = 5 }
                                 , tailSegments = [ { x = 3, y = 5 } ]
                                 , appleLocation = { x = 3, y = 2 }
+                                , appleCountBefore = state.appleCount
+                                , pickedAppleCount = 0
                                 }
                 )
 
@@ -304,14 +424,20 @@ type SnakeDirection
 
 
 type alias PickApplesState =
-    { headDirection : SnakeDirection
-    , headLocation : Location
-    , tailSegments : List Location
-    , appleLocation : Location
-    }
+    RecordWithoutConstructorFunction
+        { name : String
+        , gemCount : Int
+        , appleCountBefore : Int
+        , windowSize : { width : Int, height : Int }
+        , headDirection : SnakeDirection
+        , headLocation : PickApplesLocation
+        , tailSegments : List PickApplesLocation
+        , appleLocation : PickApplesLocation
+        , pickedAppleCount : Int
+        }
 
 
-type alias Location =
+type alias PickApplesLocation =
     RecordWithoutConstructorFunction
         { x : Int
         , y : Int
@@ -321,11 +447,7 @@ type alias Location =
 type PickApplesEvent
     = PickApplesKeyPressed (Result Json.Decode.Error String)
     | PickApplesSimulationTick Time.Posix
-
-
-cellSideLength : number
-cellSideLength =
-    80
+    | WindowSizeReceived { width : Int, height : Int }
 
 
 worldSizeCells : { x : Int, y : Int }
@@ -333,22 +455,15 @@ worldSizeCells =
     { x = 16, y = 12 }
 
 
-worldWidth : Float
-worldWidth =
-    cellSideLength * toFloat worldSizeCells.x
-
-
-worldHeight : Float
-worldHeight =
-    cellSideLength * toFloat worldSizeCells.y
-
-
-pickApplesInterface : PickApplesState -> BrowserApp.Interface State
+pickApplesInterface : PickApplesState -> Web.Interface State
 pickApplesInterface state =
-    [ BrowserApp.Time.periodicallyListen (Duration.milliseconds 125)
-        |> BrowserApp.map PickApplesSimulationTick
-    , BrowserApp.Dom.documentEventListen "keydown"
-        |> BrowserApp.map
+    [ Web.Time.periodicallyListen (Duration.milliseconds 125)
+        |> Web.interfaceMap PickApplesSimulationTick
+    , [ Web.Window.sizeRequest, Web.Window.resizeListen ]
+        |> Web.interfaceBatch
+        |> Web.interfaceMap WindowSizeReceived
+    , Web.Dom.documentEventListen "keydown"
+        |> Web.interfaceMap
             (\event ->
                 event
                     |> Json.Decode.decodeValue
@@ -356,50 +471,124 @@ pickApplesInterface state =
                     |> PickApplesKeyPressed
             )
     , let
-        rectangleAtCellLocation : Color.Color -> Location -> BrowserApp.DomNode state_
+        rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.DomNode state_
         rectangleAtCellLocation fill cellLocation =
-            BrowserApp.Svg.element "rect"
-                [ BrowserApp.Dom.style "fill" (fill |> Color.toCssString)
-                , BrowserApp.Dom.attribute "width" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
-                , BrowserApp.Dom.attribute "height" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
-                , BrowserApp.Dom.attribute "x" (((cellSideLength * 0.05 + toFloat cellLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                , BrowserApp.Dom.attribute "y" (((cellSideLength * 0.05 + toFloat cellLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+            Web.Svg.element "rect"
+                [ Web.Dom.style "fill" (fill |> Color.toCssString)
+                , Web.Dom.attribute "width" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
+                , Web.Dom.attribute "height" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
+                , Web.Dom.attribute "x" (((cellSideLength * 0.05 + toFloat cellLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
+                , Web.Dom.attribute "y" (((cellSideLength * 0.05 + toFloat cellLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
                 ]
                 []
 
-        worldShape =
-            BrowserApp.Svg.element "rect"
-                [ BrowserApp.Dom.style "fill" (Color.black |> Color.toCssString)
-                , BrowserApp.Dom.attribute "width" "100%"
-                , BrowserApp.Dom.attribute "height" "100%"
+        worldUi : Web.DomNode state_
+        worldUi =
+            Web.Svg.element "rect"
+                [ Web.Dom.style "fill" (Color.black |> Color.toCssString)
+                , Web.Dom.attribute "width" "100%"
+                , Web.Dom.attribute "height" "100%"
                 ]
                 []
 
-        snakeUi =
-            BrowserApp.Svg.element "g"
+        headTailUi : Web.DomNode state_
+        headTailUi =
+            Web.Svg.element "g"
                 []
                 (state.headLocation
                     :: state.tailSegments
                     |> List.map (rectangleAtCellLocation Color.lightGrey)
                 )
 
+        appleUi : Web.DomNode state_
         appleUi =
-            rectangleAtCellLocation Color.red state.appleLocation
+            Web.Svg.element "g"
+                []
+                [ Web.Svg.element "circle"
+                    [ Web.Dom.style "fill" (Color.red |> Color.toCssString)
+                    , Web.Dom.attribute "r" (((cellSideLength * 0.45) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" (((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" (((cellSideLength * 0.5 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+                    ]
+                    []
+                , Web.Svg.element "ellipse"
+                    [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
+                    , Web.Dom.attribute "rx" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "ry" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" (((cellSideLength * 0.6 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" (((cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+                    ]
+                    []
+                , Web.Svg.element "ellipse"
+                    [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
+                    , Web.Dom.attribute "transform" "rotate(45deg)"
+                    , Web.Dom.attribute "rx" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "ry" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" (((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" (((cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+                    ]
+                    []
+                ]
+
+        pickedAppleCountUi : Web.DomNode state_
+        pickedAppleCountUi =
+            Web.Svg.element "text"
+                [ Web.Dom.style "fill" (Color.rgba 0.3 1 0.5 0.13 |> Color.toCssString)
+                , Web.Dom.style "font-size" "30em"
+                , Web.Dom.attribute "text-anchor" "middle"
+                , Web.Dom.attribute "dominant-baseline" "middle"
+                , Web.Dom.attribute "font-weight" "bolder"
+                , Web.Dom.attribute "x" "50%"
+                , Web.Dom.attribute "y" "50%"
+                , Web.Dom.attribute "width" "50%"
+                , Web.Dom.attribute "height" "50%"
+                ]
+                [ state.pickedAppleCount |> String.fromInt |> Web.Dom.text ]
+
+        cellSideLength : Float
+        cellSideLength =
+            worldSize.width / (worldSizeCells.x |> Basics.toFloat)
+
+        worldSize : { width : Float, height : Float }
+        worldSize =
+            let
+                ratioWidthToHeight : Float
+                ratioWidthToHeight =
+                    (worldSizeCells.x |> Basics.toFloat) / (worldSizeCells.y |> Basics.toFloat)
+            in
+            if (state.windowSize.width |> Basics.toFloat) < (state.windowSize.height |> Basics.toFloat) * ratioWidthToHeight then
+                -- disproportional in height
+                { width = state.windowSize.width |> Basics.toFloat
+                , height = (state.windowSize.width |> Basics.toFloat) / ratioWidthToHeight
+                }
+
+            else
+                -- might be disproportional in width
+                { width = (state.windowSize.height |> Basics.toFloat) * ratioWidthToHeight
+                , height = state.windowSize.height |> Basics.toFloat
+                }
       in
-      BrowserApp.Svg.element "svg"
-        [ BrowserApp.Dom.attribute "viewBox" ("0 0 " ++ (worldWidth |> String.fromFloat) ++ " " ++ (worldHeight |> String.fromFloat))
-        , BrowserApp.Dom.attribute "width" ((worldWidth |> String.fromFloat) ++ "px")
-        , BrowserApp.Dom.attribute "height" ((worldHeight |> String.fromFloat) ++ "px")
-        , BrowserApp.Dom.style "display" "block"
-        , BrowserApp.Dom.style "margin" "auto"
+      Web.Svg.element "svg"
+        [ Web.Dom.attribute "viewBox" ("0 0 " ++ (worldSize.width |> String.fromFloat) ++ " " ++ (worldSize.height |> String.fromFloat))
+        , Web.Dom.attribute "width" ((worldSize.width |> String.fromFloat) ++ "px")
+        , Web.Dom.attribute "height" ((worldSize.height |> String.fromFloat) ++ "px")
+        , Web.Dom.style "display" "block"
+        , Web.Dom.style "margin" "auto"
         ]
-        [ worldShape, snakeUi, appleUi ]
-        |> BrowserApp.Dom.render
+        [ worldUi
+        , pickedAppleCountUi
+        , headTailUi
+        , appleUi
+        ]
+        |> Web.Dom.render
     ]
-        |> BrowserApp.batch
-        |> BrowserApp.map
+        |> Web.interfaceBatch
+        |> Web.interfaceMap
             (\event ->
                 case event of
+                    WindowSizeReceived windowSize ->
+                        PickingApples { state | windowSize = windowSize }
+
                     PickApplesSimulationTick _ ->
                         let
                             headMovement =
@@ -410,6 +599,7 @@ pickApplesInterface state =
                                 , y = (state.headLocation.y + headMovement.y) |> modBy worldSizeCells.y
                                 }
 
+                            applePicked : Bool
                             applePicked =
                                 newHeadLocation == state.appleLocation
 
@@ -424,40 +614,56 @@ pickApplesInterface state =
                                         |> List.drop 1
                                         |> List.reverse
                         in
-                        PickingApples
-                            { state
-                                | headLocation = newHeadLocation
-                                , tailSegments = newTailSegments
-                                , appleLocation =
-                                    if not applePicked then
-                                        state.appleLocation
+                        if newTailSegments |> List.member newHeadLocation then
+                            AtSign
+                                { name = state.name
+                                , gemCount = state.gemCount
+                                , appleCount = state.appleCountBefore + state.pickedAppleCount
+                                , birdConversationState = WaitingForTalk
+                                }
 
-                                    else
-                                        let
-                                            cellsLocationsWithoutSnake =
-                                                Set.diff
-                                                    (List.range 0 (worldSizeCells.x - 1)
-                                                        |> List.concatMap
-                                                            (\x ->
-                                                                List.range 0 (worldSizeCells.y - 1)
-                                                                    |> List.map (\y -> ( x, y ))
-                                                            )
-                                                        |> Set.fromList
-                                                    )
-                                                    ((newHeadLocation :: newTailSegments)
-                                                        |> List.map
-                                                            (\location -> ( location.x, location.y ))
-                                                        |> Set.fromList
-                                                    )
-                                                    |> Set.toList
-                                        in
-                                        -- TODO use Random.Extra.choose instead
-                                        cellsLocationsWithoutSnake
-                                            |> List.drop (15485863 |> modBy ((cellsLocationsWithoutSnake |> List.length) - 1))
-                                            |> List.head
-                                            |> Maybe.map (\( x, y ) -> { x = x, y = y })
-                                            |> Maybe.withDefault { x = -1, y = -1 }
-                            }
+                        else
+                            PickingApples
+                                { state
+                                    | pickedAppleCount =
+                                        if applePicked then
+                                            state.pickedAppleCount + 1
+
+                                        else
+                                            state.pickedAppleCount
+                                    , headLocation = newHeadLocation
+                                    , tailSegments = newTailSegments
+                                    , appleLocation =
+                                        if not applePicked then
+                                            state.appleLocation
+
+                                        else
+                                            let
+                                                cellsLocationsWithoutSnake : List ( Int, Int )
+                                                cellsLocationsWithoutSnake =
+                                                    Set.diff
+                                                        (List.range 0 (worldSizeCells.x - 1)
+                                                            |> List.concatMap
+                                                                (\x ->
+                                                                    List.range 0 (worldSizeCells.y - 1)
+                                                                        |> List.map (\y -> ( x, y ))
+                                                                )
+                                                            |> Set.fromList
+                                                        )
+                                                        ((newHeadLocation :: newTailSegments)
+                                                            |> List.map
+                                                                (\location -> ( location.x, location.y ))
+                                                            |> Set.fromList
+                                                        )
+                                                        |> Set.toList
+                                            in
+                                            -- TODO use Random.Extra.choose instead
+                                            cellsLocationsWithoutSnake
+                                                |> List.drop (15485863 |> modBy ((cellsLocationsWithoutSnake |> List.length) - 1))
+                                                |> List.head
+                                                |> Maybe.map (\( x, y ) -> { x = x, y = y })
+                                                |> Maybe.withDefault { x = -1, y = -1 }
+                                }
 
                     PickApplesKeyPressed (Err _) ->
                         PickingApples state
@@ -502,68 +708,92 @@ directionToXYOffset direction =
             { x = 1, y = 0 }
 
 
+mapWithExitInterface : Web.Interface state_
+mapWithExitInterface =
+    Web.Navigation.load
+        { protocol = Url.Https
+        , host = "dark.elm.dmy.fr"
+        , port_ = Nothing
+        , path = "/packages/lue-bird/elm-state-interface/latest/"
+        , query = Nothing
+        , fragment = Nothing
+        }
+
+
 
 -- Ui
 
 
-uiFrame : List (BrowserApp.Dom.Modifier state) -> List (BrowserApp.DomNode state) -> BrowserApp.DomNode state
+uiFrame : List (Web.Dom.Modifier state) -> List (Web.DomNode state) -> Web.DomNode state
 uiFrame modifiers subs =
-    BrowserApp.Dom.element "div"
-        ([ BrowserApp.Dom.style "font-size" "2em"
-         , BrowserApp.Dom.style "padding-top" "50px"
-         , BrowserApp.Dom.style "padding-left" "80px"
-         , BrowserApp.Dom.style "padding-right" "80px"
-         , BrowserApp.Dom.style "height" "100vh"
-         , BrowserApp.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
-         , BrowserApp.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
+    Web.Dom.element "div"
+        ([ Web.Dom.style "font-size" "2em"
+         , Web.Dom.style "padding-left" "80px"
+         , Web.Dom.style "padding-right" "80px"
+         , Web.Dom.style "height" "100vh"
+         , Web.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
+         , Web.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
          ]
             ++ modifiers
         )
         subs
 
 
-buttonUi : List (BrowserApp.Dom.Modifier ()) -> List (BrowserApp.DomNode ()) -> BrowserApp.DomNode ()
+narrativeUiFrame : List (Web.Dom.Modifier state_) -> List (Web.DomNode state_) -> Web.DomNode state_
+narrativeUiFrame modifiers subs =
+    uiFrame
+        modifiers
+        [ Web.Dom.element "div"
+            [ Web.Dom.style "max-width" "870px"
+            , Web.Dom.style "padding-top" "80px"
+            ]
+            subs
+        ]
+
+
+buttonUi : List (Web.Dom.Modifier ()) -> List (Web.DomNode ()) -> Web.DomNode ()
 buttonUi modifiers subs =
-    BrowserApp.Dom.element "button"
-        ([ BrowserApp.Dom.listenTo "click"
-            |> BrowserApp.Dom.modifierMap (\_ -> ())
-         , BrowserApp.Dom.style "background-color" "#000000"
-         , BrowserApp.Dom.style "border" "3px solid"
-         , BrowserApp.Dom.style "border-radius" "50px"
-         , BrowserApp.Dom.style "color" "#FFFFFF"
-         , BrowserApp.Dom.style "padding" "5px 15px"
-         , BrowserApp.Dom.style "text-align" "center"
-         , BrowserApp.Dom.style "display" "inline-block"
-         , BrowserApp.Dom.style "font-size" "1em"
-         , BrowserApp.Dom.style "font-family" "inherit"
+    Web.Dom.element "button"
+        ([ Web.Dom.listenTo "click"
+            |> Web.Dom.modifierMap (\_ -> ())
+         , Web.Dom.style "background-color" "#000000"
+         , Web.Dom.style "border" "3px solid"
+         , Web.Dom.style "border-radius" "50px"
+         , Web.Dom.style "color" "#FFFFFF"
+         , Web.Dom.style "padding" "5px 15px"
+         , Web.Dom.style "margin" "7px 0px"
+         , Web.Dom.style "text-align" "center"
+         , Web.Dom.style "display" "inline-block"
+         , Web.Dom.style "font-size" "1em"
+         , Web.Dom.style "font-family" "inherit"
          ]
             ++ modifiers
         )
         subs
 
 
-textInputUi : BrowserApp.DomNode (Result Json.Decode.Error String)
+textInputUi : Web.DomNode (Result Json.Decode.Error String)
 textInputUi =
-    BrowserApp.Dom.element "input"
-        [ BrowserApp.Dom.attribute "type" "text"
-        , BrowserApp.Dom.listenTo "input"
-            |> BrowserApp.Dom.modifierMap
+    Web.Dom.element "input"
+        [ Web.Dom.attribute "type" "text"
+        , Web.Dom.listenTo "input"
+            |> Web.Dom.modifierMap
                 (Json.Decode.decodeValue
                     (Json.Decode.field "target" (Json.Decode.field "value" Json.Decode.string))
                 )
-        , BrowserApp.Dom.style "font-size" "1em"
-        , BrowserApp.Dom.style "background-color" "transparent"
-        , BrowserApp.Dom.style "border-bottom" "3px solid white"
-        , BrowserApp.Dom.style "border-top" "none"
-        , BrowserApp.Dom.style "border-left" "none"
-        , BrowserApp.Dom.style "border-right" "none"
-        , BrowserApp.Dom.style "color" "inherit"
-        , BrowserApp.Dom.style "font-family" "inherit"
+        , Web.Dom.style "font-size" "1em"
+        , Web.Dom.style "background-color" "transparent"
+        , Web.Dom.style "border-bottom" "3px solid white"
+        , Web.Dom.style "border-top" "none"
+        , Web.Dom.style "border-left" "none"
+        , Web.Dom.style "border-right" "none"
+        , Web.Dom.style "color" "inherit"
+        , Web.Dom.style "font-family" "inherit"
         ]
         []
 
 
-clockUi : { posix : Time.Posix, timezone : Time.Zone } -> BrowserApp.DomNode state_
+clockUi : { posix : Time.Posix, timezone : Time.Zone } -> Web.DomNode state_
 clockUi state =
     let
         hour : Int
@@ -578,16 +808,16 @@ clockUi state =
         second =
             Time.toSecond state.timezone state.posix
     in
-    BrowserApp.Svg.element "svg"
-        [ BrowserApp.Dom.attribute "viewBox" "0 0 60 60"
-        , BrowserApp.Dom.attribute "width" "60"
-        , BrowserApp.Dom.attribute "height" "60"
+    Web.Svg.element "svg"
+        [ Web.Dom.attribute "viewBox" "0 0 60 60"
+        , Web.Dom.attribute "width" "60"
+        , Web.Dom.attribute "height" "60"
         ]
-        [ BrowserApp.Svg.element "circle"
-            [ BrowserApp.Dom.attribute "cx" "30"
-            , BrowserApp.Dom.attribute "cy" "30"
-            , BrowserApp.Dom.attribute "r" "30"
-            , BrowserApp.Dom.attribute "fill" (Color.rgba 1 1 1 0.15 |> Color.toCssString)
+        [ Web.Svg.element "circle"
+            [ Web.Dom.attribute "cx" "30"
+            , Web.Dom.attribute "cy" "30"
+            , Web.Dom.attribute "r" "30"
+            , Web.Dom.attribute "fill" (Color.rgba 1 1 1 0.15 |> Color.toCssString)
             ]
             []
         , clockHandUi { width = 4, length = 15, turns = (hour |> Basics.toFloat) / 12 }
@@ -596,23 +826,23 @@ clockUi state =
         ]
 
 
-clockHandUi : { width : Int, length : Float, turns : Float } -> BrowserApp.DomNode state_
+clockHandUi : { width : Int, length : Float, turns : Float } -> Web.DomNode state_
 clockHandUi config =
     let
         clockTurns : Float
         clockTurns =
             config.turns - 0.25
     in
-    BrowserApp.Svg.element "line"
-        [ BrowserApp.Dom.attribute "x1" "30"
-        , BrowserApp.Dom.attribute "y1" "30"
-        , BrowserApp.Dom.attribute "x2"
+    Web.Svg.element "line"
+        [ Web.Dom.attribute "x1" "30"
+        , Web.Dom.attribute "y1" "30"
+        , Web.Dom.attribute "x2"
             (30 + config.length * cos (Basics.turns clockTurns) |> String.fromFloat)
-        , BrowserApp.Dom.attribute "y2"
+        , Web.Dom.attribute "y2"
             (30 + config.length * sin (Basics.turns clockTurns) |> String.fromFloat)
-        , BrowserApp.Dom.attribute "stroke" "white"
-        , BrowserApp.Dom.attribute "stroke-width" (String.fromInt config.width)
-        , BrowserApp.Dom.attribute "stroke-linecap" "round"
+        , Web.Dom.attribute "stroke" "white"
+        , Web.Dom.attribute "stroke-width" (String.fromInt config.width)
+        , Web.Dom.attribute "stroke-linecap" "round"
         ]
         []
 
