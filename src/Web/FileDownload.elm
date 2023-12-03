@@ -33,5 +33,61 @@ Replacement for [`File.Download.bytes`](https://dark.elm.dmy.fr/packages/elm/fil
 -}
 bits : { name : String, mimeType : String, content : List Bit } -> Web.Interface state_
 bits fileDownloadConfig =
-    Web.FileDownloadBits fileDownloadConfig
+    Web.FileDownloadUnsignedInt8List
+        { name = fileDownloadConfig.name
+        , mimeType = fileDownloadConfig.mimeType
+        , content =
+            fileDownloadConfig.content
+                |> listToChunksOf8
+                |> List.map (\bits8 -> bits8 |> bitsToUnsignedInt)
+        }
         |> Rope.singleton
+
+
+listToChunksOf8 : List element -> List (List element)
+listToChunksOf8 =
+    \list ->
+        let
+            chunked : { remainderLength : Int, fullChunks : List (List element), remainder : List element }
+            chunked =
+                list
+                    |> List.foldl
+                        (\bit soFar ->
+                            if soFar.remainderLength >= 8 then
+                                { remainder = []
+                                , remainderLength = 0
+                                , fullChunks =
+                                    soFar.fullChunks
+                                        |> (::) (soFar.remainder |> List.reverse)
+                                }
+
+                            else
+                                { remainder = soFar.remainder |> (::) bit
+                                , remainderLength = soFar.remainderLength + 1
+                                , fullChunks = soFar.fullChunks
+                                }
+                        )
+                        { remainderLength = 0, remainder = [], fullChunks = [] }
+        in
+        (chunked.remainder :: chunked.fullChunks)
+            |> List.reverse
+
+
+bitsToUnsignedInt : List Bit -> Int
+bitsToUnsignedInt =
+    \bitList ->
+        bitList
+            |> List.foldr
+                (\bit soFar ->
+                    { power = soFar.power + 1
+                    , total =
+                        case bit of
+                            Bit.O ->
+                                soFar.total
+
+                            Bit.I ->
+                                soFar.total + (2 ^ soFar.power)
+                    }
+                )
+                { power = 0, total = 0 }
+            |> .total

@@ -54,10 +54,10 @@ Types used by [`Web.Http`](Web-Http)
 
 -}
 
+import AndOr
 import AppUrl exposing (AppUrl)
 import AppUrl.Local
 import Array exposing (Array)
-import Bit exposing (Bit)
 import Dict exposing (Dict)
 import Emptiable exposing (Emptiable)
 import Json.Decode
@@ -67,6 +67,7 @@ import Keys exposing (Key, Keys)
 import KeysSet exposing (KeysSet)
 import Map exposing (Mapping)
 import N exposing (N1)
+import Or
 import Order exposing (Ordering)
 import Possibly exposing (Possibly)
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
@@ -158,7 +159,7 @@ type InterfaceSingle state
     | NavigationGo Int
     | NavigationLoad Url
     | NavigationReload
-    | FileDownloadBits { mimeType : String, name : String, content : List Bit }
+    | FileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -276,7 +277,7 @@ type InterfaceSingleId
     | IdNavigationGo Int
     | IdNavigationLoad Url
     | IdNavigationReload
-    | IdFileDownloadBits { mimeType : String, name : String, content : List Bit }
+    | IdFileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -461,8 +462,8 @@ interfaceSingleMap stateChange =
             NavigationReload ->
                 NavigationReload
 
-            FileDownloadBits config ->
-                FileDownloadBits config
+            FileDownloadUnsignedInt8List config ->
+                FileDownloadUnsignedInt8List config
 
 
 httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
@@ -704,8 +705,8 @@ interfaceSingleToId =
             NavigationReload ->
                 IdNavigationReload
 
-            FileDownloadBits config ->
-                IdFileDownloadBits config
+            FileDownloadUnsignedInt8List config ->
+                IdFileDownloadUnsignedInt8List config
 
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
@@ -807,25 +808,14 @@ interfaceSingleIdToComparable =
             IdNavigationReload ->
                 ComparableString "IdNavigationReload"
 
-            IdFileDownloadBits config ->
+            IdFileDownloadUnsignedInt8List config ->
                 ComparableList
                     [ ComparableString config.name
                     , ComparableString config.mimeType
                     , config.content
-                        |> List.map (\bit -> bit |> bitToString |> ComparableString)
+                        |> List.map (\bit -> bit |> String.fromInt |> ComparableString)
                         |> ComparableList
                     ]
-
-
-bitToString : Bit -> String
-bitToString =
-    \bit ->
-        case bit of
-            Bit.O ->
-                "0"
-
-            Bit.I ->
-                "1"
 
 
 httpRequestIdToComparable : HttpRequestId -> Comparable
@@ -901,6 +891,24 @@ httpExpectIdToComparable =
                 "IdHttpExpectWhatever" |> ComparableString
 
 
+interfaceDiffs :
+    { old : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
+    , updated : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
+    }
+    -> List InterfaceDiff
+interfaceDiffs =
+    \interfaces ->
+        ( { key = interfaceKeys, set = interfaces.old }
+        , { key = interfaceKeys, set = interfaces.updated }
+        )
+            |> KeysSet.fold2From
+                []
+                (\interfaceAndOr soFar ->
+                    interfaceOldAndOrUpdatedDiffs interfaceAndOr
+                        ++ soFar
+                )
+
+
 domNodeToId : DomNode state_ -> DomNodeId
 domNodeToId domNode =
     case domNode of
@@ -911,168 +919,149 @@ domNodeToId domNode =
             DomElementId (element |> domElementToId)
 
 
-interfaceDiffToCmds :
-    { old : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
-    , updated : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
-    }
-    -> List InterfaceDiff
-interfaceDiffToCmds =
-    \interfaces ->
-        [ interfaces.old
-            |> KeysSet.except interfaceKeys
-                (interfaces.updated |> KeysSet.toKeys interfaceKeys)
-            |> KeysSet.toList interfaceKeys
-            |> List.filterMap
-                (\interface ->
-                    case interface of
-                        TimePosixRequest _ ->
-                            Nothing
+interfaceOldAndOrUpdatedDiffs : AndOr.AndOr (InterfaceSingle state) (InterfaceSingle state) -> List InterfaceDiff
+interfaceOldAndOrUpdatedDiffs =
+    \interfaceAndOr ->
+        case interfaceAndOr of
+            AndOr.Both ( DomNodeRender domElementPreviouslyRendered, DomNodeRender domElementToRender ) ->
+                ( domElementPreviouslyRendered, domElementToRender )
+                    |> domNodeDiff []
+                    |> List.map
+                        (\subDiff ->
+                            ReplaceDomNode
+                                { path = subDiff.path
+                                , domNode = subDiff.replacementDomNode |> domNodeToId
+                                }
+                        )
 
-                        TimezoneOffsetRequest _ ->
-                            Nothing
+            AndOr.Both _ ->
+                []
 
-                        TimezoneNameRequest _ ->
-                            Nothing
+            AndOr.Only (Or.First onlyOld) ->
+                case onlyOld of
+                    TimePosixRequest _ ->
+                        []
 
-                        TimePeriodicallyListen timePeriodicallyListen ->
-                            RemoveTimePeriodicallyListen
-                                { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-                                |> Just
+                    TimezoneOffsetRequest _ ->
+                        []
 
-                        RandomUnsignedIntsRequest _ ->
-                            Nothing
+                    TimezoneNameRequest _ ->
+                        []
 
-                        ConsoleLog _ ->
-                            Nothing
+                    TimePeriodicallyListen timePeriodicallyListen ->
+                        RemoveTimePeriodicallyListen
+                            { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
+                            |> List.singleton
 
-                        HttpRequest request ->
-                            RemoveHttpRequest (request |> httpRequestToId) |> Just
+                    RandomUnsignedIntsRequest _ ->
+                        []
 
-                        DomNodeRender _ ->
-                            RemoveDom |> Just
+                    ConsoleLog _ ->
+                        []
 
-                        WindowSizeRequest _ ->
-                            Nothing
+                    HttpRequest request ->
+                        RemoveHttpRequest (request |> httpRequestToId) |> List.singleton
 
-                        WindowEventListen listen ->
-                            RemoveWindowEventListen listen.eventName |> Just
+                    DomNodeRender _ ->
+                        RemoveDom |> List.singleton
 
-                        WindowAnimationFrameListen _ ->
-                            RemoveWindowAnimationFrameListen |> Just
+                    WindowSizeRequest _ ->
+                        []
 
-                        NavigationUrlRequest _ ->
-                            Nothing
+                    WindowEventListen listen ->
+                        RemoveWindowEventListen listen.eventName |> List.singleton
 
-                        DocumentEventListen listen ->
-                            RemoveDocumentEventListen listen.eventName |> Just
+                    WindowAnimationFrameListen _ ->
+                        RemoveWindowAnimationFrameListen |> List.singleton
 
-                        NavigationReplaceUrl _ ->
-                            Nothing
+                    NavigationUrlRequest _ ->
+                        []
 
-                        NavigationPushUrl _ ->
-                            Nothing
+                    DocumentEventListen listen ->
+                        RemoveDocumentEventListen listen.eventName |> List.singleton
 
-                        NavigationGo _ ->
-                            Nothing
+                    NavigationReplaceUrl _ ->
+                        []
 
-                        NavigationLoad _ ->
-                            Nothing
+                    NavigationPushUrl _ ->
+                        []
 
-                        NavigationReload ->
-                            Nothing
+                    NavigationGo _ ->
+                        []
 
-                        FileDownloadBits _ ->
-                            Nothing
-                )
-        , interfaces.updated
-            |> KeysSet.except interfaceKeys
-                (interfaces.old |> KeysSet.toKeys interfaceKeys)
-            |> KeysSet.toList interfaceKeys
-            |> List.concatMap
-                (\interface ->
-                    case interface of
-                        TimePosixRequest _ ->
-                            AddTimePosixRequest |> List.singleton
+                    NavigationLoad _ ->
+                        []
 
-                        TimezoneOffsetRequest _ ->
-                            AddTimezoneOffsetRequest |> List.singleton
+                    NavigationReload ->
+                        []
 
-                        TimezoneNameRequest _ ->
-                            AddTimezoneNameRequest |> List.singleton
+                    FileDownloadUnsignedInt8List _ ->
+                        []
 
-                        TimePeriodicallyListen timePeriodicallyListen ->
-                            AddTimePeriodicallyListen
-                                { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-                                |> List.singleton
+            AndOr.Only (Or.Second onlyUpdated) ->
+                case onlyUpdated of
+                    TimePosixRequest _ ->
+                        AddTimePosixRequest |> List.singleton
 
-                        RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-                            AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> List.singleton
+                    TimezoneOffsetRequest _ ->
+                        AddTimezoneOffsetRequest |> List.singleton
 
-                        ConsoleLog string ->
-                            AddConsoleLog string |> List.singleton
+                    TimezoneNameRequest _ ->
+                        AddTimezoneNameRequest |> List.singleton
 
-                        DomNodeRender domElementToRender ->
-                            case interfaces.old |> KeysSet.element interfaceKeys IdDomNodeRender of
-                                Emptiable.Filled (DomNodeRender domElementPreviouslyRendered) ->
-                                    ( domElementPreviouslyRendered, domElementToRender )
-                                        |> domNodeDiff []
-                                        |> List.map
-                                            (\subDiff ->
-                                                ReplaceDomNode
-                                                    { path = subDiff.path
-                                                    , domNode = subDiff.replacementDomNode |> domNodeToId
-                                                    }
-                                            )
+                    TimePeriodicallyListen timePeriodicallyListen ->
+                        AddTimePeriodicallyListen
+                            { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
+                            |> List.singleton
 
-                                Emptiable.Filled _ ->
-                                    -- bug
-                                    []
+                    RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
+                        AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> List.singleton
 
-                                Emptiable.Empty _ ->
-                                    [ ReplaceDomNode
-                                        { path = []
-                                        , domNode = domElementToRender |> domNodeToId
-                                        }
-                                    ]
+                    ConsoleLog string ->
+                        AddConsoleLog string |> List.singleton
 
-                        HttpRequest httpRequest ->
-                            AddHttpRequest (httpRequest |> httpRequestToId) |> List.singleton
+                    DomNodeRender domElementToRender ->
+                        [ ReplaceDomNode
+                            { path = []
+                            , domNode = domElementToRender |> domNodeToId
+                            }
+                        ]
 
-                        WindowSizeRequest _ ->
-                            AddWindowSizeRequest |> List.singleton
+                    HttpRequest httpRequest ->
+                        AddHttpRequest (httpRequest |> httpRequestToId) |> List.singleton
 
-                        WindowEventListen listen ->
-                            AddWindowEventListen listen.eventName |> List.singleton
+                    WindowSizeRequest _ ->
+                        AddWindowSizeRequest |> List.singleton
 
-                        WindowAnimationFrameListen _ ->
-                            AddWindowAnimationFrameListen |> List.singleton
+                    WindowEventListen listen ->
+                        AddWindowEventListen listen.eventName |> List.singleton
 
-                        NavigationUrlRequest _ ->
-                            AddNavigationUrlRequest |> List.singleton
+                    WindowAnimationFrameListen _ ->
+                        AddWindowAnimationFrameListen |> List.singleton
 
-                        DocumentEventListen listen ->
-                            AddDocumentEventListen listen.eventName |> List.singleton
+                    NavigationUrlRequest _ ->
+                        AddNavigationUrlRequest |> List.singleton
 
-                        NavigationReplaceUrl url ->
-                            AddNavigationReplaceUrl url |> List.singleton
+                    DocumentEventListen listen ->
+                        AddDocumentEventListen listen.eventName |> List.singleton
 
-                        NavigationPushUrl url ->
-                            AddNavigationPushUrl url |> List.singleton
+                    NavigationReplaceUrl url ->
+                        AddNavigationReplaceUrl url |> List.singleton
 
-                        NavigationGo urlSteps ->
-                            AddNavigationGo urlSteps |> List.singleton
+                    NavigationPushUrl url ->
+                        AddNavigationPushUrl url |> List.singleton
 
-                        NavigationLoad url ->
-                            url |> AddNavigationLoad |> List.singleton
+                    NavigationGo urlSteps ->
+                        AddNavigationGo urlSteps |> List.singleton
 
-                        NavigationReload ->
-                            AddNavigationReload |> List.singleton
+                    NavigationLoad url ->
+                        url |> AddNavigationLoad |> List.singleton
 
-                        FileDownloadBits config ->
-                            AddFileDownloadBits config |> List.singleton
-                )
-        ]
-            |> List.concat
+                    NavigationReload ->
+                        AddNavigationReload |> List.singleton
+
+                    FileDownloadUnsignedInt8List config ->
+                        AddFileDownloadUnsignedInt8List config |> List.singleton
 
 
 domNodeIdToJson : DomNodeId -> Json.Encode.Value
@@ -1176,68 +1165,17 @@ interfaceDiffToJson =
                 AddNavigationReload ->
                     ( "addNavigationReload", Json.Encode.null )
 
-                AddFileDownloadBits config ->
-                    ( "addFileDownloadBits"
+                AddFileDownloadUnsignedInt8List config ->
+                    ( "addFileDownloadUnsignedInt8List"
                     , Json.Encode.object
                         [ ( "name", config.name |> Json.Encode.string )
                         , ( "mimeType", config.mimeType |> Json.Encode.string )
                         , ( "content"
-                          , config.content
-                                |> listToChunksOf8
-                                |> Json.Encode.list (\bits8 -> bits8 |> bitsToUnsignedInt |> Json.Encode.int)
+                          , config.content |> Json.Encode.list Json.Encode.int
                           )
                         ]
                     )
             ]
-
-
-listToChunksOf8 : List element -> List (List element)
-listToChunksOf8 =
-    \list ->
-        let
-            chunked : { remainderLength : Int, fullChunks : List (List element), remainder : List element }
-            chunked =
-                list
-                    |> List.foldl
-                        (\bit soFar ->
-                            if soFar.remainderLength >= 8 then
-                                { remainder = []
-                                , remainderLength = 0
-                                , fullChunks =
-                                    soFar.fullChunks
-                                        |> (::) (soFar.remainder |> List.reverse)
-                                }
-
-                            else
-                                { remainder = soFar.remainder |> (::) bit
-                                , remainderLength = soFar.remainderLength + 1
-                                , fullChunks = soFar.fullChunks
-                                }
-                        )
-                        { remainderLength = 0, remainder = [], fullChunks = [] }
-        in
-        (chunked.remainder :: chunked.fullChunks)
-            |> List.reverse
-
-
-bitsToUnsignedInt : List Bit -> Int
-bitsToUnsignedInt =
-    \bits ->
-        bits
-            |> List.foldr
-                (\bit soFar ->
-                    { power = soFar.power + 1
-                    , total =
-                        case bit of
-                            Bit.O ->
-                                soFar.total
-
-                            Bit.I ->
-                                soFar.total + (2 ^ soFar.power)
-                    }
-                )
-                { power = 0, total = 0 }
-            |> .total
 
 
 httpRequestIdToJson : HttpRequestId -> Json.Encode.Value
@@ -1331,7 +1269,7 @@ programInit appConfig =
         , appState = appConfig.initialState
         }
     , { old = Emptiable.empty, updated = initialInterface }
-        |> interfaceDiffToCmds
+        |> interfaceDiffs
         |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
         |> Cmd.batch
         |> Cmd.map never
@@ -1472,6 +1410,17 @@ interfaceDiffJsonDecoder =
             )
         , Json.Decode.map (\() -> AddNavigationReload)
             (Json.Decode.field "addNavigationReload" (Json.Decode.null ()))
+        , Json.Decode.map AddFileDownloadUnsignedInt8List
+            (Json.Decode.field "addFileDownloadUnsignedInt8List"
+                (Json.Decode.succeed
+                    (\name mimeType content ->
+                        { name = name, mimeType = mimeType, content = content }
+                    )
+                    |> Json.Decode.Local.andMap (Json.Decode.field "name" Json.Decode.string)
+                    |> Json.Decode.Local.andMap (Json.Decode.field "mimeType" Json.Decode.string)
+                    |> Json.Decode.Local.andMap (Json.Decode.field "content" (Json.Decode.list Json.Decode.int))
+                )
+            )
         ]
 
 
@@ -1650,7 +1599,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
                                     Just (DomElement foundDomElement) ->
                                         case foundDomElement.eventListens |> Dict.get specificEvent.name of
                                             Nothing ->
-                                                Json.Decode.fail "received event for element without listen"
+                                                Json.Decode.fail ("received event for element without listen " ++ Debug.toString foundDomElement)
 
                                             Just eventListen ->
                                                 eventListen specificEvent.event |> Json.Decode.succeed
@@ -1745,7 +1694,7 @@ eventDataAndConstructStateJsonDecoder interfaceDiff interface =
         NavigationReload ->
             Nothing
 
-        FileDownloadBits _ ->
+        FileDownloadUnsignedInt8List _ ->
             Nothing
 
 
@@ -1944,7 +1893,7 @@ programUpdate appConfig =
                     in
                     ( State { interface = updatedInterface, appState = updatedAppState }
                     , { old = oldState.interface, updated = updatedInterface }
-                        |> interfaceDiffToCmds
+                        |> interfaceDiffs
                         |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
                         |> Cmd.batch
                         |> Cmd.map never
@@ -2067,7 +2016,7 @@ type InterfaceDiff
     | AddNavigationGo Int
     | AddNavigationLoad Url
     | AddNavigationReload
-    | AddFileDownloadBits { mimeType : String, name : String, content : List Bit }
+    | AddFileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
