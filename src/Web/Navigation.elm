@@ -93,7 +93,15 @@ This always results in a page load, even if the provided URL is the same as the 
 
     gotoElmWebsite : Web.Interface state_
     gotoElmWebsite =
-        Web.Navigation.load "https://elm-lang.org"
+        Web.Navigation.load
+            -- https://elm-lang.org/
+            { protocol = Url.Https
+            , host = "elm-lang.org"
+            , port_ = Nothing
+            , path = "/"
+            , query = Nothing
+            , fragment = Nothing
+            }
 
 Replacement for [`Browser.Navigation.load`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#load)
 
