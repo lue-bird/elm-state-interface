@@ -1,22 +1,20 @@
 {
     "type": "module",
-    "name": "elm-state-interface",
-    "version": "1.0.0",
-    "description": "TEA but simpler, safer and more declarative",
+    "name": "elm-state-interface-example",
     "main": "index.js",
     "keywords": [
         "elm"
     ],
-    "scripts": {
-        "start": "elm-watch hot"
-    },
     "dependencies": {
+        "@lue-bird/elm-state-interface": "^1.0.2",
         "elm-codegen": "^0.3.0",
         "elm-optimize-level-2": "^0.3.4",
         "elm-tooling": "1.12.0",
         "elm-watch": "^1.2.0-beta.4",
         "esbuild": "0.15.18",
         "run-pty": "4.0.3",
-        "uglify-js": "3.17.4"
+        "uglify-js": "3.17.4",
+        "vite": "^4.4.9",
+        "vite-plugin-elm": "^2.8.0"
     }
 }
