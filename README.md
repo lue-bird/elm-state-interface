@@ -54,7 +54,7 @@ programConfig =
                         , queryParameters = Dict.singleton "counter" [ counter |> String.fromInt ]
                         , fragment = Nothing
                         }
-                    , Web.Navigation.byUserListen |> Web.interfaceMap UserWentToUrl
+                    , Web.Navigation.movementListen |> Web.interfaceMap UserWentToUrl
                     ]
                         |> Web.interfaceBatch
                         |> Web.interfaceMap
@@ -155,7 +155,7 @@ So the full solution to always get the current window size is
 
 Why can't we do the same in the counter + url example above?
 ```elm
-[ Navigation.urlRequest, Web.Navigation.byUserListen ]
+[ Navigation.urlRequest, Web.Navigation.movementListen ]
     |> Web.interfaceBatch
     |> Web.interfaceMap UserWentToUrl
 ```

@@ -1,13 +1,15 @@
 module Web.Navigation exposing
-    ( urlRequest, byUserListen
-    , forward, back, pushUrl, replaceUrl
+    ( urlRequest
+    , pushUrl, replaceUrl
+    , moveForward, moveBack, movementListen
     , load, reload
     )
 
 {-| Helpers for `history` interaction as part of an [`Interface`](Web#Interface)
 
-@docs urlRequest, byUserListen
-@docs forward, back, pushUrl, replaceUrl
+@docs urlRequest
+@docs pushUrl, replaceUrl
+@docs moveForward, moveBack, movementListen
 @docs load, reload
 
 -}
@@ -72,8 +74,8 @@ Note: You only manage the browser history that you created.
 Replacement for [`Browser.Navigation.forward`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#forward)
 
 -}
-forward : Int -> Web.Interface state_
-forward urlSteps =
+moveForward : Int -> Web.Interface state_
+moveForward urlSteps =
     Web.NavigationGo urlSteps
         |> Web.InterfaceWithoutReceive
         |> Rope.singleton
@@ -86,8 +88,8 @@ Note: You only manage the browser history that you created.
 Replacement for [`Browser.Navigation.back`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#back)
 
 -}
-back : Int -> Web.Interface state_
-back urlSteps =
+moveBack : Int -> Web.Interface state_
+moveBack urlSteps =
     Web.NavigationGo urlSteps
         |> Web.InterfaceWithoutReceive
         |> Rope.singleton
@@ -133,17 +135,19 @@ reload =
         |> Rope.singleton
 
 
-{-| If you use [`pushUrl`](#pushUrl) to update the URL,
-when the user clicks ← or → buttons, the URL will change but your UI will not.
+{-| If you used [`pushUrl`](#pushUrl) to update the URL with new history entries,
+when the user clicks ← or → buttons (or you call [`moveForward`](#moveForward) or [`moveBack`](#moveBack) yourself),
+the URL will change but your UI will not.
 
-Use [`byUserListen`](#byUserListen) to detect those URL changes and make ui changes as needed.
+Use [`movementListen`](#movementListen) to detect those URL changes and make ui changes as needed.
 
-Note: When the app itself initiates a url change, like with [`pushUrl`](#pushUrl) or [`replaceUrl`](#replaceUrl)
-, no such event is triggered
+When the app itself initiates a url change (not just movement) with [`pushUrl`](#pushUrl) or [`replaceUrl`](#replaceUrl), no such event is triggered.
+
+Note: This event is (confusingly) called ["popstate"](https://developer.mozilla.org/en-US/docs/Web/API/Window/popstate_event) in js
 
 -}
-byUserListen : Web.Interface AppUrl
-byUserListen =
+movementListen : Web.Interface AppUrl
+movementListen =
     Web.WindowEventListen
         { eventName = "popstate"
         , on =
