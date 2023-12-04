@@ -52,7 +52,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addTimePeriodicallyListen": (config, sendToElm) => {
             addTimePeriodicallyListen(config, sendToElm)
         },
-        "addRandomUnsignedIntsRequest": (config, sendToElm) => {
+        "addRandomUnsignedInt32sRequest": (config, sendToElm) => {
             sendToElm(crypto.getRandomValues(new Uint32Array(config)))
         },
         "replaceDomNode": (config, sendToElm) => {

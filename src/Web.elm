@@ -167,7 +167,7 @@ type InterfaceSingleWithReceive state
     | TimezoneOffsetRequest (Int -> state)
     | TimezoneNameRequest (Time.ZoneName -> state)
     | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> state }
-    | RandomUnsignedIntsRequest { count : Int, on : List Int -> state }
+    | RandomUnsignedInt32sRequest { count : Int, on : List Int -> state }
     | DocumentEventListen { eventName : String, on : Json.Decode.Decoder state }
     | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
@@ -285,7 +285,7 @@ type InterfaceSingleWithReceiveId
     | IdTimezoneOffsetRequest
     | IdTimezoneNameRequest
     | IdTimePeriodicallyListen { milliSeconds : Int }
-    | IdRandomUnsignedIntsRequest Int
+    | IdRandomUnsignedInt32sRequest Int
     | IdDomNodeRender
     | IdHttpRequest HttpRequestId
     | IdWindowSizeRequest
@@ -440,11 +440,11 @@ interfaceWithReceiveMap stateChange =
                 }
                     |> TimePeriodicallyListen
 
-            RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-                { count = randomUnsignedIntsRequest.count
-                , on = \ints -> randomUnsignedIntsRequest.on ints |> stateChange
+            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
+                { count = randomUnsignedInt32sRequest.count
+                , on = \ints -> randomUnsignedInt32sRequest.on ints |> stateChange
                 }
-                    |> RandomUnsignedIntsRequest
+                    |> RandomUnsignedInt32sRequest
 
             DomNodeRender domElementToRender ->
                 domElementToRender |> domNodeMap stateChange |> DomNodeRender
@@ -681,8 +681,8 @@ interfaceWithReceiveToId =
                 IdTimePeriodicallyListen
                     { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
 
-            RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-                IdRandomUnsignedIntsRequest randomUnsignedIntsRequest.count
+            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
+                IdRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count
 
             DomNodeRender _ ->
                 IdDomNodeRender
@@ -747,9 +747,9 @@ idInterfaceWithoutReceiveToComparable =
                     , intervalDuration.milliSeconds |> intToComparable
                     ]
 
-            IdRandomUnsignedIntsRequest count ->
+            IdRandomUnsignedInt32sRequest count ->
                 ComparableList
-                    [ ComparableString "IdRandomUnsignedIntsRequest"
+                    [ ComparableString "IdRandomUnsignedInt32sRequest"
                     , count |> intToComparable
                     ]
 
@@ -984,7 +984,7 @@ interfaceOldAndOrUpdatedDiffs =
                                     { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
                                     |> List.singleton
 
-                            RandomUnsignedIntsRequest _ ->
+                            RandomUnsignedInt32sRequest _ ->
                                 []
 
                             HttpRequest request ->
@@ -1057,8 +1057,8 @@ interfaceOldAndOrUpdatedDiffs =
                                     { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
                                     |> InterfaceWithReceiveDiff
 
-                            RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-                                AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> InterfaceWithReceiveDiff
+                            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
+                                AddRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count |> InterfaceWithReceiveDiff
 
                             DomNodeRender domElementToRender ->
                                 ReplaceDomNode
@@ -1207,8 +1207,8 @@ interfaceWithReceiveDiffToJson =
                     , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
                     )
 
-                AddRandomUnsignedIntsRequest count ->
-                    ( "addRandomUnsignedIntsRequest", count |> Json.Encode.int )
+                AddRandomUnsignedInt32sRequest count ->
+                    ( "addRandomUnsignedInt32sRequest", count |> Json.Encode.int )
 
                 ReplaceDomNode domElementToAdd ->
                     ( "replaceDomNode"
@@ -1404,8 +1404,8 @@ interfaceDiffWithReceiveJsonDecoder =
                     (Json.Decode.field "milliSeconds" Json.Decode.int)
                 )
             )
-        , Json.Decode.map AddRandomUnsignedIntsRequest
-            (Json.Decode.field "addRandomUnsignedIntsRequest" Json.Decode.int)
+        , Json.Decode.map AddRandomUnsignedInt32sRequest
+            (Json.Decode.field "addRandomUnsignedInt32sRequest" Json.Decode.int)
         , Json.Decode.map ReplaceDomNode
             (Json.Decode.field "replaceDomNode"
                 (Json.Decode.succeed (\path domNode -> { path = path, domNode = domNode })
@@ -1565,11 +1565,11 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                 _ ->
                     Nothing
 
-        RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
+        RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
             case interfaceAddDiff of
-                AddRandomUnsignedIntsRequest diffCount ->
-                    if randomUnsignedIntsRequest.count == diffCount then
-                        Json.Decode.succeed randomUnsignedIntsRequest.on
+                AddRandomUnsignedInt32sRequest diffCount ->
+                    if randomUnsignedInt32sRequest.count == diffCount then
+                        Json.Decode.succeed randomUnsignedInt32sRequest.on
                             |> Json.Decode.Local.andMap
                                 (Json.Decode.list Json.Decode.int)
                             |> Just
@@ -2045,7 +2045,7 @@ type InterfaceWithReceiveDiff
     | AddTimezoneOffsetRequest
     | AddTimezoneNameRequest
     | AddTimePeriodicallyListen { milliSeconds : Int }
-    | AddRandomUnsignedIntsRequest Int
+    | AddRandomUnsignedInt32sRequest Int
     | AddDocumentEventListen String
     | ReplaceDomNode { path : List Int, domNode : DomNodeId }
     | AddHttpRequest HttpRequestId

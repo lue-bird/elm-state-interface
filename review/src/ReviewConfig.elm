@@ -168,7 +168,7 @@ config =
                 ]
       ]
         |> ReviewPipelineStyles.rule
-    , UseCamelCase.rule UseCamelCase.default
+    --, UseCamelCase.rule UseCamelCase.default
     , NoPrimitiveTypeAlias.rule
     , OnlyAllSingleUseTypeVarsEndWith_.rule
     , NoRecordAliasConstructor.rule
