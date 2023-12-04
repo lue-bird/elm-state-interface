@@ -36,7 +36,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addNavigationPushUrl": (config) => { pushUrl(config) },
         "addNavigationLoad": (config) => { load(config) },
         "addNavigationReload": (_config) => { reload() },
-        "addFileDownloadBytes": (config) => { fileDownloadBytes(config) }
+        "addFileDownloadBytes": (config) => { fileDownloadBytes(config) },
+        "addClipboardReplaceBy": (config: string) => { navigator.clipboard.writeText(config) }
     }
     const interfaceWithSendToElmImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
         "addTimePosixRequest": (_config, sendToElm) => {
@@ -74,6 +75,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             sendToElm(window.location.href)
         },
         "addDocumentEventListen": documentEventListenAdd,
+        "addClipboardRequest": (_config, sendToElm) => {
+            navigator.clipboard.readText().then(sendToElm)
+        }
     }
 
 

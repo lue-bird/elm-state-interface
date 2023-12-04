@@ -158,6 +158,7 @@ type InterfaceSingleWithoutReceive
     | NavigationLoad Url
     | NavigationReload
     | FileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
+    | ClipboardReplaceBy String
 
 
 {-| An [`InterfaceSingle`](#InterfaceSingle) that will notify elm some time in the future.
@@ -175,6 +176,7 @@ type InterfaceSingleWithReceive state
     | WindowEventListen { eventName : String, on : Json.Decode.Decoder state }
     | WindowAnimationFrameListen (Time.Posix -> state)
     | NavigationUrlRequest (AppUrl -> state)
+    | ClipboardRequest (String -> state)
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -293,6 +295,7 @@ type InterfaceSingleWithReceiveId
     | IdWindowAnimationFrameListen
     | IdNavigationUrlRequest
     | IdDocumentEventListen String
+    | IdClipboardRequest
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -471,6 +474,9 @@ interfaceWithReceiveMap stateChange =
             DocumentEventListen listen ->
                 { eventName = listen.eventName, on = listen.on |> Json.Decode.map stateChange }
                     |> DocumentEventListen
+
+            ClipboardRequest toState ->
+                (\event -> toState event |> stateChange) |> ClipboardRequest
 
 
 httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
@@ -705,6 +711,9 @@ interfaceWithReceiveToId =
             DocumentEventListen listen ->
                 IdDocumentEventListen listen.eventName
 
+            ClipboardRequest _ ->
+                IdClipboardRequest
+
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
@@ -782,6 +791,9 @@ idInterfaceWithoutReceiveToComparable =
                     [ ComparableString "IdDocumentEventListen"
                     , ComparableString eventName
                     ]
+
+            IdClipboardRequest ->
+                ComparableString "IdClipboardRequest"
 
 
 httpRequestIdToComparable : HttpRequestId -> Comparable
@@ -908,11 +920,18 @@ interfaceWithoutReceiveToComparable =
 
             FileDownloadUnsignedInt8List config ->
                 ComparableList
-                    [ ComparableString config.name
+                    [ ComparableString "FileDownloadUnsignedInt8List"
+                    , ComparableString config.name
                     , ComparableString config.mimeType
                     , config.content
                         |> List.map (\bit -> bit |> String.fromInt |> ComparableString)
                         |> ComparableList
+                    ]
+
+            ClipboardReplaceBy replacement ->
+                ComparableList
+                    [ ComparableString "ClipboardReplaceBy"
+                    , ComparableString replacement
                     ]
 
 
@@ -1007,6 +1026,9 @@ interfaceOldAndOrUpdatedDiffs =
 
                             DocumentEventListen listen ->
                                 RemoveDocumentEventListen listen.eventName |> List.singleton
+
+                            ClipboardRequest _ ->
+                                []
                 )
                     |> List.map InterfaceWithoutReceiveDiff
 
@@ -1040,6 +1062,9 @@ interfaceOldAndOrUpdatedDiffs =
 
                             FileDownloadUnsignedInt8List config ->
                                 AddFileDownloadUnsignedInt8List config |> InterfaceWithoutReceiveDiff
+
+                            ClipboardReplaceBy replacement ->
+                                AddClipboardReplaceBy replacement |> InterfaceWithoutReceiveDiff
 
                     InterfaceWithReceive interfaceWithReceive ->
                         case interfaceWithReceive of
@@ -1084,6 +1109,9 @@ interfaceOldAndOrUpdatedDiffs =
 
                             DocumentEventListen listen ->
                                 AddDocumentEventListen listen.eventName |> InterfaceWithReceiveDiff
+
+                            ClipboardRequest _ ->
+                                AddClipboardRequest |> InterfaceWithReceiveDiff
                 )
                     |> List.singleton
 
@@ -1235,6 +1263,9 @@ interfaceWithReceiveDiffToJson =
 
                 AddDocumentEventListen eventName ->
                     ( "addDocumentEventListen", eventName |> Json.Encode.string )
+
+                AddClipboardRequest ->
+                    ( "addClipboardRequest", Json.Encode.null )
             ]
 
 
@@ -1276,6 +1307,11 @@ interfaceWithoutReceiveDiffToJson =
                           , config.content |> Json.Encode.list Json.Encode.int
                           )
                         ]
+                    )
+
+                AddClipboardReplaceBy replacement ->
+                    ( "addClipboardReplaceBy"
+                    , replacement |> Json.Encode.string
                     )
 
                 RemoveTimePeriodicallyListen intervalDuration ->
@@ -1691,6 +1727,14 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                 _ ->
                     Nothing
 
+        ClipboardRequest toState ->
+            case interfaceAddDiff of
+                AddClipboardRequest ->
+                    Json.Decode.map toState Json.Decode.string |> Just
+
+                _ ->
+                    Nothing
+
 
 domElementAtReversePath : List Int -> (DomNode state -> Maybe (DomNode state))
 domElementAtReversePath path domNode =
@@ -2030,6 +2074,7 @@ type InterfaceWithoutReceiveDiff
     | AddNavigationLoad Url
     | AddNavigationReload
     | AddFileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
+    | AddClipboardReplaceBy String
     | RemoveTimePeriodicallyListen { milliSeconds : Int }
     | RemoveHttpRequest HttpRequestId
     | RemoveDom
@@ -2053,6 +2098,7 @@ type InterfaceWithReceiveDiff
     | AddWindowEventListen String
     | AddWindowAnimationFrameListen
     | AddNavigationUrlRequest
+    | AddClipboardRequest
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
