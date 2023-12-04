@@ -159,7 +159,7 @@ startingRoomInterface =
                 , Web.Dom.element "li"
                     []
                     [ "\"How do I know your name " |> Web.Dom.text
-                    , textInputUi |> Web.Dom.map NameChanged
+                    , textInputUi state.name |> Web.Dom.map NameChanged
                     , "?\"" |> Web.Dom.text
                     ]
                 , Web.Dom.element "li"
@@ -837,10 +837,18 @@ buttonUi modifiers subs =
         subs
 
 
-textInputUi : Web.DomNode (Result Json.Decode.Error String)
-textInputUi =
+textInputUi : Maybe String -> Web.DomNode (Result Json.Decode.Error String)
+textInputUi currentInputValue =
     Web.Dom.element "input"
         [ Web.Dom.attribute "type" "text"
+        , Web.Dom.attribute "value"
+            (case currentInputValue of
+                Nothing ->
+                    ""
+
+                Just inputValue ->
+                    inputValue
+            )
         , Web.Dom.listenTo "input"
             |> Web.Dom.modifierMap
                 (Json.Decode.decodeValue
