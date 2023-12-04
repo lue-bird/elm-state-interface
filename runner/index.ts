@@ -1,16 +1,6 @@
 import * as fetchAdapter from "./http/fetch.js"
-/*
-import {
-    DomError,
-    DomElement,
-    Viewport,
-    SetViewportOptions,
-    SetViewportOfOptions,
-} from "./browser/index.js"
-import * as dom from "./browser/dom.js" */
 
 export * from "./http/index.js"
-export * from "./browser/index.js"
 
 export interface ElmPorts {
     toJs: {
