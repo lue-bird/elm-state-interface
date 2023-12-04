@@ -1898,7 +1898,7 @@ programUpdate appConfig =
                     , ("bug in lue-bird/elm-state-interface: interface diff failed to decode: "
                         ++ (jsonError |> Json.Decode.errorToString)
                       )
-                        |> AddConsoleLog
+                        |> AddConsoleError
                         |> InterfaceWithoutReceiveDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
@@ -1911,7 +1911,7 @@ programUpdate appConfig =
                     , ("bug in lue-bird/elm-state-interface: interface event data failed to decode: "
                         ++ (jsonError |> Json.Decode.errorToString)
                       )
-                        |> AddConsoleLog
+                        |> AddConsoleError
                         |> InterfaceWithoutReceiveDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
