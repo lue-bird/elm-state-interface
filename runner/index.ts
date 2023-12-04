@@ -179,12 +179,11 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => an
                 }
             )
         })
-        for (let subIndex = 0; subIndex <= node.element.subs.length - 1; subIndex++) {
-            const sub = node.element.subs[subIndex]
+        node.element.subs.forEach((sub: any, subIndex: number) => {
             createdDomElement.appendChild(
                 createDomNode([subIndex].concat(innerPath), sub, sendToElm)
             )
-        }
+        })
         return createdDomElement
     }
 }
