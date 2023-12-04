@@ -15,6 +15,10 @@
         "review:watch": "elm-review --watch --fix",
         "runner:compile": "tsc"
     },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/lue-bird/elm-state-interface.git"
+    },
     "keywords": [
         "elm",
         "elm-architecture",
