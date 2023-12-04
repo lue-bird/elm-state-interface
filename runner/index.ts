@@ -177,14 +177,17 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => an
         for (let [styleKey, styleValue] of Object.entries(node.element.styles)) {
             createdDomElement.style.setProperty(styleKey, styleValue as string)
         }
-        node.element.eventListens.forEach((eventListenName: string) => {
+        for (let [eventListenName, defaultActionHandling] of Object.entries(node.element.eventListens)) {
             createdDomElement.addEventListener(
                 eventListenName,
                 (triggeredEvent) => {
                     sendToElm({ innerPath: innerPath, name: eventListenName, event: triggeredEvent })
+                    if (defaultActionHandling === "DefaultActionPrevent") {
+                        triggeredEvent.preventDefault()
+                    }
                 }
             )
-        })
+        }
         node.element.subs.forEach((sub: any, subIndex: number) => {
             createdDomElement.appendChild(
                 createDomNode([subIndex].concat(innerPath), sub, sendToElm)

@@ -2,7 +2,9 @@ module Web.Dom exposing
     ( documentEventListen
     , text
     , element, elementNamespaced
-    , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style, listenTo, modifierMap, modifierBatch, modifierNone
+    , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style
+    , listenTo, listenToPreventingDefaultAction
+    , modifierMap, modifierBatch, modifierNone
     , map, render
     )
 
@@ -14,7 +16,9 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 @docs documentEventListen
 @docs text
 @docs element, elementNamespaced
-@docs Modifier, ModifierSingle, attribute, attributeNamespaced, style, listenTo, modifierMap, modifierBatch, modifierNone
+@docs Modifier, ModifierSingle, attribute, attributeNamespaced, style
+@docs listenTo, listenToPreventingDefaultAction
+@docs modifierMap, modifierBatch, modifierNone
 @docs map, render
 
 -}
@@ -87,7 +91,12 @@ elementMap stateChange =
         , attributesNamespaced = domElementToMap.attributesNamespaced
         , eventListens =
             domElementToMap.eventListens
-                |> Dict.map (\_ listen -> \event -> listen event |> stateChange)
+                |> Dict.map
+                    (\_ listen ->
+                        { on = \event -> listen.on event |> stateChange
+                        , defaultActionHandling = listen.defaultActionHandling
+                        }
+                    )
         , subs =
             domElementToMap.subs |> Array.map (map stateChange)
         }
@@ -115,7 +124,12 @@ elementWithMaybeNamespace maybeNamespace tag modifiers subs =
                 (\modifier ->
                     case modifier of
                         Listen listen ->
-                            ( listen.eventName, listen.on ) |> Just
+                            ( listen.eventName
+                            , { on = listen.on
+                              , defaultActionHandling = listen.defaultActionHandling
+                              }
+                            )
+                                |> Just
 
                         _ ->
                             Nothing
@@ -247,7 +261,11 @@ Create using [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenT
 type ModifierSingle state
     = Attribute { namespace : Maybe String, key : String, value : String }
     | Style { key : String, value : String }
-    | Listen { eventName : String, on : Json.Decode.Value -> state }
+    | Listen
+        { eventName : String
+        , on : Json.Decode.Value -> state
+        , defaultActionHandling : Web.DefaultActionHandling
+        }
 
 
 {-| A key-value attribute [`Modifier`](#Modifier)
@@ -279,10 +297,34 @@ style key value =
 
 {-| Listen for a specific DOM event on the [`DomElement`](Web#DomElement).
 Use [`modifierMap`](#modifierMap) to wire this to a specific event.
+
+If you want to override the browser's default behavior for that event,
+use [`listenToPreventingDefaultAction`](#listenToPreventingDefaultAction)
+
 -}
 listenTo : String -> Modifier Json.Decode.Value
 listenTo eventName =
-    { eventName = eventName, on = identity } |> Listen |> Rope.singleton
+    { eventName = eventName, on = identity, defaultActionHandling = Web.DefaultActionExecute }
+        |> Listen
+        |> Rope.singleton
+
+
+{-| Like [`listenTo`](#listenTo) but [preventing the browser's default action](https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault).
+
+That's for example how elm's [`Browser.Events.onSubmit`](https://dark.elm.dmy.fr/packages/elm/html/latest/Html-Events#onSubmit)
+prevents the form from changing the page’s location:
+
+    submitListen : Web.Dom.Modifier ()
+    submitListen =
+        Web.Dom.listenToPreventingDefaultAction "submit"
+            |> Web.Dom.modifierMap (\_ -> ())
+
+-}
+listenToPreventingDefaultAction : String -> Modifier Json.Decode.Value
+listenToPreventingDefaultAction eventName =
+    { eventName = eventName, on = identity, defaultActionHandling = Web.DefaultActionPrevent }
+        |> Listen
+        |> Rope.singleton
 
 
 {-| Wire events from this [`Modifier`](#Modifier) to a specific event.
@@ -309,5 +351,6 @@ modifierSingleMap stateChange =
             Listen listen ->
                 { eventName = listen.eventName
                 , on = \json -> listen.on json |> stateChange
+                , defaultActionHandling = listen.defaultActionHandling
                 }
                     |> Listen

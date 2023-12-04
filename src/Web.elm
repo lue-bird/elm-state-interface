@@ -3,7 +3,7 @@ module Web exposing
     , program, ProgramState(..), ProgramEvent(..)
     , programInit, programUpdate, programSubscriptions
     , Interface, interfaceBatch, interfaceNone, interfaceMap
-    , DomNode(..), DomElement
+    , DomNode(..), DomElement, DefaultActionHandling(..)
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceSingle(..), InterfaceSingleWithReceive(..), InterfaceSingleWithoutReceive(..)
     , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..)
@@ -37,7 +37,7 @@ If you just want to replace a part of your elm app with this architecture. Make 
 
 Types used by [`Web.Dom`](Web-Dom)
 
-@docs DomNode, DomElement
+@docs DomNode, DomElement, DefaultActionHandling
 
 
 ## HTTP
@@ -268,9 +268,21 @@ type alias DomElement state =
         , styles : Dict String String
         , attributes : Dict String String
         , attributesNamespaced : Dict ( String, String ) String
-        , eventListens : Dict String (Json.Decode.Value -> state)
+        , eventListens :
+            Dict
+                String
+                { on : Json.Decode.Value -> state
+                , defaultActionHandling : DefaultActionHandling
+                }
         , subs : Array (DomNode state)
         }
+
+
+{-| Setting for a listen [`Web.Dom.Modifier`](Web-Dom#Modifier) to keep or overwrite the browsers default action.
+-}
+type DefaultActionHandling
+    = DefaultActionPrevent
+    | DefaultActionExecute
 
 
 {-| Safe to ignore. Identifier for an [`Interface`](#Interface)
@@ -307,7 +319,7 @@ type alias DomElementId =
         , styles : Dict String String
         , attributes : Dict String String
         , attributesNamespaced : Dict ( String, String ) String
-        , eventListens : Set String
+        , eventListens : Dict String DefaultActionHandling
         , subs : Array DomNodeId
         }
 
@@ -510,7 +522,12 @@ domElementMap stateChange =
         , attributesNamespaced = domElementToMap.attributesNamespaced
         , eventListens =
             domElementToMap.eventListens
-                |> Dict.map (\_ listen -> \event -> listen event |> stateChange)
+                |> Dict.map
+                    (\_ listen ->
+                        { on = \event -> listen.on event |> stateChange
+                        , defaultActionHandling = listen.defaultActionHandling
+                        }
+                    )
         , subs =
             domElementToMap.subs |> Array.map (domNodeMap stateChange)
         }
@@ -1639,7 +1656,7 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                                                 Json.Decode.fail "received event for element without listen"
 
                                             Just eventListen ->
-                                                eventListen specificEvent.event |> Json.Decode.succeed
+                                                eventListen.on specificEvent.event |> Json.Decode.succeed
                             )
                     )
                         |> Just
@@ -1905,10 +1922,27 @@ domElementIdJsonDecoder =
             )
         |> Json.Decode.Local.andMap
             (Json.Decode.field "eventListens"
-                (Json.Decode.map Set.fromList (Json.Decode.list Json.Decode.string))
+                (Json.Decode.dict defaultActionHandlingJsonDecoder)
             )
         |> Json.Decode.Local.andMap
             (Json.Decode.field "subs" (Json.Decode.array domNodeIdJsonDecoder))
+
+
+defaultActionHandlingJsonDecoder : Json.Decode.Decoder DefaultActionHandling
+defaultActionHandlingJsonDecoder =
+    Json.Decode.andThen
+        (\string ->
+            case string of
+                "DefaultActionPrevent" ->
+                    DefaultActionPrevent |> Json.Decode.succeed
+
+                "DefaultActionExecute" ->
+                    DefaultActionExecute |> Json.Decode.succeed
+
+                _ ->
+                    "needs to be either DefaultActionPrevent or DefaultActionExecute" |> Json.Decode.fail
+        )
+        Json.Decode.string
 
 
 {-| The "update" part for an embedded program
@@ -1975,7 +2009,7 @@ domElementToId =
         , attributes = domElement.attributes
         , attributesNamespaced = domElement.attributesNamespaced
         , eventListens =
-            domElement.eventListens |> Dict.foldl (\k _ -> Set.insert k) Set.empty
+            domElement.eventListens |> Dict.map (\_ listen -> listen.defaultActionHandling)
         , subs =
             domElement.subs |> Array.map domNodeToId
         }
@@ -2008,9 +2042,20 @@ domElementIdToJson =
                                 ]
                         )
               )
-            , ( "eventListens", domElementId.eventListens |> Json.Encode.set Json.Encode.string )
+            , ( "eventListens", domElementId.eventListens |> Json.Encode.dict identity defaultActionHandlingToJson )
             , ( "subs", domElementId.subs |> Json.Encode.array domNodeIdToJson )
             ]
+
+
+defaultActionHandlingToJson : DefaultActionHandling -> Json.Encode.Value
+defaultActionHandlingToJson =
+    \defaultActionHandling ->
+        case defaultActionHandling of
+            DefaultActionPrevent ->
+                "DefaultActionPrevent" |> Json.Encode.string
+
+            DefaultActionExecute ->
+                "DefaultActionExecute" |> Json.Encode.string
 
 
 {-| A Request can fail in a couple ways:

@@ -249,7 +249,6 @@ Unlike [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/
 Instead, the goal of this package is to publish more browser APIs like webstorage instead of users doing the work only for their own projects. Since I'm a noob in the js world, feedback and contributions are super welcome ❀
 
 ## TODO before publish
-- ModifierEventListener add option to preventDefault
 - publish using npm publish --access public
 
 ## the 1.0.0 release
