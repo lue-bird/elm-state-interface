@@ -1,12 +1,15 @@
 port module Main exposing (main)
 
+import AppUrl exposing (AppUrl)
 import Array
+import Codec exposing (Codec)
 import Color
 import Dict exposing (Dict)
 import Duration
 import Json.Decode
 import Json.Decode.Local
 import Json.Encode
+import Json.Encode.Extra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Set
 import Time
@@ -26,33 +29,76 @@ main =
 
 programConfig : Web.ProgramConfig State
 programConfig =
-    { initialState =
-        StartingRoom
-            { name = Nothing
-            , gemCount = 0
-            , mousePoint = { x = 0, y = 0 }
-            , posix = Time.millisToPosix 0
-            , timezone = Time.utc
-            }
+    { initialState = WaitingForInitialUrl
     , interface =
         \stateChoice ->
             case stateChoice of
-                StartingRoom startingRoomState ->
-                    startingRoomState |> startingRoomInterface
+                WaitingForInitialUrl ->
+                    Web.Navigation.urlRequest
+                        |> Web.interfaceMap
+                            (\initialUrl ->
+                                case initialUrl |> appUrlToState of
+                                    Just initialState ->
+                                        initialState |> Initialized
 
-                AtSign atSignState ->
-                    atSignState |> atSignInterface
+                                    Nothing ->
+                                        StartingRoom
+                                            { name = Nothing
+                                            , gemCount = 0
+                                            , mousePoint = { x = 0, y = 0 }
+                                            , posix = Time.millisToPosix 0
+                                            , timezone = Time.utc
+                                            }
+                                            |> Initialized
+                            )
 
-                PickingApples pickingApplesState ->
-                    pickingApplesState |> pickApplesInterface
+                Initialized initialized ->
+                    [ initialized |> initializedInterface
+                    , Web.Navigation.pushUrl (initialized |> stateToAppUrl)
+                    , Web.Navigation.movementListen
+                        |> Web.interfaceMap
+                            (\newUrl ->
+                                case newUrl |> appUrlToState of
+                                    Nothing ->
+                                        let
+                                            _ =
+                                                Debug.log "failed to decode AppUrl" newUrl
+                                        in
+                                        initialized
 
-                ShowingMapWithExit ->
-                    mapWithExitInterface
+                                    Just newState ->
+                                        newState
+                            )
+                    ]
+                        |> Web.interfaceBatch
+                        |> Web.interfaceMap Initialized
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
 
+initializedInterface : InitializedState -> Web.Interface InitializedState
+initializedInterface =
+    \stateChoice ->
+        case stateChoice of
+            StartingRoom startingRoomState ->
+                startingRoomState |> startingRoomInterface
+
+            AtSign atSignState ->
+                atSignState |> atSignInterface
+
+            PickingApples pickingApplesState ->
+                pickingApplesState |> pickApplesInterface
+
+            ShowingMapWithExit ->
+                mapWithExitInterface
+
+
 type State
+    = WaitingForInitialUrl
+    | Initialized InitializedState
+
+
+type InitializedState
     = StartingRoom StartingRoomState
     | AtSign AtSignState
     | PickingApples PickApplesState
@@ -79,7 +125,7 @@ type StartingRoomEvent
     | WalkToSignClicked
 
 
-startingRoomInterface : StartingRoomState -> Web.Interface State
+startingRoomInterface : StartingRoomState -> Web.Interface InitializedState
 startingRoomInterface =
     \state ->
         [ narrativeUiFrame
@@ -243,11 +289,11 @@ type alias AtSignState =
         { gemCount : Int
         , appleCount : Int
         , name : String
-        , birdConversationState : ConversationWithBirdState
+        , birdConversationState : BirdConversationState
         }
 
 
-type ConversationWithBirdState
+type BirdConversationState
     = WaitingForTalk
     | GreetingAndAskingForWhatYouWant
     | BirdTellAboutItself
@@ -263,7 +309,7 @@ type AtSignEvent
     | OpenMapClicked
 
 
-atSignInterface : AtSignState -> Web.Interface State
+atSignInterface : AtSignState -> Web.Interface InitializedState
 atSignInterface =
     \state ->
         [ narrativeUiFrame []
@@ -401,7 +447,7 @@ atSignInterface =
                             PickingApples
                                 { name = state.name
                                 , gemCount = state.gemCount
-                                , windowSize = { width = 1920, height = 1080 }
+                                , windowSize = dummyWindowSize
                                 , headDirection = Right
                                 , headLocation = { x = 4, y = 5 }
                                 , tailSegments = [ { x = 3, y = 5 } ]
@@ -410,6 +456,11 @@ atSignInterface =
                                 , pickedAppleCount = 0
                                 }
                 )
+
+
+dummyWindowSize : { width : Int, height : Int }
+dummyWindowSize =
+    { width = 1920, height = 1080 }
 
 
 
@@ -455,7 +506,7 @@ worldSizeCells =
     { x = 16, y = 12 }
 
 
-pickApplesInterface : PickApplesState -> Web.Interface State
+pickApplesInterface : PickApplesState -> Web.Interface InitializedState
 pickApplesInterface state =
     [ Web.Time.periodicallyListen (Duration.milliseconds 125)
         |> Web.interfaceMap PickApplesSimulationTick
@@ -730,7 +781,8 @@ uiFrame modifiers subs =
         ([ Web.Dom.style "font-size" "2em"
          , Web.Dom.style "padding-left" "80px"
          , Web.Dom.style "padding-right" "80px"
-         , Web.Dom.style "height" "100vh"
+
+         --, Web.Dom.style "height" "100vh"
          , Web.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
          , Web.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
          ]
@@ -845,6 +897,171 @@ clockHandUi config =
         , Web.Dom.attribute "stroke-linecap" "round"
         ]
         []
+
+
+
+-- app url
+
+
+stateToAppUrl : InitializedState -> AppUrl
+stateToAppUrl =
+    \state ->
+        { path = []
+        , queryParameters = Dict.singleton "" [ state |> Codec.encodeToString 0 stateCodec ]
+        , fragment = Nothing
+        }
+
+
+stateCodec : Codec InitializedState
+stateCodec =
+    Codec.custom
+        (\startingRoomStateVariant atSignStateVariant pickApplesStateVariant showingMapWithExitVariant state ->
+            case state of
+                StartingRoom startingRoomState ->
+                    startingRoomStateVariant startingRoomState
+
+                AtSign atSignState ->
+                    atSignStateVariant atSignState
+
+                PickingApples pickApplesState ->
+                    pickApplesStateVariant pickApplesState
+
+                ShowingMapWithExit ->
+                    showingMapWithExitVariant
+        )
+        |> Codec.variant1 "StartingRoom" StartingRoom startingRoomStateCodec
+        |> Codec.variant1 "AtSign" AtSign atSignStateCodec
+        |> Codec.variant1 "PickingApples" PickingApples pickApplesStateCodec
+        |> Codec.variant0 "ShowingMapWithExit" ShowingMapWithExit
+        |> Codec.buildCustom
+
+
+appUrlToState : AppUrl -> Maybe InitializedState
+appUrlToState =
+    \appUrl ->
+        appUrl.queryParameters
+            |> Dict.get ""
+            |> Maybe.andThen List.head
+            |> Maybe.andThen (\str -> str |> Codec.decodeString stateCodec |> Result.toMaybe)
+
+
+startingRoomStateCodec : Codec StartingRoomState
+startingRoomStateCodec =
+    Codec.object
+        (\name gemCount ->
+            { name = name
+            , gemCount = gemCount
+            , mousePoint = { x = 0, y = 0 }
+            , timezone = Time.utc
+            , posix = Time.millisToPosix 0
+            }
+        )
+        |> Codec.field "name" .name (Codec.nullable Codec.string)
+        |> Codec.field "gemCount" .gemCount Codec.int
+        |> Codec.buildObject
+
+
+atSignStateCodec : Codec AtSignState
+atSignStateCodec =
+    Codec.object
+        (\name gemCount appleCount birdConversationState ->
+            { name = name
+            , gemCount = gemCount
+            , appleCount = appleCount
+            , birdConversationState = birdConversationState
+            }
+        )
+        |> Codec.field "name" .name Codec.string
+        |> Codec.field "gemCount" .gemCount Codec.int
+        |> Codec.field "appleCount" .gemCount Codec.int
+        |> Codec.field "birdConversationState" .birdConversationState birdConversationStateCodec
+        |> Codec.buildObject
+
+
+birdConversationStateCodec : Codec BirdConversationState
+birdConversationStateCodec =
+    Codec.custom
+        (\waitingForTalk greetingAndAskingForWhatYouWant birdTellAboutItself askedBirdForMap tooHungryToSell birdConversationState ->
+            case birdConversationState of
+                WaitingForTalk ->
+                    waitingForTalk
+
+                GreetingAndAskingForWhatYouWant ->
+                    greetingAndAskingForWhatYouWant
+
+                BirdTellAboutItself ->
+                    birdTellAboutItself
+
+                AskedBirdForMap ->
+                    askedBirdForMap
+
+                TooHungryToSell ->
+                    tooHungryToSell
+        )
+        |> Codec.variant0 "WaitingForTalk" WaitingForTalk
+        |> Codec.variant0 "GreetingAndAskingForWhatYouWant" GreetingAndAskingForWhatYouWant
+        |> Codec.variant0 "BirdTellAboutItself" BirdTellAboutItself
+        |> Codec.variant0 "AskedBirdForMap" AskedBirdForMap
+        |> Codec.variant0 "TooHungryToSell" TooHungryToSell
+        |> Codec.buildCustom
+
+
+pickApplesStateCodec : Codec PickApplesState
+pickApplesStateCodec =
+    Codec.object
+        (\name gemCount appleCountBefore pickedAppleCount headDirection headLocation tailSegments appleLocation ->
+            { name = name
+            , gemCount = gemCount
+            , appleCountBefore = appleCountBefore
+            , pickedAppleCount = pickedAppleCount
+            , headDirection = headDirection
+            , headLocation = headLocation
+            , tailSegments = tailSegments
+            , appleLocation = appleLocation
+            , windowSize = dummyWindowSize
+            }
+        )
+        |> Codec.field "name" .name Codec.string
+        |> Codec.field "gemCount" .gemCount Codec.int
+        |> Codec.field "appleCountBefore" .gemCount Codec.int
+        |> Codec.field "pickedAppleCount" .gemCount Codec.int
+        |> Codec.field "headDirection" .headDirection directionCodec
+        |> Codec.field "headLocation" .headLocation pickApplesLocationCodec
+        |> Codec.field "tailSegments" .tailSegments (Codec.list pickApplesLocationCodec)
+        |> Codec.field "appleLocation" .appleLocation pickApplesLocationCodec
+        |> Codec.buildObject
+
+
+pickApplesLocationCodec : Codec PickApplesLocation
+pickApplesLocationCodec =
+    Codec.object (\x y -> { x = x, y = y })
+        |> Codec.field "x" .x Codec.int
+        |> Codec.field "y" .y Codec.int
+        |> Codec.buildObject
+
+
+directionCodec : Codec SnakeDirection
+directionCodec =
+    Codec.custom
+        (\left right up down direction ->
+            case direction of
+                Left ->
+                    left
+
+                Right ->
+                    right
+
+                Up ->
+                    up
+
+                Down ->
+                    down
+        )
+        |> Codec.variant0 "Left" Left
+        |> Codec.variant0 "Right" Right
+        |> Codec.variant0 "Up" Up
+        |> Codec.variant0 "Down" Down
+        |> Codec.buildCustom
 
 
 port toJs : Json.Encode.Value -> Cmd event_
