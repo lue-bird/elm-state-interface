@@ -1636,7 +1636,17 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
         NavigationUrlRequest toState ->
             case interfaceAddDiff of
                 AddNavigationUrlRequest ->
-                    AppUrl.Local.jsonDecoder |> Json.Decode.map toState |> Just
+                    Json.Decode.andThen
+                        (\urlString ->
+                            case urlString |> Url.fromString of
+                                Nothing ->
+                                    "invalid URL" |> Json.Decode.fail
+
+                                Just url ->
+                                    url |> AppUrl.fromUrl |> toState |> Json.Decode.succeed
+                        )
+                        Json.Decode.string
+                        |> Just
 
                 _ ->
                     Nothing
