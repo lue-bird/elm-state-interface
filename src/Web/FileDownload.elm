@@ -1,4 +1,4 @@
-module Web.FileDownload exposing (bits)
+module Web.FileDownload exposing (bytes)
 
 {-| Helpers for downloading a dynamically generated file as part of an [`Interface`](Web#Interface).
 
@@ -11,11 +11,12 @@ Note: There's no equivalent module for file select
 since you can easily replicate the behavior using an input element with type file or file drop area modifiers,
 see for example [mpizenberg/elm-file](https://dark.elm.dmy.fr/packages/mpizenberg/elm-file/latest/FileValue#load-files-with-an-input).
 
-@docs bits
+@docs bytes
 
 -}
 
-import Bit exposing (Bit)
+import Bytes exposing (Bytes)
+import Bytes.Decode
 import Rope
 import Web
 
@@ -24,71 +25,35 @@ import Web
 with a list of [`Bit`](https://dark.elm.dmy.fr/packages/lue-bird/elm-bits/latest/)s as its content,
 a given type and and a given default name.
 
-Note: Doesn't use [elm/bytes](https://dark.elm.dmy.fr/packages/elm/bytes/latest/)
-because they can't easily be diffed as their representation is magic and only exists in js land.
-To create an encoder, you can use [the bits helpers in the modules of elm-morph](https://dark.elm.dmy.fr/packages/lue-bird/elm-morph/latest/)
-
 Replacement for [`File.Download.bytes`](https://dark.elm.dmy.fr/packages/elm/file/latest/File-Download#bytes)
 
 -}
-bits : { name : String, mimeType : String, content : List Bit } -> Web.Interface state_
-bits fileDownloadConfig =
-    Web.FileDownloadUnsignedInt8List
+bytes : { name : String, mimeType : String, content : Bytes } -> Web.Interface state_
+bytes fileDownloadConfig =
+    Web.FileDownloadUnsignedInt8s
         { name = fileDownloadConfig.name
         , mimeType = fileDownloadConfig.mimeType
         , content =
+            -- `Bytes` can't be diffed as their representation is magic and only exists in js land, so we need to convert it.
             fileDownloadConfig.content
-                |> listToChunksOf8
-                |> List.map (\bits8 -> bits8 |> bitsToUnsignedInt)
+                |> Bytes.Decode.decode
+                    (byteListDecoder (fileDownloadConfig.content |> Bytes.width))
+                |> -- above decoder should never fail
+                   Maybe.withDefault []
         }
         |> Web.InterfaceWithoutReceive
         |> Rope.singleton
 
 
-listToChunksOf8 : List element -> List (List element)
-listToChunksOf8 =
-    \list ->
-        let
-            chunked : { remainderLength : Int, fullChunks : List (List element), remainder : List element }
-            chunked =
-                list
-                    |> List.foldl
-                        (\bit soFar ->
-                            if soFar.remainderLength >= 8 then
-                                { remainder = []
-                                , remainderLength = 0
-                                , fullChunks =
-                                    soFar.fullChunks
-                                        |> (::) (soFar.remainder |> List.reverse)
-                                }
+byteListDecoder : Int -> Bytes.Decode.Decoder (List Int)
+byteListDecoder length =
+    Bytes.Decode.loop ( length, [] )
+        (\( n, elements ) ->
+            if n <= 0 then
+                Bytes.Decode.succeed (Bytes.Decode.Done (elements |> List.reverse))
 
-                            else
-                                { remainder = soFar.remainder |> (::) bit
-                                , remainderLength = soFar.remainderLength + 1
-                                , fullChunks = soFar.fullChunks
-                                }
-                        )
-                        { remainderLength = 0, remainder = [], fullChunks = [] }
-        in
-        (chunked.remainder :: chunked.fullChunks)
-            |> List.reverse
-
-
-bitsToUnsignedInt : List Bit -> Int
-bitsToUnsignedInt =
-    \bitList ->
-        bitList
-            |> List.foldr
-                (\bit soFar ->
-                    { power = soFar.power + 1
-                    , total =
-                        case bit of
-                            Bit.O ->
-                                soFar.total
-
-                            Bit.I ->
-                                soFar.total + (2 ^ soFar.power)
-                    }
-                )
-                { power = 0, total = 0 }
-            |> .total
+            else
+                Bytes.Decode.map
+                    (\byte -> Bytes.Decode.Loop ( n - 1, byte :: elements ))
+                    Bytes.Decode.unsignedInt8
+        )
