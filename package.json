@@ -29,6 +29,7 @@
     ],
     "author": "lue-bird",
     "license": "MIT",
+    "homepage": "https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/",
     "devDependencies": {
         "elm-doc-preview": "^1.0.7",
         "elm-review": "^2.10.2",
