@@ -139,6 +139,8 @@ byUserListen : Web.Interface AppUrl
 byUserListen =
     Web.WindowEventListen
         { eventName = "popstate"
-        , on = Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder
+        , on =
+            Json.Decode.field "state"
+                (Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder)
         }
         |> Rope.singleton
