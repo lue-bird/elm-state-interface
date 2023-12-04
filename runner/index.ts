@@ -104,7 +104,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 parentDomNode.replaceChildren() // remove all subs
                 parentDomNode.appendChild(createDomNode([], replacement.node, sendToElm))
             } else {
-                console.error("trying to set a DOM node modifier failed because the given path was empty")
+                editDomModifiers(parentDomNode.firstChild as (Element & ElementCSSInlineStyle), replacement, path, sendToElm)
             }
         } else {
             let parentDomNode: ChildNode | null = appConfig.domElement.firstChild
@@ -120,33 +120,35 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     if (replacement?.node) {
                         parentDomNode.replaceChild(createDomNode([], replacement.node, sendToElm), oldDomNode)
                     } else {
-                        const domNodeToEdit = oldDomNode as (Element & ElementCSSInlineStyle)
-                        if (replacement?.styles) {
-                            domNodeToEdit.removeAttribute("style")
-                            domElementAddStyles(domNodeToEdit, replacement.styles)
-                        } else if (replacement?.attributes) {
-                            for (const attribute of domNodeToEdit.attributes) {
-                                if (attribute.name !== "style" && attribute.namespaceURI === null) {
-                                    domNodeToEdit.removeAttribute(attribute.name)
-                                }
-                            }
-                            domElementAddAttributes(domNodeToEdit, replacement.attributes)
-                        } else if (replacement?.attributesNamespaced) {
-                            for (const attribute of domNodeToEdit.attributes) {
-                                if (attribute.name !== "style" && attribute.namespaceURI) {
-                                    domNodeToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
-                                }
-                            }
-                            domElementAddAttributesNamespaced(domNodeToEdit, replacement.attributesNamespaced)
-                        } else if (replacement?.eventListens) {
-                            // https://stackoverflow.com/a/73409567
-                            domNodeToEdit.replaceWith(domNodeToEdit.cloneNode(true))
-                            domElementAddEventListens(domNodeToEdit, replacement.eventListens, path, sendToElm)
-                        }
+                        editDomModifiers(oldDomNode as (Element & ElementCSSInlineStyle), replacement, path, sendToElm)
                     }
                 }
             }
         }
+    }
+}
+function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replacement: any, path: number[], sendToElm: (v: any) => void) {
+    if (replacement?.styles) {
+        domNodeToEdit.removeAttribute("style")
+        domElementAddStyles(domNodeToEdit, replacement.styles)
+    } else if (replacement?.attributes) {
+        for (const attribute of domNodeToEdit.attributes) {
+            if (attribute.name !== "style" && attribute.namespaceURI === null) {
+                domNodeToEdit.removeAttribute(attribute.name)
+            }
+        }
+        domElementAddAttributes(domNodeToEdit, replacement.attributes)
+    } else if (replacement?.attributesNamespaced) {
+        for (const attribute of domNodeToEdit.attributes) {
+            if (attribute.name !== "style" && attribute.namespaceURI) {
+                domNodeToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
+            }
+        }
+        domElementAddAttributesNamespaced(domNodeToEdit, replacement.attributesNamespaced)
+    } else if (replacement?.eventListens) {
+        // https://stackoverflow.com/a/73409567
+        domNodeToEdit.replaceWith(domNodeToEdit.cloneNode(true))
+        domElementAddEventListens(domNodeToEdit, replacement.eventListens, path, sendToElm)
     }
 }
 
