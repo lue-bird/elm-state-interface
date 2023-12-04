@@ -22,6 +22,10 @@ jsonDecoder =
 fromString : String -> Maybe AppUrl
 fromString =
     \appUrlString ->
-        ("https://dummy.com" ++ appUrlString)
-            |> Url.fromString
-            |> Maybe.map AppUrl.fromUrl
+        if appUrlString |> String.startsWith "/" then
+            ("https://dummy.com" ++ appUrlString)
+                |> Url.fromString
+                |> Maybe.map AppUrl.fromUrl
+
+        else
+            Nothing
