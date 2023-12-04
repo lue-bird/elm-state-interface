@@ -89,13 +89,12 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 if (associatedRemoveFunction) {
                     associatedRemoveFunction(diffConfig)
                 } else {
-                    console.log("Unknown message kind " + diffKind + " from elm. Maybe you have a typo? Otherwise the associated js function might be missing.")
+                    console.error("Unknown message kind " + diffKind + " from elm. Maybe you have a typo? Otherwise the associated js function might be missing.")
                 }
             }
         } else {
-            console.log("I the message {} from elm. I need a specific command as { actionToPerform : config }")
+            console.error("I got the message {} from elm but I need a specific command as { actionToPerform : config }")
         }
-
     })
 
     function editDom(path: number[], replacement: any, sendToElm: (v: any) => void) {
