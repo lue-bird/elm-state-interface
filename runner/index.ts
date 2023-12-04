@@ -14,6 +14,12 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addConsoleLog": (config) => {
             console.log(config)
         },
+        "addConsoleWarn": (config) => {
+            console.warn(config)
+        },
+        "addConsoleError": (config) => {
+            console.error(config)
+        },
         "removeTimePeriodicallyListen": removeTimePeriodicallyListen,
         "removeDom": (_config) => {
             appConfig.domElement.replaceChildren()

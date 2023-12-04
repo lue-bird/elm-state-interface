@@ -56,7 +56,6 @@ Types used by [`Web.Http`](Web-Http)
 
 import AndOr
 import AppUrl exposing (AppUrl)
-import AppUrl.Local
 import Array exposing (Array)
 import Dict exposing (Dict)
 import Emptiable exposing (Emptiable)
@@ -147,6 +146,8 @@ type InterfaceSingle state
     | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> state }
     | RandomUnsignedIntsRequest { count : Int, on : List Int -> state }
     | ConsoleLog String
+    | ConsoleWarn String
+    | ConsoleError String
     | DomNodeRender (DomNode state)
     | HttpRequest (HttpRequest state)
     | WindowSizeRequest ({ width : Int, height : Int } -> state)
@@ -265,6 +266,8 @@ type InterfaceSingleId
     | IdTimePeriodicallyListen { milliSeconds : Int }
     | IdRandomUnsignedIntsRequest Int
     | IdConsoleLog String
+    | IdConsoleWarn String
+    | IdConsoleError String
     | IdDomNodeRender
     | IdHttpRequest HttpRequestId
     | IdWindowSizeRequest
@@ -420,6 +423,12 @@ interfaceSingleMap stateChange =
 
             ConsoleLog string ->
                 ConsoleLog string
+
+            ConsoleWarn string ->
+                ConsoleWarn string
+
+            ConsoleError string ->
+                ConsoleError string
 
             DomNodeRender domElementToRender ->
                 domElementToRender |> domNodeMap stateChange |> DomNodeRender
@@ -669,6 +678,12 @@ interfaceSingleToId =
             ConsoleLog string ->
                 IdConsoleLog string
 
+            ConsoleWarn string ->
+                IdConsoleWarn string
+
+            ConsoleError string ->
+                IdConsoleError string
+
             DomNodeRender _ ->
                 IdDomNodeRender
 
@@ -748,6 +763,18 @@ interfaceSingleIdToComparable =
             IdConsoleLog string ->
                 ComparableList
                     [ ComparableString "IdConsoleLog"
+                    , ComparableString string
+                    ]
+
+            IdConsoleWarn string ->
+                ComparableList
+                    [ ComparableString "IdConsoleWarn"
+                    , ComparableString string
+                    ]
+
+            IdConsoleError string ->
+                ComparableList
+                    [ ComparableString "IdConsoleError"
                     , ComparableString string
                     ]
 
@@ -960,6 +987,12 @@ interfaceOldAndOrUpdatedDiffs =
                     ConsoleLog _ ->
                         []
 
+                    ConsoleWarn _ ->
+                        []
+
+                    ConsoleError _ ->
+                        []
+
                     HttpRequest request ->
                         RemoveHttpRequest (request |> httpRequestToId) |> List.singleton
 
@@ -1022,6 +1055,12 @@ interfaceOldAndOrUpdatedDiffs =
 
                     ConsoleLog string ->
                         AddConsoleLog string |> InterfaceWithoutReceiveDiff
+
+                    ConsoleWarn string ->
+                        AddConsoleWarn string |> InterfaceWithoutReceiveDiff
+
+                    ConsoleError string ->
+                        AddConsoleError string |> InterfaceWithoutReceiveDiff
 
                     DomNodeRender domElementToRender ->
                         ReplaceDomNode
@@ -1226,6 +1265,12 @@ interfaceWithoutReceiveDiffToJson =
             [ case interfaceRemoveDiff of
                 AddConsoleLog string ->
                     ( "addConsoleLog", string |> Json.Encode.string )
+
+                AddConsoleWarn string ->
+                    ( "addConsoleWarn", string |> Json.Encode.string )
+
+                AddConsoleError string ->
+                    ( "addConsoleError", string |> Json.Encode.string )
 
                 AddNavigationPushUrl url ->
                     ( "addNavigationPushUrl", url |> AppUrl.toString |> Json.Encode.string )
@@ -1551,6 +1596,12 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                     Nothing
 
         ConsoleLog _ ->
+            Nothing
+
+        ConsoleWarn _ ->
+            Nothing
+
+        ConsoleError _ ->
             Nothing
 
         DomNodeRender domElementToRender ->
@@ -1986,6 +2037,8 @@ type InterfaceDiff
 -}
 type InterfaceWithoutReceiveDiff
     = AddConsoleLog String
+    | AddConsoleWarn String
+    | AddConsoleError String
     | AddNavigationReplaceUrl AppUrl
     | AddNavigationPushUrl AppUrl
     | AddNavigationGo Int
