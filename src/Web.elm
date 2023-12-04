@@ -157,7 +157,7 @@ type InterfaceSingleWithoutReceive
     | NavigationGo Int
     | NavigationLoad Url
     | NavigationReload
-    | FileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
+    | FileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
     | ClipboardReplaceBy String
 
 
@@ -918,9 +918,9 @@ interfaceWithoutReceiveToComparable =
             NavigationReload ->
                 ComparableString "NavigationReload"
 
-            FileDownloadUnsignedInt8List config ->
+            FileDownloadUnsignedInt8s config ->
                 ComparableList
-                    [ ComparableString "FileDownloadUnsignedInt8List"
+                    [ ComparableString "FileDownloadUnsignedInt8s"
                     , ComparableString config.name
                     , ComparableString config.mimeType
                     , config.content
@@ -1060,8 +1060,8 @@ interfaceOldAndOrUpdatedDiffs =
                             NavigationReload ->
                                 AddNavigationReload |> InterfaceWithoutReceiveDiff
 
-                            FileDownloadUnsignedInt8List config ->
-                                AddFileDownloadUnsignedInt8List config |> InterfaceWithoutReceiveDiff
+                            FileDownloadUnsignedInt8s config ->
+                                AddFileDownloadUnsignedInt8s config |> InterfaceWithoutReceiveDiff
 
                             ClipboardReplaceBy replacement ->
                                 AddClipboardReplaceBy replacement |> InterfaceWithoutReceiveDiff
@@ -1298,8 +1298,8 @@ interfaceWithoutReceiveDiffToJson =
                 AddNavigationReload ->
                     ( "addNavigationReload", Json.Encode.null )
 
-                AddFileDownloadUnsignedInt8List config ->
-                    ( "addFileDownloadUnsignedInt8List"
+                AddFileDownloadUnsignedInt8s config ->
+                    ( "addFileDownloadUnsignedInt8s"
                     , Json.Encode.object
                         [ ( "name", config.name |> Json.Encode.string )
                         , ( "mimeType", config.mimeType |> Json.Encode.string )
@@ -2073,7 +2073,7 @@ type InterfaceWithoutReceiveDiff
     | AddNavigationGo Int
     | AddNavigationLoad Url
     | AddNavigationReload
-    | AddFileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
+    | AddFileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
     | AddClipboardReplaceBy String
     | RemoveTimePeriodicallyListen { milliSeconds : Int }
     | RemoveHttpRequest HttpRequestId

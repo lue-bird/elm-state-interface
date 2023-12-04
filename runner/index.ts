@@ -36,7 +36,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addNavigationPushUrl": (config) => { pushUrl(config) },
         "addNavigationLoad": (config) => { load(config) },
         "addNavigationReload": (_config) => { reload() },
-        "addFileDownloadBytes": (config) => { fileDownloadBytes(config) },
+        "addFileDownloadUnsignedInt8s": (config) => { fileDownloadBytes(config) },
         "addClipboardReplaceBy": (config: string) => { navigator.clipboard.writeText(config) }
     }
     const interfaceWithSendToElmImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
