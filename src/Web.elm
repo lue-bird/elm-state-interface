@@ -6,7 +6,7 @@ module Web exposing
     , DomNode(..), DomElement, DefaultActionHandling(..)
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceSingle(..), InterfaceSingleWithReceive(..), InterfaceSingleWithoutReceive(..)
-    , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..)
+    , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
     , InterfaceSingleKeys, InterfaceSingleIdOrderTag
     , InterfaceSingleId(..), InterfaceSingleWithReceiveId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
@@ -50,7 +50,7 @@ Types used by [`Web.Http`](Web-Http)
 ## internals, safe to ignore
 
 @docs InterfaceSingle, InterfaceSingleWithReceive, InterfaceSingleWithoutReceive
-@docs InterfaceDiff, InterfaceWithReceiveDiff, InterfaceWithoutReceiveDiff
+@docs InterfaceDiff, InterfaceWithReceiveDiff, InterfaceWithoutReceiveDiff, EditDomDiff, ReplacementInEditDomDiff
 @docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
 @docs InterfaceSingleId, InterfaceSingleWithReceiveId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
@@ -547,25 +547,40 @@ type ProgramEvent appState
     | AppEventToNewAppState appState
 
 
+domElementToId : DomElement state_ -> DomElementId
+domElementToId =
+    \domElement ->
+        { namespace = domElement.namespace
+        , tag = domElement.tag
+        , styles = domElement.styles
+        , attributes = domElement.attributes
+        , attributesNamespaced = domElement.attributesNamespaced
+        , eventListens =
+            domElement.eventListens |> Dict.map (\_ listen -> listen.defaultActionHandling)
+        , subs =
+            domElement.subs |> Array.map domNodeToId
+        }
+
+
 domNodeDiff :
     List Int
     -> ( DomNode state, DomNode state )
-    -> List { path : List Int, replacementDomNode : DomNode state }
+    -> List EditDomDiff
 domNodeDiff path =
     \( aNode, bNode ) ->
         case ( aNode, bNode ) of
-            ( DomText _, DomElement _ ) ->
-                []
+            ( DomText _, DomElement bElement ) ->
+                [ { path = path, replacement = bElement |> domElementToId |> DomElementId |> ReplacementDomNode } ]
 
-            ( DomElement _, DomText _ ) ->
-                []
+            ( DomElement _, DomText bText ) ->
+                [ { path = path, replacement = bText |> DomTextId |> ReplacementDomNode } ]
 
             ( DomText aText, DomText bText ) ->
                 if aText == bText then
                     []
 
                 else
-                    [ { path = path, replacementDomNode = bText |> DomText } ]
+                    [ { path = path, replacement = bText |> DomTextId |> ReplacementDomNode } ]
 
             ( DomElement aElement, DomElement bElement ) ->
                 ( aElement, bElement ) |> domElementDiff path
@@ -574,23 +589,58 @@ domNodeDiff path =
 domElementDiff :
     List Int
     -> ( DomElement state, DomElement state )
-    -> List { path : List Int, replacementDomNode : DomNode state }
+    -> List EditDomDiff
 domElementDiff path =
     \( aElement, bElement ) ->
         if
             (aElement.tag == bElement.tag)
-                && (aElement.styles == bElement.styles)
-                && (aElement.attributes == bElement.attributes)
-                && ((aElement.eventListens |> Dict.keys) == (bElement.eventListens |> Dict.keys))
                 && ((aElement.subs |> Array.length) == (bElement.subs |> Array.length))
         then
-            List.map2 (\( subIndex, aSub ) bSub -> domNodeDiff (subIndex :: path) ( aSub, bSub ))
-                (aElement.subs |> Array.toIndexedList)
-                (bElement.subs |> Array.toList)
-                |> List.concat
+            let
+                modifierDiffs : List ReplacementInEditDomDiff
+                modifierDiffs =
+                    [ if aElement.styles == bElement.styles then
+                        Nothing
+
+                      else
+                        ReplacementDomElementStyles bElement.styles |> Just
+                    , if aElement.attributes == bElement.attributes then
+                        Nothing
+
+                      else
+                        ReplacementDomElementAttributes bElement.attributes |> Just
+                    , if aElement.attributesNamespaced == bElement.attributesNamespaced then
+                        Nothing
+
+                      else
+                        ReplacementDomElementAttributesNamespaced bElement.attributesNamespaced |> Just
+                    , let
+                        bElementEventListensId : Dict String DefaultActionHandling
+                        bElementEventListensId =
+                            bElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling)
+                      in
+                      if
+                        (aElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling))
+                            == bElementEventListensId
+                      then
+                        Nothing
+
+                      else
+                        ReplacementDomElementEventListens bElementEventListensId |> Just
+                    ]
+                        |> List.filterMap identity
+            in
+            (modifierDiffs
+                |> List.map (\replacement -> { path = path, replacement = replacement })
+            )
+                ++ (List.map2 (\( subIndex, aSub ) bSub -> domNodeDiff (subIndex :: path) ( aSub, bSub ))
+                        (aElement.subs |> Array.toIndexedList)
+                        (bElement.subs |> Array.toList)
+                        |> List.concat
+                   )
 
         else
-            [ { path = path, replacementDomNode = bElement |> DomElement } ]
+            [ { path = path, replacement = bElement |> domElementToId |> DomElementId |> ReplacementDomNode } ]
 
 
 type Comparable
@@ -987,14 +1037,7 @@ interfaceOldAndOrUpdatedDiffs =
             AndOr.Both ( InterfaceWithReceive (DomNodeRender domElementPreviouslyRendered), InterfaceWithReceive (DomNodeRender domElementToRender) ) ->
                 ( domElementPreviouslyRendered, domElementToRender )
                     |> domNodeDiff []
-                    |> List.map
-                        (\subDiff ->
-                            ReplaceDomNode
-                                { path = subDiff.path
-                                , domNode = subDiff.replacementDomNode |> domNodeToId
-                                }
-                        )
-                    |> List.map InterfaceWithReceiveDiff
+                    |> List.map (\diff -> diff |> AddEditDom |> InterfaceWithReceiveDiff)
 
             AndOr.Both _ ->
                 []
@@ -1103,10 +1146,10 @@ interfaceOldAndOrUpdatedDiffs =
                                 AddRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count |> InterfaceWithReceiveDiff
 
                             DomNodeRender domElementToRender ->
-                                ReplaceDomNode
-                                    { path = []
-                                    , domNode = domElementToRender |> domNodeToId
-                                    }
+                                { path = []
+                                , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
+                                }
+                                    |> AddEditDom
                                     |> InterfaceWithReceiveDiff
 
                             HttpRequest httpRequest ->
@@ -1233,6 +1276,32 @@ httpBodyToJson =
                 Json.Encode.null
 
 
+domElementAttributesNamespacedToJson : Dict ( String, String ) String -> Json.Encode.Value
+domElementAttributesNamespacedToJson =
+    \attributesNamespaced ->
+        attributesNamespaced
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( ( namespace, key ), value ) ->
+                    Json.Encode.object
+                        [ ( "namespace", namespace |> Json.Encode.string )
+                        , ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
+defaultActionHandlingToJson : DefaultActionHandling -> Json.Encode.Value
+defaultActionHandlingToJson =
+    \defaultActionHandling ->
+        case defaultActionHandling of
+            DefaultActionPrevent ->
+                "DefaultActionPrevent" |> Json.Encode.string
+
+            DefaultActionExecute ->
+                "DefaultActionExecute" |> Json.Encode.string
+
+
 interfaceWithReceiveDiffToJson : InterfaceWithReceiveDiff -> Json.Encode.Value
 interfaceWithReceiveDiffToJson =
     \interfaceAddOrReplaceDiff ->
@@ -1255,11 +1324,31 @@ interfaceWithReceiveDiffToJson =
                 AddRandomUnsignedInt32sRequest count ->
                     ( "addRandomUnsignedInt32sRequest", count |> Json.Encode.int )
 
-                ReplaceDomNode domElementToAdd ->
-                    ( "replaceDomNode"
+                AddEditDom editDomDiff ->
+                    ( "addEditDom"
                     , Json.Encode.object
-                        [ ( "path", domElementToAdd.path |> Json.Encode.list Json.Encode.int )
-                        , ( "domNode", domElementToAdd.domNode |> domNodeIdToJson )
+                        [ ( "path", editDomDiff.path |> Json.Encode.list Json.Encode.int )
+                        , ( "replacement"
+                          , Json.Encode.object
+                                [ case editDomDiff.replacement of
+                                    ReplacementDomNode domElementReplacement ->
+                                        ( "node"
+                                        , domElementReplacement |> domNodeIdToJson
+                                        )
+
+                                    ReplacementDomElementStyles styles ->
+                                        ( "styles", styles |> Json.Encode.dict identity Json.Encode.string )
+
+                                    ReplacementDomElementAttributes attributes ->
+                                        ( "attributes", attributes |> Json.Encode.dict identity Json.Encode.string )
+
+                                    ReplacementDomElementAttributesNamespaced attributesNamespaced ->
+                                        ( "attributesNamespaced", attributesNamespaced |> domElementAttributesNamespacedToJson )
+
+                                    ReplacementDomElementEventListens eventListens ->
+                                        ( "eventListens", eventListens |> Json.Encode.dict identity defaultActionHandlingToJson )
+                                ]
+                          )
                         ]
                     )
 
@@ -1442,6 +1531,35 @@ domNodeIdJsonDecoder =
         ]
 
 
+domElementAttributesNamespacedJsonDecoder : Json.Decode.Decoder (Dict ( String, String ) String)
+domElementAttributesNamespacedJsonDecoder =
+    Json.Decode.map Dict.fromList
+        (Json.Decode.list
+            (Json.Decode.succeed (\namespace key value -> ( ( namespace, key ), value ))
+                |> Json.Decode.Local.andMap (Json.Decode.field "namespace" Json.Decode.string)
+                |> Json.Decode.Local.andMap (Json.Decode.field "key" Json.Decode.string)
+                |> Json.Decode.Local.andMap (Json.Decode.field "value" Json.Decode.string)
+            )
+        )
+
+
+defaultActionHandlingJsonDecoder : Json.Decode.Decoder DefaultActionHandling
+defaultActionHandlingJsonDecoder =
+    Json.Decode.andThen
+        (\string ->
+            case string of
+                "DefaultActionPrevent" ->
+                    DefaultActionPrevent |> Json.Decode.succeed
+
+                "DefaultActionExecute" ->
+                    DefaultActionExecute |> Json.Decode.succeed
+
+                _ ->
+                    "needs to be either DefaultActionPrevent or DefaultActionExecute" |> Json.Decode.fail
+        )
+        Json.Decode.string
+
+
 interfaceDiffWithReceiveJsonDecoder : Json.Decode.Decoder InterfaceWithReceiveDiff
 interfaceDiffWithReceiveJsonDecoder =
     Json.Decode.oneOf
@@ -1459,11 +1577,26 @@ interfaceDiffWithReceiveJsonDecoder =
             )
         , Json.Decode.map AddRandomUnsignedInt32sRequest
             (Json.Decode.field "addRandomUnsignedInt32sRequest" Json.Decode.int)
-        , Json.Decode.map ReplaceDomNode
-            (Json.Decode.field "replaceDomNode"
-                (Json.Decode.succeed (\path domNode -> { path = path, domNode = domNode })
+        , Json.Decode.map AddEditDom
+            (Json.Decode.field "addEditDom"
+                (Json.Decode.succeed (\path replacement -> { path = path, replacement = replacement })
                     |> Json.Decode.Local.andMap (Json.Decode.field "path" (Json.Decode.list Json.Decode.int))
-                    |> Json.Decode.Local.andMap (Json.Decode.field "domNode" domNodeIdJsonDecoder)
+                    |> Json.Decode.Local.andMap
+                        (Json.Decode.field "replacement"
+                            (Json.Decode.oneOf
+                                [ Json.Decode.map ReplacementDomNode
+                                    (Json.Decode.field "node" domNodeIdJsonDecoder)
+                                , Json.Decode.map ReplacementDomElementStyles
+                                    (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
+                                , Json.Decode.map ReplacementDomElementAttributes
+                                    (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
+                                , Json.Decode.map ReplacementDomElementAttributesNamespaced
+                                    (Json.Decode.field "attributesNamespaced" domElementAttributesNamespacedJsonDecoder)
+                                , Json.Decode.map ReplacementDomElementEventListens
+                                    (Json.Decode.field "eventListens" (Json.Decode.dict defaultActionHandlingJsonDecoder))
+                                ]
+                            )
+                        )
                 )
             )
         , Json.Decode.map AddHttpRequest
@@ -1635,7 +1768,7 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
 
         DomNodeRender domElementToRender ->
             case interfaceAddDiff of
-                ReplaceDomNode domNodeReplacement ->
+                AddEditDom domEditDiff ->
                     (Json.Decode.succeed (\innerPath name event -> { innerPath = innerPath, name = name, event = event })
                         |> Json.Decode.Local.andMap (Json.Decode.field "innerPath" (Json.Decode.list Json.Decode.int))
                         |> Json.Decode.Local.andMap (Json.Decode.field "name" Json.Decode.string)
@@ -1643,7 +1776,7 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                             (Json.Decode.field "event" Json.Decode.value)
                         |> Json.Decode.andThen
                             (\specificEvent ->
-                                case domElementToRender |> domElementAtReversePath ((specificEvent.innerPath ++ domNodeReplacement.path) |> List.reverse) of
+                                case domElementToRender |> domElementAtReversePath ((specificEvent.innerPath ++ domEditDiff.path) |> List.reverse) of
                                     Nothing ->
                                         Json.Decode.fail "origin element of event not found"
 
@@ -1909,40 +2042,13 @@ domElementIdJsonDecoder =
         |> Json.Decode.Local.andMap (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
         |> Json.Decode.Local.andMap (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
         |> Json.Decode.Local.andMap
-            (Json.Decode.field "attributesNamespaced"
-                (Json.Decode.map Dict.fromList
-                    (Json.Decode.list
-                        (Json.Decode.succeed (\namespace key value -> ( ( namespace, key ), value ))
-                            |> Json.Decode.Local.andMap (Json.Decode.field "namespace" Json.Decode.string)
-                            |> Json.Decode.Local.andMap (Json.Decode.field "key" Json.Decode.string)
-                            |> Json.Decode.Local.andMap (Json.Decode.field "value" Json.Decode.string)
-                        )
-                    )
-                )
-            )
+            (Json.Decode.field "attributesNamespaced" domElementAttributesNamespacedJsonDecoder)
         |> Json.Decode.Local.andMap
             (Json.Decode.field "eventListens"
                 (Json.Decode.dict defaultActionHandlingJsonDecoder)
             )
         |> Json.Decode.Local.andMap
             (Json.Decode.field "subs" (Json.Decode.array domNodeIdJsonDecoder))
-
-
-defaultActionHandlingJsonDecoder : Json.Decode.Decoder DefaultActionHandling
-defaultActionHandlingJsonDecoder =
-    Json.Decode.andThen
-        (\string ->
-            case string of
-                "DefaultActionPrevent" ->
-                    DefaultActionPrevent |> Json.Decode.succeed
-
-                "DefaultActionExecute" ->
-                    DefaultActionExecute |> Json.Decode.succeed
-
-                _ ->
-                    "needs to be either DefaultActionPrevent or DefaultActionExecute" |> Json.Decode.fail
-        )
-        Json.Decode.string
 
 
 {-| The "update" part for an embedded program
@@ -2000,21 +2106,6 @@ programUpdate appConfig =
                     )
 
 
-domElementToId : DomElement state_ -> DomElementId
-domElementToId =
-    \domElement ->
-        { namespace = domElement.namespace
-        , tag = domElement.tag
-        , styles = domElement.styles
-        , attributes = domElement.attributes
-        , attributesNamespaced = domElement.attributesNamespaced
-        , eventListens =
-            domElement.eventListens |> Dict.map (\_ listen -> listen.defaultActionHandling)
-        , subs =
-            domElement.subs |> Array.map domNodeToId
-        }
-
-
 domElementIdToJson : DomElementId -> Json.Encode.Value
 domElementIdToJson =
     \domElementId ->
@@ -2031,31 +2122,11 @@ domElementIdToJson =
             , ( "styles", domElementId.styles |> Json.Encode.dict identity Json.Encode.string )
             , ( "attributes", domElementId.attributes |> Json.Encode.dict identity Json.Encode.string )
             , ( "attributesNamespaced"
-              , domElementId.attributesNamespaced
-                    |> Dict.toList
-                    |> Json.Encode.list
-                        (\( ( namespace, key ), value ) ->
-                            Json.Encode.object
-                                [ ( "namespace", namespace |> Json.Encode.string )
-                                , ( "key", key |> Json.Encode.string )
-                                , ( "value", value |> Json.Encode.string )
-                                ]
-                        )
+              , domElementId.attributesNamespaced |> domElementAttributesNamespacedToJson
               )
             , ( "eventListens", domElementId.eventListens |> Json.Encode.dict identity defaultActionHandlingToJson )
             , ( "subs", domElementId.subs |> Json.Encode.array domNodeIdToJson )
             ]
-
-
-defaultActionHandlingToJson : DefaultActionHandling -> Json.Encode.Value
-defaultActionHandlingToJson =
-    \defaultActionHandling ->
-        case defaultActionHandling of
-            DefaultActionPrevent ->
-                "DefaultActionPrevent" |> Json.Encode.string
-
-            DefaultActionExecute ->
-                "DefaultActionExecute" |> Json.Encode.string
 
 
 {-| A Request can fail in a couple ways:
@@ -2137,13 +2208,30 @@ type InterfaceWithReceiveDiff
     | AddTimePeriodicallyListen { milliSeconds : Int }
     | AddRandomUnsignedInt32sRequest Int
     | AddDocumentEventListen String
-    | ReplaceDomNode { path : List Int, domNode : DomNodeId }
+    | AddEditDom EditDomDiff
     | AddHttpRequest HttpRequestId
     | AddWindowSizeRequest
     | AddWindowEventListen String
     | AddWindowAnimationFrameListen
     | AddNavigationUrlRequest
     | AddClipboardRequest
+
+
+{-| Change the current node at a given path using a given [`ReplacementInEditDomDiff`](#ReplacementInEditDomDiff)
+-}
+type alias EditDomDiff =
+    RecordWithoutConstructorFunction
+        { path : List Int, replacement : ReplacementInEditDomDiff }
+
+
+{-| What parts of a node are replaced. Either all modifiers of a certain kind or the whole node
+-}
+type ReplacementInEditDomDiff
+    = ReplacementDomNode DomNodeId
+    | ReplacementDomElementStyles (Dict String String)
+    | ReplacementDomElementAttributes (Dict String String)
+    | ReplacementDomElementAttributesNamespaced (Dict ( String, String ) String)
+    | ReplacementDomElementEventListens (Dict String DefaultActionHandling)
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)

@@ -46,8 +46,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addRandomUnsignedInt32sRequest": (config, sendToElm) => {
             sendToElm(crypto.getRandomValues(new Uint32Array(config)))
         },
-        "replaceDomNode": (config, sendToElm) => {
-            renderDomNode(config.path, config.domNode, sendToElm)
+        "addEditDom": (config, sendToElm) => {
+            editDom(config.path, config.replace, sendToElm)
         },
         "addHttpRequest": (config, sendToElm) => {
             const abortController = new AbortController()
@@ -98,12 +98,15 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
 
     })
 
-    function renderDomNode(path: number[], node: any, sendToElm: (v: any) => void) {
-        const createdDomNode = createDomNode([], node, sendToElm)
+    function editDom(path: number[], replacement: any, sendToElm: (v: any) => void) {
         if (path.length === 0) {
             const parentDomNode = appConfig.domElement
-            parentDomNode.replaceChildren() // remove all subs
-            parentDomNode.appendChild(createdDomNode)
+            if (replacement?.node) {
+                parentDomNode.replaceChildren() // remove all subs
+                parentDomNode.appendChild(createDomNode([], replacement.node, sendToElm))
+            } else {
+                console.error("trying to set a DOM node modifier failed because the given path was empty")
+            }
         } else {
             let parentDomNode: ChildNode | null = appConfig.domElement.firstChild
             if (parentDomNode) {
@@ -113,9 +116,35 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         parentDomNode = subNode
                     }
                 })
-                const oldDomNode = parentDomNode.childNodes[path[0] ?? 0]
+                const oldDomNode: ChildNode | undefined = parentDomNode.childNodes[path[0] ?? 0]
                 if (oldDomNode) {
-                    parentDomNode.replaceChild(createdDomNode, oldDomNode)
+                    if (replacement?.node) {
+                        parentDomNode.replaceChild(createDomNode([], replacement.node, sendToElm), oldDomNode)
+                    } else {
+                        const domNodeToEdit = oldDomNode as (Element & ElementCSSInlineStyle)
+                        if (replacement?.styles) {
+                            domNodeToEdit.removeAttribute("style")
+                            domElementAddStyles(domNodeToEdit, replacement.styles)
+                        } else if (replacement?.attributes) {
+                            for (const attribute of domNodeToEdit.attributes) {
+                                if (attribute.name !== "style" && attribute.namespaceURI === null) {
+                                    domNodeToEdit.removeAttribute(attribute.name)
+                                }
+                            }
+                            domElementAddAttributes(domNodeToEdit, replacement.attributes)
+                        } else if (replacement?.attributesNamespaced) {
+                            for (const attribute of domNodeToEdit.attributes) {
+                                if (attribute.name !== "style" && attribute.namespaceURI) {
+                                    domNodeToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
+                                }
+                            }
+                            domElementAddAttributesNamespaced(domNodeToEdit, replacement.attributesNamespaced)
+                        } else if (replacement?.eventListens) {
+                            // https://stackoverflow.com/a/73409567
+                            domNodeToEdit.replaceWith(domNodeToEdit.cloneNode(true))
+                            domElementAddEventListens(domNodeToEdit, replacement.eventListens, path, sendToElm)
+                        }
+                    }
                 }
             }
         }
@@ -158,32 +187,44 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => an
                 :
                 document.createElement(noScript(node.element.tag))
 
-        for (let [attributeKey, attributeValue] of Object.entries(node.element.attributes)) {
-            createdDomElement.setAttribute(attributeKey, attributeValue as string)
-        }
-        node.element.attributesNamespaced.forEach((attributeNamespaced: { namespace: string, key: string, value: string }) => {
-            createdDomElement.setAttributeNS(attributeNamespaced.namespace, attributeNamespaced.key, attributeNamespaced.value)
-        })
-        for (let [styleKey, styleValue] of Object.entries(node.element.styles)) {
-            createdDomElement.style.setProperty(styleKey, styleValue as string)
-        }
-        for (let [eventListenName, defaultActionHandling] of Object.entries(node.element.eventListens)) {
-            createdDomElement.addEventListener(
-                eventListenName,
-                (triggeredEvent) => {
-                    sendToElm({ innerPath: innerPath, name: eventListenName, event: triggeredEvent })
-                    if (defaultActionHandling === "DefaultActionPrevent") {
-                        triggeredEvent.preventDefault()
-                    }
-                }
-            )
-        }
+        domElementAddAttributes(createdDomElement, node.element.attributes)
+        domElementAddAttributesNamespaced(createdDomElement, node.element.attributesNamespaced)
+        domElementAddStyles(createdDomElement, node.element.styles)
+        domElementAddEventListens(createdDomElement, node.element.eventListens, innerPath, sendToElm)
         node.element.subs.forEach((sub: any, subIndex: number) => {
             createdDomElement.appendChild(
                 createDomNode([subIndex].concat(innerPath), sub, sendToElm)
             )
         })
         return createdDomElement
+    }
+}
+function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles: any) {
+    for (let [styleKey, styleValue] of Object.entries(styles)) {
+        domElement.style.setProperty(styleKey, styleValue as string)
+    }
+}
+function domElementAddAttributes(domElement: Element, attributes: any) {
+    for (let [attributeKey, attributeValue] of Object.entries(attributes)) {
+        domElement.setAttribute(attributeKey, attributeValue as string)
+    }
+}
+function domElementAddAttributesNamespaced(domElement: Element, attributesNamespaced: any) {
+    attributesNamespaced.forEach((attributeNamespaced: { namespace: string, key: string, value: string }) => {
+        domElement.setAttributeNS(attributeNamespaced.namespace, attributeNamespaced.key, attributeNamespaced.value)
+    })
+}
+function domElementAddEventListens(domElement: Element, eventListens: any, path: number[], sendToElm: (v: any) => any) {
+    for (let [eventListenName, defaultActionHandling] of Object.entries(eventListens)) {
+        domElement.addEventListener(
+            eventListenName,
+            (triggeredEvent) => {
+                sendToElm({ innerPath: path, name: eventListenName, event: triggeredEvent })
+                if (defaultActionHandling === "DefaultActionPrevent") {
+                    triggeredEvent.preventDefault()
+                }
+            }
+        )
     }
 }
 
