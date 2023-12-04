@@ -1,7 +1,3 @@
-import * as fetchAdapter from "./http/fetch.js"
-
-export * from "./http/index.js"
-
 export interface ElmPorts {
     toJs: {
         subscribe: (callback: (fromElm: any) => void) => void
@@ -65,7 +61,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addHttpRequest": (config, sendToElm) => {
             const abortController = new AbortController()
             httpRequestAbortControllers[config] = abortController
-            fetchAdapter.http(config, abortController).then(response => { sendToElm(response) })
+            httpFetch(config, abortController).then(response => { sendToElm(response) })
         },
         "addWindowSizeRequest": (_config, sendToElm) => {
             sendToElm({ width: window.innerWidth, height: window.innerHeight })
@@ -284,4 +280,75 @@ function fileDownloadBytes(config: { mimeType: string, name: string, content: nu
     temporaryAnchorDomElement.dispatchEvent(event)
     document.body.removeChild(temporaryAnchorDomElement)
     URL.revokeObjectURL(objectUrl)
+}
+
+interface HttpRequest {
+    url: string
+    method: string
+    headers: [name: string, value: string][]
+    expect: Expect
+    timeout: number | null
+    body: string | null
+}
+type Expect = "STRING" | "JSON" | "WHATEVER"
+
+type HttpResponse = { ok: ResponseSuccess } | { err: any }
+interface ResponseSuccess {
+    body: any | string | null
+    url: string
+    headers: { [header: string]: string }
+    statusCode: number
+    statusText: string
+}
+
+function httpFetch(request: HttpRequest, abortController: AbortController): Promise<HttpResponse> {
+    if (request.timeout) {
+        setTimeout(() => abortController?.abort(), request.timeout);
+    }
+
+    return fetch(request.url, {
+        method: request.method,
+        body: request.body || null,
+        headers: new Headers(request.headers),
+        signal: abortController?.signal,
+    })
+        .then((res: Response) => {
+            const headers = Object.fromEntries(res.headers.entries());
+            switch (request.expect) {
+                case "STRING": {
+                    return res.text().then((x) => ({
+                        ok: {
+                            url: res.url,
+                            headers: headers,
+                            statusCode: res.status,
+                            statusText: res.statusText,
+                            body: x || null,
+                        }
+                    }));
+                }
+                case "JSON": {
+                    return res.json().then((x) => ({
+                        ok: {
+                            url: res.url,
+                            headers: headers,
+                            statusCode: res.status,
+                            statusText: res.statusText,
+                            body: x || null,
+                        }
+                    }));
+                }
+                case "WHATEVER": {
+                    return {
+                        ok: {
+                            url: res.url,
+                            headers: headers,
+                            statusCode: res.status,
+                            statusText: res.statusText,
+                            body: null,
+                        }
+                    }
+                }
+            }
+        })
+        .catch((e) => { return { err: e } })
 }
