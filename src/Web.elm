@@ -1616,8 +1616,9 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                 AddHttpRequest addedHttpRequestId ->
                     if (httpRequest |> httpRequestToId) == addedHttpRequestId then
                         Json.Decode.oneOf
-                            [ httpExpectJsonDecoder httpRequest.expect
-                            , httpErrorJsonDecoder httpRequest |> Json.Decode.map (httpExpectOnError httpRequest.expect)
+                            [ Json.Decode.field "ok" (httpExpectJsonDecoder httpRequest.expect)
+                            , Json.Decode.field "err" (httpErrorJsonDecoder httpRequest)
+                                |> Json.Decode.map (httpExpectOnError httpRequest.expect)
                             ]
                             |> Just
 
@@ -1734,6 +1735,10 @@ httpExpectJsonDecoder expect =
                     isOk : Bool
                     isOk =
                         meta.statusCode >= 200 && meta.statusCode < 300
+
+                    badStatusJsonDecoder : Json.Decode.Decoder (Result HttpError value_)
+                    badStatusJsonDecoder =
+                        Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
                 in
                 Json.Decode.field "body"
                     (case expect of
@@ -1743,7 +1748,7 @@ httpExpectJsonDecoder expect =
                                     Json.Decode.map Ok Json.Decode.value
 
                                  else
-                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                    badStatusJsonDecoder
                                 )
 
                         HttpExpectString toState ->
@@ -1752,7 +1757,7 @@ httpExpectJsonDecoder expect =
                                     Json.Decode.map Ok Json.Decode.string
 
                                  else
-                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                    badStatusJsonDecoder
                                 )
 
                         HttpExpectWhatever toState ->
@@ -1761,7 +1766,7 @@ httpExpectJsonDecoder expect =
                                     Json.Decode.succeed (Ok ())
 
                                  else
-                                    Json.Decode.map (\body -> Err (HttpBadStatus { metadata = meta, body = body })) Json.Decode.value
+                                    badStatusJsonDecoder
                                 )
                     )
             )
@@ -1785,22 +1790,44 @@ httpMetadataJsonDecoder =
 
 httpErrorJsonDecoder : HttpRequest state_ -> Json.Decode.Decoder HttpError
 httpErrorJsonDecoder httpRequest =
-    Json.Decode.field "reason" Json.Decode.string
+    Json.Decode.field "cause" (Json.Decode.field "code" Json.Decode.string)
         |> Json.Decode.andThen
             (\code ->
-                case code of
-                    "TIMEOUT" ->
-                        Json.Decode.succeed HttpTimeout
+                if httpNetworkErrorCodes |> Set.member code then
+                    Json.Decode.succeed HttpNetworkError
 
-                    "NETWORK_ERROR" ->
-                        Json.Decode.succeed HttpNetworkError
+                else
+                    case code of
+                        "BAD_URL" ->
+                            Json.Decode.succeed (HttpBadUrl httpRequest.url)
 
-                    "BAD_URL" ->
-                        Json.Decode.succeed (HttpBadUrl httpRequest.url)
+                        _ ->
+                            Json.Decode.field "name" Json.Decode.string
+                                |> Json.Decode.andThen
+                                    (\name ->
+                                        case name of
+                                            "AbortError" ->
+                                                Json.Decode.succeed HttpTimeout
 
-                    otherCode ->
-                        Json.Decode.fail ("Unknown error code: " ++ otherCode)
+                                            _ ->
+                                                Json.Decode.value
+                                                    |> Json.Decode.andThen
+                                                        (\errorValue ->
+                                                            Json.Decode.fail
+                                                                ([ "Unknown HTTP fetch error: "
+                                                                 , errorValue |> Json.Encode.encode 0
+                                                                 , ". consider submitting an issue for adding it as an explicit case to https://github.com/lue-bird/elm-state-interface/"
+                                                                 ]
+                                                                    |> String.concat
+                                                                )
+                                                        )
+                                    )
             )
+
+
+httpNetworkErrorCodes : Set String
+httpNetworkErrorCodes =
+    Set.fromList [ "EAGAIN", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "UND_ERR", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_OVERFLOW", "UND_ERR_BODY_TIMEOUT", "UND_ERR_RESPONSE_STATUS_CODE", "UND_ERR_INVALID_ARG", "UND_ERR_INVALID_RETURN_VALUE", "UND_ERR_ABORTED", "UND_ERR_DESTROYED", "UND_ERR_CLOSED", "UND_ERR_SOCKET", "UND_ERR_NOT_SUPPORTED", "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH", "UND_ERR_RES_CONTENT_LENGTH_MISMATCH", "UND_ERR_INFO", "UND_ERR_RES_EXCEEDED_MAX_SIZE" ]
 
 
 domElementIdJsonDecoder : Json.Decode.Decoder DomElementId
