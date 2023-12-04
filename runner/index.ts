@@ -1,4 +1,4 @@
-import * as fetchAdapter from "./http/fetch.js";
+import * as fetchAdapter from "./http/fetch.js"
 /*
 import {
     DomError,
@@ -6,17 +6,17 @@ import {
     Viewport,
     SetViewportOptions,
     SetViewportOfOptions,
-} from "./browser/index.js";
-import * as dom from "./browser/dom.js"; */
+} from "./browser/index.js"
+import * as dom from "./browser/dom.js" */
 
-export * from "./http/index.js";
-export * from "./browser/index.js";
+export * from "./http/index.js"
+export * from "./browser/index.js"
 
 export interface ElmPorts {
     toJs: {
-        subscribe: (callback: (fromElm: any) => void) => void;
-    };
-    fromJs: { send: (toElm: any) => void };
+        subscribe: (callback: (fromElm: any) => void) => void
+    }
+    fromJs: { send: (toElm: any) => void }
 }
 
 export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
@@ -110,7 +110,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             console.log("I the message {} from elm. I need a specific command as { actionToPerform : config }")
         }
 
-    });
+    })
 
     function renderDomNode(path: number[], node: any, sendToElm: (v: any) => void) {
         const createdDomNode = createDomNode([], node, sendToElm)
@@ -156,9 +156,9 @@ function removeTimePeriodicallyListen(intervalDuration: { milliSeconds: number }
 // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L27-L35
 function getTimezoneName(): string | number {
     try {
-        return Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return Intl.DateTimeFormat().resolvedOptions().timeZone
     } catch (e) {
-        return new Date().getTimezoneOffset();
+        return new Date().getTimezoneOffset()
     }
 }
 
@@ -211,33 +211,33 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => an
 // can be unpredictable in large programs where JIT may have a harder time with
 // functions are not fully self-contained. The benefit is more that the js and
 // js_html ones are so weird that I prefer to see them near each other.
-const RE_script = /^script$/i;
+const RE_script = /^script$/i
 function noScript(tag: string) {
     return RE_script.test(tag) ? 'p' : tag
 }
 
 function windowEventListenAdd(eventName: string, sendToElm: (v: any) => any) {
-    (window as { [key: string]: any })["on" + eventName] = sendToElm;
+    (window as { [key: string]: any })["on" + eventName] = sendToElm
 }
 function windowEventListenRemove(eventName: string) {
     (window as { [key: string]: any })["on" + eventName] = null
 }
 
 function documentEventListenAdd(eventName: string, sendToElm: (v: any) => any) {
-    (window as { [key: string]: any })["on" + eventName] = sendToElm;
+    (window as { [key: string]: any })["on" + eventName] = sendToElm
 }
 function documentEventListenRemove(eventName: string) {
     (window as { [key: string]: any })["on" + eventName] = null
 }
 
 function go(urlSteps: number) {
-    history.go(urlSteps);
+    history.go(urlSteps)
 }
 function pushUrl(appUrl: string) {
-    history.pushState({ appUrl: appUrl }, "", window.location.origin + appUrl);
+    history.pushState({ appUrl: appUrl }, "", window.location.origin + appUrl)
 }
 function replaceUrl(appUrl: string) {
-    history.replaceState({ appUrl: appUrl }, "", window.location.origin + appUrl);
+    history.replaceState({ appUrl: appUrl }, "", window.location.origin + appUrl)
 }
 
 function reload() {
@@ -254,7 +254,7 @@ function load(url: string) {
     }
 }
 
-let runningAnimationFrameLoopId: number | undefined = undefined;
+let runningAnimationFrameLoopId: number | undefined = undefined
 function addAnimationFrameListen(sendToElm: (v: any) => any) {
     runningAnimationFrameLoopId =
         window.requestAnimationFrame(_timestamp => {
