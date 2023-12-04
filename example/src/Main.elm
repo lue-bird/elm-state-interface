@@ -781,6 +781,11 @@ uiFrame modifiers subs =
         ([ Web.Dom.style "font-size" "2em"
          , Web.Dom.style "padding-left" "80px"
          , Web.Dom.style "padding-right" "80px"
+         , Web.Dom.style "position" "fixed"
+         , Web.Dom.style "top" "0"
+         , Web.Dom.style "right" "0"
+         , Web.Dom.style "bottom" "0"
+         , Web.Dom.style "left" "0"
 
          --, Web.Dom.style "height" "100vh"
          , Web.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
