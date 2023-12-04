@@ -15,6 +15,14 @@
         "review:watch": "elm-review --watch --fix",
         "runner:compile": "tsc"
     },
+    "keywords": [
+        "elm",
+        "elm-architecture",
+        "architecture",
+        "tea",
+        "mvu",
+        "declarative"
+    ],
     "author": "lue-bird",
     "license": "MIT",
     "devDependencies": {
