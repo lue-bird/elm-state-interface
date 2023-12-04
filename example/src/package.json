@@ -6,7 +6,7 @@
         "elm"
     ],
     "dependencies": {
-        "@lue-bird/elm-state-interface": "^1.0.2",
+        "@lue-bird/elm-state-interface": "^1.0.3",
         "elm-codegen": "^0.3.0",
         "elm-optimize-level-2": "^0.3.4",
         "elm-tooling": "1.12.0",
