@@ -7,7 +7,7 @@ cmds, tasks, subs and view are combined into one view/subscriptions-like `state 
 which means
 
 - actions (like changing the url) aren't tied to a specific event happening but to a specific state
-- update is part of the interface (having an intermediate event type is optional but often useful)
+- update is part of the interface and having an intermediate event type is optional (but often useful)
 - when updating based on an event, there's no need to case on the relevant state. (Either use the state from the `case` in the interface in an inner update, or safely include the state in the event)
 
 The classic counter example including managing the url:
