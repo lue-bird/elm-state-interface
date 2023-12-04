@@ -7,19 +7,18 @@ export interface ElmPorts {
 
 export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
     const interfaceWithoutSendToElmImplementations: { [key: string]: (config: any) => void } = {
-        "addConsoleLog": (config) => {
-            console.log(config)
-        },
-        "addConsoleWarn": (config) => {
-            console.warn(config)
-        },
-        "addConsoleError": (config) => {
-            console.error(config)
-        },
+        "addConsoleLog": (config) => { console.log(config) },
+        "addConsoleWarn": (config) => { console.warn(config) },
+        "addConsoleError": (config) => { console.error(config) },
+        "addNavigationPushUrl": (config) => { pushUrl(config) },
+        "addNavigationReplaceUrl": (config) => { replaceUrl(config) },
+        "addNavigationGo": (config) => { go(config) },
+        "addNavigationLoad": (config) => { load(config) },
+        "addNavigationReload": (_config) => { reload() },
+        "addFileDownloadUnsignedInt8s": (config) => { fileDownloadBytes(config) },
+        "addClipboardReplaceBy": (config: string) => { navigator.clipboard.writeText(config) },
         "removeTimePeriodicallyListen": removeTimePeriodicallyListen,
-        "removeDom": (_config) => {
-            appConfig.domElement.replaceChildren()
-        },
+        "removeDom": (_config) => { appConfig.domElement.replaceChildren() },
         "removeHttpRequest": (config) => {
             const maybeAbortController = httpRequestAbortControllers[config]
             if (maybeAbortController) {
@@ -27,17 +26,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             }
         },
         "removeWindowEventListen": windowEventListenRemove,
-        "removeAnimationFrameListen": (_config) => {
-            removeAnimationFrameListen()
-        },
-        "removeDocumentEventListen": documentEventListenRemove,
-        "addNavigationGo": (config) => { go(config) },
-        "addNavigationReplaceUrl": (config) => { replaceUrl(config) },
-        "addNavigationPushUrl": (config) => { pushUrl(config) },
-        "addNavigationLoad": (config) => { load(config) },
-        "addNavigationReload": (_config) => { reload() },
-        "addFileDownloadUnsignedInt8s": (config) => { fileDownloadBytes(config) },
-        "addClipboardReplaceBy": (config: string) => { navigator.clipboard.writeText(config) }
+        "removeAnimationFrameListen": (_config) => { removeAnimationFrameListen() },
+        "removeDocumentEventListen": documentEventListenRemove
     }
     const interfaceWithSendToElmImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
         "addTimePosixRequest": (_config, sendToElm) => {
