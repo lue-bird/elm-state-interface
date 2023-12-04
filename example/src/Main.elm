@@ -556,7 +556,7 @@ pickApplesInterface state =
             Web.Svg.element "g"
                 []
                 [ Web.Svg.element "circle"
-                    [ Web.Dom.style "fill" (Color.red |> Color.toCssString)
+                    [ Web.Dom.style "fill" (Color.rgb 0.9 0.1 0.05 |> Color.toCssString)
                     , Web.Dom.attribute "r" (((cellSideLength * 0.45) |> String.fromFloat) ++ "px")
                     , Web.Dom.attribute "cx" (((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
                     , Web.Dom.attribute "cy" (((cellSideLength * 0.5 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
@@ -564,19 +564,18 @@ pickApplesInterface state =
                     []
                 , Web.Svg.element "ellipse"
                     [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.6 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "rx" (((cellSideLength * 0.24) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "ry" (((cellSideLength * 0.12) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" (((cellSideLength * 0.7 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" (((cellSideLength * 0.1 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
                     ]
                     []
                 , Web.Svg.element "ellipse"
                     [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
-                    , Web.Dom.attribute "transform" "rotate(45deg)"
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "rx" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "ry" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" (((cellSideLength * 0.3 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" (((cellSideLength * 0.12 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
                     ]
                     []
                 ]
@@ -619,17 +618,26 @@ pickApplesInterface state =
                 , height = state.windowSize.height |> Basics.toFloat
                 }
       in
-      Web.Svg.element "svg"
-        [ Web.Dom.attribute "viewBox" ("0 0 " ++ (worldSize.width |> String.fromFloat) ++ " " ++ (worldSize.height |> String.fromFloat))
-        , Web.Dom.attribute "width" ((worldSize.width |> String.fromFloat) ++ "px")
-        , Web.Dom.attribute "height" ((worldSize.height |> String.fromFloat) ++ "px")
-        , Web.Dom.style "display" "block"
-        , Web.Dom.style "margin" "auto"
+      Web.Dom.element "div"
+        [ Web.Dom.style "background-color" (Color.rgb 0.05 0.05 0.05 |> Color.toCssString)
+        , Web.Dom.style "position" "fixed"
+        , Web.Dom.style "top" "0"
+        , Web.Dom.style "right" "0"
+        , Web.Dom.style "bottom" "0"
+        , Web.Dom.style "left" "0"
         ]
-        [ worldUi
-        , pickedAppleCountUi
-        , headTailUi
-        , appleUi
+        [ Web.Svg.element "svg"
+            [ Web.Dom.attribute "viewBox" ("0 0 " ++ (worldSize.width |> String.fromFloat) ++ " " ++ (worldSize.height |> String.fromFloat))
+            , Web.Dom.attribute "width" ((worldSize.width |> String.fromFloat) ++ "px")
+            , Web.Dom.attribute "height" ((worldSize.height |> String.fromFloat) ++ "px")
+            , Web.Dom.style "display" "block"
+            , Web.Dom.style "margin" "auto"
+            ]
+            [ worldUi
+            , pickedAppleCountUi
+            , headTailUi
+            , appleUi
+            ]
         ]
         |> Web.Dom.render
     ]
