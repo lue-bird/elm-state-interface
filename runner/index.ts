@@ -232,7 +232,9 @@ function go(urlSteps: number) {
     history.go(urlSteps)
 }
 function pushUrl(appUrl: string) {
-    history.pushState({ appUrl: appUrl }, "", window.location.origin + appUrl)
+    if (history.state === null || (history.state.appUrl !== appUrl)) {
+        history.pushState({ appUrl: appUrl }, "", window.location.origin + appUrl)
+    }
 }
 function replaceUrl(appUrl: string) {
     history.replaceState({ appUrl: appUrl }, "", window.location.origin + appUrl)

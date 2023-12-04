@@ -141,9 +141,9 @@ the URL will change but your UI will not.
 
 Use [`movementListen`](#movementListen) to detect those URL changes and make ui changes as needed.
 
-When the app itself initiates a url change (not just movement) with [`pushUrl`](#pushUrl) or [`replaceUrl`](#replaceUrl), no such event is triggered.
+When the app itself initiates a url change with [`pushUrl`](#pushUrl) or [`replaceUrl`](#replaceUrl), no such event is triggered.
 
-Note: This event is (confusingly) called ["popstate"](https://developer.mozilla.org/en-US/docs/Web/API/Window/popstate_event) in js
+Note: This event is called ["popstate"](https://developer.mozilla.org/en-US/docs/Web/API/Window/popstate_event) in js
 
 -}
 movementListen : Web.Interface AppUrl
@@ -152,7 +152,11 @@ movementListen =
         { eventName = "popstate"
         , on =
             Json.Decode.field "state"
-                (Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder)
+                (Json.Decode.oneOf
+                    [ Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder
+                    , Json.Decode.null () |> Json.Decode.map (\() -> AppUrl.fromPath [])
+                    ]
+                )
         }
         |> Web.InterfaceWithReceive
         |> Rope.singleton
