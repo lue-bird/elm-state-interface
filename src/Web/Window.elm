@@ -22,6 +22,7 @@ import Web
 eventListen : String -> Web.Interface Json.Decode.Value
 eventListen eventName =
     Web.WindowEventListen { eventName = eventName, on = Json.Decode.value }
+        |> Web.InterfaceWithReceive
         |> Rope.singleton
 
 
@@ -31,6 +32,7 @@ not including toolbars/scrollbars.
 sizeRequest : Web.Interface { width : Int, height : Int }
 sizeRequest =
     Web.WindowSizeRequest identity
+        |> Web.InterfaceWithReceive
         |> Rope.singleton
 
 
@@ -47,6 +49,7 @@ resizeListen =
                     |> Json.Decode.Local.andMap (Json.Decode.field "innerHeight" Json.Decode.int)
                 )
         }
+        |> Web.InterfaceWithReceive
         |> Rope.singleton
 
 
@@ -67,4 +70,5 @@ Note: uses [`window.requestAnimationFrame`](https://developer.mozilla.org/en-US/
 animationFrameListen : Web.Interface Time.Posix
 animationFrameListen =
     Web.WindowAnimationFrameListen identity
+        |> Web.InterfaceWithReceive
         |> Rope.singleton

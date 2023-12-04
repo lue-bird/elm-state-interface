@@ -41,6 +41,7 @@ bits fileDownloadConfig =
                 |> listToChunksOf8
                 |> List.map (\bits8 -> bits8 |> bitsToUnsignedInt)
         }
+        |> Web.InterfaceWithoutReceive
         |> Rope.singleton
 
 

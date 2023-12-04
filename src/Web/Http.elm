@@ -102,4 +102,7 @@ using the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
 request : HttpRequest state -> Web.Interface state
 request =
     \httpRequest ->
-        httpRequest |> Web.HttpRequest |> Rope.singleton
+        httpRequest
+            |> Web.HttpRequest
+            |> Web.InterfaceWithReceive
+            |> Rope.singleton

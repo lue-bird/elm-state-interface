@@ -32,6 +32,7 @@ like like keypress, keydown, keyup, click, mousemove, mousedown, mouseup
 documentEventListen : String -> Web.Interface Json.Decode.Value
 documentEventListen eventName =
     Web.DocumentEventListen { eventName = eventName, on = Json.Decode.value }
+        |> Web.InterfaceWithReceive
         |> Rope.singleton
 
 
@@ -42,6 +43,7 @@ render =
     \domNode ->
         domNode
             |> Web.DomNodeRender
+            |> Web.InterfaceWithReceive
             |> Rope.singleton
 
 

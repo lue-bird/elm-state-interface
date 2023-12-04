@@ -15,7 +15,9 @@ as an [`Interface`](Web#Interface)
 -}
 log : String -> Web.Interface state_
 log string =
-    Web.ConsoleLog string |> Rope.singleton
+    Web.ConsoleLog string
+        |> Web.InterfaceWithoutReceive
+        |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) for printing a message that something didn't succeed, for example
@@ -29,7 +31,9 @@ Note: uses [`console.warn`](https://developer.mozilla.org/en-US/docs/Web/API/con
 -}
 warn : String -> Web.Interface state_
 warn string =
-    Web.ConsoleWarn string |> Rope.singleton
+    Web.ConsoleWarn string
+        |> Web.InterfaceWithoutReceive
+        |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) for printing a message that something failed with bad consequences, for example
@@ -41,4 +45,6 @@ Note: uses [`console.error`](https://developer.mozilla.org/en-US/docs/Web/API/co
 -}
 error : String -> Web.Interface state_
 error string =
-    Web.ConsoleError string |> Rope.singleton
+    Web.ConsoleError string
+        |> Web.InterfaceWithoutReceive
+        |> Rope.singleton

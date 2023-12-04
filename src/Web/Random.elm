@@ -20,4 +20,5 @@ Note: uses [`window.crypto.getRandomValues`](https://developer.mozilla.org/en-US
 unsignedInts : Int -> Web.Interface (List Int)
 unsignedInts count =
     Web.RandomUnsignedIntsRequest { count = count, on = identity }
+        |> Web.InterfaceWithReceive
         |> Rope.singleton

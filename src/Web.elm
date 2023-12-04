@@ -2,12 +2,13 @@ module Web exposing
     ( ProgramConfig
     , program, ProgramState(..), ProgramEvent(..)
     , programInit, programUpdate, programSubscriptions
-    , Interface, InterfaceSingle(..), interfaceBatch, interfaceNone, interfaceMap
+    , Interface, interfaceBatch, interfaceNone, interfaceMap
     , DomNode(..), DomElement
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
+    , InterfaceSingle(..), InterfaceSingleWithReceive(..), InterfaceSingleWithoutReceive(..)
     , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..)
     , InterfaceSingleKeys, InterfaceSingleIdOrderTag
-    , InterfaceSingleId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
+    , InterfaceSingleId(..), InterfaceSingleWithReceiveId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program running in the browser
@@ -15,7 +16,7 @@ module Web exposing
 @docs ProgramConfig
 
 
-## as elm Program
+## as elm/browser Program
 
 @docs program, ProgramState, ProgramEvent
 
@@ -29,7 +30,7 @@ If you just want to replace a part of your elm app with this architecture. Make 
 
 # interface types
 
-@docs Interface, InterfaceSingle, interfaceBatch, interfaceNone, interfaceMap
+@docs Interface, interfaceBatch, interfaceNone, interfaceMap
 
 
 ## DOM
@@ -48,9 +49,10 @@ Types used by [`Web.Http`](Web-Http)
 
 ## internals, safe to ignore
 
+@docs InterfaceSingle, InterfaceSingleWithReceive, InterfaceSingleWithoutReceive
 @docs InterfaceDiff, InterfaceWithReceiveDiff, InterfaceWithoutReceiveDiff
 @docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
-@docs InterfaceSingleId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
+@docs InterfaceSingleId, InterfaceSingleWithReceiveId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
 -}
 
@@ -140,27 +142,39 @@ type alias Interface state =
 To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
 -}
 type InterfaceSingle state
-    = TimePosixRequest (Time.Posix -> state)
-    | TimezoneOffsetRequest (Int -> state)
-    | TimezoneNameRequest (Time.ZoneName -> state)
-    | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> state }
-    | RandomUnsignedIntsRequest { count : Int, on : List Int -> state }
-    | ConsoleLog String
+    = InterfaceWithReceive (InterfaceSingleWithReceive state)
+    | InterfaceWithoutReceive InterfaceSingleWithoutReceive
+
+
+{-| An [`InterfaceSingle`](#InterfaceSingle) that will never notify elm
+-}
+type InterfaceSingleWithoutReceive
+    = ConsoleLog String
     | ConsoleWarn String
     | ConsoleError String
-    | DomNodeRender (DomNode state)
-    | HttpRequest (HttpRequest state)
-    | WindowSizeRequest ({ width : Int, height : Int } -> state)
-    | WindowEventListen { eventName : String, on : Json.Decode.Decoder state }
-    | WindowAnimationFrameListen (Time.Posix -> state)
-    | NavigationUrlRequest (AppUrl -> state)
-    | DocumentEventListen { eventName : String, on : Json.Decode.Decoder state }
     | NavigationReplaceUrl AppUrl
     | NavigationPushUrl AppUrl
     | NavigationGo Int
     | NavigationLoad Url
     | NavigationReload
     | FileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
+
+
+{-| An [`InterfaceSingle`](#InterfaceSingle) that will notify elm some time in the future.
+-}
+type InterfaceSingleWithReceive state
+    = TimePosixRequest (Time.Posix -> state)
+    | TimezoneOffsetRequest (Int -> state)
+    | TimezoneNameRequest (Time.ZoneName -> state)
+    | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> state }
+    | RandomUnsignedIntsRequest { count : Int, on : List Int -> state }
+    | DocumentEventListen { eventName : String, on : Json.Decode.Decoder state }
+    | DomNodeRender (DomNode state)
+    | HttpRequest (HttpRequest state)
+    | WindowSizeRequest ({ width : Int, height : Int } -> state)
+    | WindowEventListen { eventName : String, on : Json.Decode.Decoder state }
+    | WindowAnimationFrameListen (Time.Posix -> state)
+    | NavigationUrlRequest (AppUrl -> state)
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -260,14 +274,18 @@ type alias DomElement state =
 {-| Safe to ignore. Identifier for an [`Interface`](#Interface)
 -}
 type InterfaceSingleId
+    = IdInterfaceWithReceive InterfaceSingleWithReceiveId
+    | IdInterfaceWithoutReceive InterfaceSingleWithoutReceive
+
+
+{-| Safe to ignore. Identifier for an [`InterfaceSingleWithReceive`](#InterfaceSingleWithReceive)
+-}
+type InterfaceSingleWithReceiveId
     = IdTimePosixRequest
     | IdTimezoneOffsetRequest
     | IdTimezoneNameRequest
     | IdTimePeriodicallyListen { milliSeconds : Int }
     | IdRandomUnsignedIntsRequest Int
-    | IdConsoleLog String
-    | IdConsoleWarn String
-    | IdConsoleError String
     | IdDomNodeRender
     | IdHttpRequest HttpRequestId
     | IdWindowSizeRequest
@@ -275,12 +293,6 @@ type InterfaceSingleId
     | IdWindowAnimationFrameListen
     | IdNavigationUrlRequest
     | IdDocumentEventListen String
-    | IdNavigationReplaceUrl AppUrl
-    | IdNavigationPushUrl AppUrl
-    | IdNavigationGo Int
-    | IdNavigationLoad Url
-    | IdNavigationReload
-    | IdFileDownloadUnsignedInt8List { mimeType : String, name : String, content : List Int }
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -382,6 +394,19 @@ interfaceMap stateChange =
             |> Rope.fromList
 
 
+interfaceSingleMap : (state -> mappedState) -> (InterfaceSingle state -> InterfaceSingle mappedState)
+interfaceSingleMap stateChange =
+    \interface ->
+        case interface of
+            InterfaceWithoutReceive interfaceWithoutReceive ->
+                interfaceWithoutReceive |> InterfaceWithoutReceive
+
+            InterfaceWithReceive interfaceWithReceive ->
+                interfaceWithReceive
+                    |> interfaceWithReceiveMap stateChange
+                    |> InterfaceWithReceive
+
+
 domNodeMap : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
 domNodeMap stateChange =
     \domElementToMap ->
@@ -393,8 +418,8 @@ domNodeMap stateChange =
                 domElement |> domElementMap stateChange |> DomElement
 
 
-interfaceSingleMap : (state -> mappedState) -> (InterfaceSingle state -> InterfaceSingle mappedState)
-interfaceSingleMap stateChange =
+interfaceWithReceiveMap : (state -> mappedState) -> (InterfaceSingleWithReceive state -> InterfaceSingleWithReceive mappedState)
+interfaceWithReceiveMap stateChange =
     \interface ->
         case interface of
             TimePosixRequest requestTimeNow ->
@@ -421,15 +446,6 @@ interfaceSingleMap stateChange =
                 }
                     |> RandomUnsignedIntsRequest
 
-            ConsoleLog string ->
-                ConsoleLog string
-
-            ConsoleWarn string ->
-                ConsoleWarn string
-
-            ConsoleError string ->
-                ConsoleError string
-
             DomNodeRender domElementToRender ->
                 domElementToRender |> domNodeMap stateChange |> DomNodeRender
 
@@ -455,24 +471,6 @@ interfaceSingleMap stateChange =
             DocumentEventListen listen ->
                 { eventName = listen.eventName, on = listen.on |> Json.Decode.map stateChange }
                     |> DocumentEventListen
-
-            NavigationReplaceUrl url ->
-                url |> NavigationReplaceUrl
-
-            NavigationPushUrl url ->
-                url |> NavigationPushUrl
-
-            NavigationGo urlSteps ->
-                urlSteps |> NavigationGo
-
-            NavigationLoad url ->
-                url |> NavigationLoad
-
-            NavigationReload ->
-                NavigationReload
-
-            FileDownloadUnsignedInt8List config ->
-                FileDownloadUnsignedInt8List config
 
 
 httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
@@ -629,6 +627,17 @@ interfaceToIdMapping =
     Map.tag InterfaceSingleToIdTag interfaceSingleToId
 
 
+interfaceSingleToId : InterfaceSingle state_ -> InterfaceSingleId
+interfaceSingleToId =
+    \interface ->
+        case interface of
+            InterfaceWithoutReceive interfaceWithoutReceive ->
+                interfaceWithoutReceive |> IdInterfaceWithoutReceive
+
+            InterfaceWithReceive interfaceWithReceive ->
+                interfaceWithReceive |> interfaceWithReceiveToId |> IdInterfaceWithReceive
+
+
 httpRequestToId : HttpRequest state_ -> HttpRequestId
 httpRequestToId =
     \httpRequest ->
@@ -655,10 +664,10 @@ httpExpectToId =
                 IdHttpExpectJson
 
 
-interfaceSingleToId : InterfaceSingle state_ -> InterfaceSingleId
-interfaceSingleToId =
-    \interface ->
-        case interface of
+interfaceWithReceiveToId : InterfaceSingleWithReceive state_ -> InterfaceSingleWithReceiveId
+interfaceWithReceiveToId =
+    \interfaceWithReceive ->
+        case interfaceWithReceive of
             TimePosixRequest _ ->
                 IdTimePosixRequest
 
@@ -674,15 +683,6 @@ interfaceSingleToId =
 
             RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
                 IdRandomUnsignedIntsRequest randomUnsignedIntsRequest.count
-
-            ConsoleLog string ->
-                IdConsoleLog string
-
-            ConsoleWarn string ->
-                IdConsoleWarn string
-
-            ConsoleError string ->
-                IdConsoleError string
 
             DomNodeRender _ ->
                 IdDomNodeRender
@@ -705,24 +705,6 @@ interfaceSingleToId =
             DocumentEventListen listen ->
                 IdDocumentEventListen listen.eventName
 
-            NavigationReplaceUrl url ->
-                url |> IdNavigationReplaceUrl
-
-            NavigationPushUrl url ->
-                url |> IdNavigationPushUrl
-
-            NavigationGo urlSteps ->
-                urlSteps |> IdNavigationGo
-
-            NavigationLoad url ->
-                url |> IdNavigationLoad
-
-            NavigationReload ->
-                IdNavigationReload
-
-            FileDownloadUnsignedInt8List config ->
-                IdFileDownloadUnsignedInt8List config
-
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
@@ -730,15 +712,26 @@ interfaceIdOrder =
         (\( a, b ) -> ( a |> interfaceSingleIdToComparable, b |> interfaceSingleIdToComparable ) |> comparableOrder)
 
 
+interfaceSingleIdToComparable : InterfaceSingleId -> Comparable
+interfaceSingleIdToComparable =
+    \interfaceId ->
+        case interfaceId of
+            IdInterfaceWithoutReceive interfaceWithoutReceive ->
+                interfaceWithoutReceive |> interfaceWithoutReceiveToComparable
+
+            IdInterfaceWithReceive idInterfaceWithoutReceive ->
+                idInterfaceWithoutReceive |> idInterfaceWithoutReceiveToComparable
+
+
 intToComparable : Int -> Comparable
 intToComparable =
     \int -> int |> String.fromInt |> ComparableString
 
 
-interfaceSingleIdToComparable : InterfaceSingleId -> Comparable
-interfaceSingleIdToComparable =
-    \interfaceId ->
-        case interfaceId of
+idInterfaceWithoutReceiveToComparable : InterfaceSingleWithReceiveId -> Comparable
+idInterfaceWithoutReceiveToComparable =
+    \idInterfaceWithoutReceive ->
+        case idInterfaceWithoutReceive of
             IdTimePosixRequest ->
                 ComparableString "IdTimePosixRequest"
 
@@ -758,24 +751,6 @@ interfaceSingleIdToComparable =
                 ComparableList
                     [ ComparableString "IdRandomUnsignedIntsRequest"
                     , count |> intToComparable
-                    ]
-
-            IdConsoleLog string ->
-                ComparableList
-                    [ ComparableString "IdConsoleLog"
-                    , ComparableString string
-                    ]
-
-            IdConsoleWarn string ->
-                ComparableList
-                    [ ComparableString "IdConsoleWarn"
-                    , ComparableString string
-                    ]
-
-            IdConsoleError string ->
-                ComparableList
-                    [ ComparableString "IdConsoleError"
-                    , ComparableString string
                     ]
 
             IdDomNodeRender ->
@@ -806,42 +781,6 @@ interfaceSingleIdToComparable =
                 ComparableList
                     [ ComparableString "IdDocumentEventListen"
                     , ComparableString eventName
-                    ]
-
-            IdNavigationReplaceUrl url ->
-                ComparableList
-                    [ ComparableString "IdNavigationReplaceUrl"
-                    , ComparableString (url |> AppUrl.toString)
-                    ]
-
-            IdNavigationPushUrl url ->
-                ComparableList
-                    [ ComparableString "IdNavigationPushUrl"
-                    , ComparableString (url |> AppUrl.toString)
-                    ]
-
-            IdNavigationGo urlSteps ->
-                ComparableList
-                    [ ComparableString "IdNavigationGo"
-                    , urlSteps |> intToComparable
-                    ]
-
-            IdNavigationLoad url ->
-                ComparableList
-                    [ ComparableString "IdNavigationLoad"
-                    , ComparableString (url |> Url.toString)
-                    ]
-
-            IdNavigationReload ->
-                ComparableString "IdNavigationReload"
-
-            IdFileDownloadUnsignedInt8List config ->
-                ComparableList
-                    [ ComparableString config.name
-                    , ComparableString config.mimeType
-                    , config.content
-                        |> List.map (\bit -> bit |> String.fromInt |> ComparableString)
-                        |> ComparableList
                     ]
 
 
@@ -918,6 +857,65 @@ httpExpectIdToComparable =
                 "IdHttpExpectWhatever" |> ComparableString
 
 
+interfaceWithoutReceiveToComparable : InterfaceSingleWithoutReceive -> Comparable
+interfaceWithoutReceiveToComparable =
+    \interfaceWithoutReceive ->
+        case interfaceWithoutReceive of
+            ConsoleLog string ->
+                ComparableList
+                    [ ComparableString "ConsoleLog"
+                    , ComparableString string
+                    ]
+
+            ConsoleWarn string ->
+                ComparableList
+                    [ ComparableString "ConsoleWarn"
+                    , ComparableString string
+                    ]
+
+            ConsoleError string ->
+                ComparableList
+                    [ ComparableString "ConsoleError"
+                    , ComparableString string
+                    ]
+
+            NavigationReplaceUrl url ->
+                ComparableList
+                    [ ComparableString "NavigationReplaceUrl"
+                    , ComparableString (url |> AppUrl.toString)
+                    ]
+
+            NavigationPushUrl url ->
+                ComparableList
+                    [ ComparableString "NavigationPushUrl"
+                    , ComparableString (url |> AppUrl.toString)
+                    ]
+
+            NavigationGo urlSteps ->
+                ComparableList
+                    [ ComparableString "NavigationGo"
+                    , urlSteps |> intToComparable
+                    ]
+
+            NavigationLoad url ->
+                ComparableList
+                    [ ComparableString "NavigationLoad"
+                    , ComparableString (url |> Url.toString)
+                    ]
+
+            NavigationReload ->
+                ComparableString "NavigationReload"
+
+            FileDownloadUnsignedInt8List config ->
+                ComparableList
+                    [ ComparableString config.name
+                    , ComparableString config.mimeType
+                    , config.content
+                        |> List.map (\bit -> bit |> String.fromInt |> ComparableString)
+                        |> ComparableList
+                    ]
+
+
 interfaceDiffs :
     { old : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
     , updated : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
@@ -950,7 +948,7 @@ interfaceOldAndOrUpdatedDiffs : AndOr.AndOr (InterfaceSingle state) (InterfaceSi
 interfaceOldAndOrUpdatedDiffs =
     \interfaceAndOr ->
         case interfaceAndOr of
-            AndOr.Both ( DomNodeRender domElementPreviouslyRendered, DomNodeRender domElementToRender ) ->
+            AndOr.Both ( InterfaceWithReceive (DomNodeRender domElementPreviouslyRendered), InterfaceWithReceive (DomNodeRender domElementToRender) ) ->
                 ( domElementPreviouslyRendered, domElementToRender )
                     |> domNodeDiff []
                     |> List.map
@@ -967,143 +965,125 @@ interfaceOldAndOrUpdatedDiffs =
 
             AndOr.Only (Or.First onlyOld) ->
                 (case onlyOld of
-                    TimePosixRequest _ ->
+                    InterfaceWithoutReceive _ ->
                         []
 
-                    TimezoneOffsetRequest _ ->
-                        []
+                    InterfaceWithReceive interfaceWithReceive ->
+                        case interfaceWithReceive of
+                            TimePosixRequest _ ->
+                                []
 
-                    TimezoneNameRequest _ ->
-                        []
+                            TimezoneOffsetRequest _ ->
+                                []
 
-                    TimePeriodicallyListen timePeriodicallyListen ->
-                        RemoveTimePeriodicallyListen
-                            { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-                            |> List.singleton
+                            TimezoneNameRequest _ ->
+                                []
 
-                    RandomUnsignedIntsRequest _ ->
-                        []
+                            TimePeriodicallyListen timePeriodicallyListen ->
+                                RemoveTimePeriodicallyListen
+                                    { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
+                                    |> List.singleton
 
-                    ConsoleLog _ ->
-                        []
+                            RandomUnsignedIntsRequest _ ->
+                                []
 
-                    ConsoleWarn _ ->
-                        []
+                            HttpRequest request ->
+                                RemoveHttpRequest (request |> httpRequestToId) |> List.singleton
 
-                    ConsoleError _ ->
-                        []
+                            DomNodeRender _ ->
+                                RemoveDom |> List.singleton
 
-                    HttpRequest request ->
-                        RemoveHttpRequest (request |> httpRequestToId) |> List.singleton
+                            WindowSizeRequest _ ->
+                                []
 
-                    DomNodeRender _ ->
-                        RemoveDom |> List.singleton
+                            WindowEventListen listen ->
+                                RemoveWindowEventListen listen.eventName |> List.singleton
 
-                    WindowSizeRequest _ ->
-                        []
+                            WindowAnimationFrameListen _ ->
+                                RemoveWindowAnimationFrameListen |> List.singleton
 
-                    WindowEventListen listen ->
-                        RemoveWindowEventListen listen.eventName |> List.singleton
+                            NavigationUrlRequest _ ->
+                                []
 
-                    WindowAnimationFrameListen _ ->
-                        RemoveWindowAnimationFrameListen |> List.singleton
-
-                    NavigationUrlRequest _ ->
-                        []
-
-                    DocumentEventListen listen ->
-                        RemoveDocumentEventListen listen.eventName |> List.singleton
-
-                    NavigationReplaceUrl _ ->
-                        []
-
-                    NavigationPushUrl _ ->
-                        []
-
-                    NavigationGo _ ->
-                        []
-
-                    NavigationLoad _ ->
-                        []
-
-                    NavigationReload ->
-                        []
-
-                    FileDownloadUnsignedInt8List _ ->
-                        []
+                            DocumentEventListen listen ->
+                                RemoveDocumentEventListen listen.eventName |> List.singleton
                 )
                     |> List.map InterfaceWithoutReceiveDiff
 
             AndOr.Only (Or.Second onlyUpdated) ->
                 (case onlyUpdated of
-                    TimePosixRequest _ ->
-                        AddTimePosixRequest |> InterfaceWithReceiveDiff
+                    InterfaceWithoutReceive interfaceWithoutReceive ->
+                        case interfaceWithoutReceive of
+                            ConsoleLog string ->
+                                AddConsoleLog string |> InterfaceWithoutReceiveDiff
 
-                    TimezoneOffsetRequest _ ->
-                        AddTimezoneOffsetRequest |> InterfaceWithReceiveDiff
+                            ConsoleWarn string ->
+                                AddConsoleWarn string |> InterfaceWithoutReceiveDiff
 
-                    TimezoneNameRequest _ ->
-                        AddTimezoneNameRequest |> InterfaceWithReceiveDiff
+                            ConsoleError string ->
+                                AddConsoleError string |> InterfaceWithoutReceiveDiff
 
-                    TimePeriodicallyListen timePeriodicallyListen ->
-                        AddTimePeriodicallyListen
-                            { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-                            |> InterfaceWithReceiveDiff
+                            NavigationReplaceUrl url ->
+                                AddNavigationReplaceUrl url |> InterfaceWithoutReceiveDiff
 
-                    RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
-                        AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> InterfaceWithReceiveDiff
+                            NavigationPushUrl url ->
+                                AddNavigationPushUrl url |> InterfaceWithoutReceiveDiff
 
-                    ConsoleLog string ->
-                        AddConsoleLog string |> InterfaceWithoutReceiveDiff
+                            NavigationGo urlSteps ->
+                                AddNavigationGo urlSteps |> InterfaceWithoutReceiveDiff
 
-                    ConsoleWarn string ->
-                        AddConsoleWarn string |> InterfaceWithoutReceiveDiff
+                            NavigationLoad url ->
+                                url |> AddNavigationLoad |> InterfaceWithoutReceiveDiff
 
-                    ConsoleError string ->
-                        AddConsoleError string |> InterfaceWithoutReceiveDiff
+                            NavigationReload ->
+                                AddNavigationReload |> InterfaceWithoutReceiveDiff
 
-                    DomNodeRender domElementToRender ->
-                        ReplaceDomNode
-                            { path = []
-                            , domNode = domElementToRender |> domNodeToId
-                            }
-                            |> InterfaceWithReceiveDiff
+                            FileDownloadUnsignedInt8List config ->
+                                AddFileDownloadUnsignedInt8List config |> InterfaceWithoutReceiveDiff
 
-                    HttpRequest httpRequest ->
-                        AddHttpRequest (httpRequest |> httpRequestToId) |> InterfaceWithReceiveDiff
+                    InterfaceWithReceive interfaceWithReceive ->
+                        case interfaceWithReceive of
+                            TimePosixRequest _ ->
+                                AddTimePosixRequest |> InterfaceWithReceiveDiff
 
-                    WindowSizeRequest _ ->
-                        AddWindowSizeRequest |> InterfaceWithReceiveDiff
+                            TimezoneOffsetRequest _ ->
+                                AddTimezoneOffsetRequest |> InterfaceWithReceiveDiff
 
-                    WindowEventListen listen ->
-                        AddWindowEventListen listen.eventName |> InterfaceWithReceiveDiff
+                            TimezoneNameRequest _ ->
+                                AddTimezoneNameRequest |> InterfaceWithReceiveDiff
 
-                    WindowAnimationFrameListen _ ->
-                        AddWindowAnimationFrameListen |> InterfaceWithReceiveDiff
+                            TimePeriodicallyListen timePeriodicallyListen ->
+                                AddTimePeriodicallyListen
+                                    { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
+                                    |> InterfaceWithReceiveDiff
 
-                    NavigationUrlRequest _ ->
-                        AddNavigationUrlRequest |> InterfaceWithReceiveDiff
+                            RandomUnsignedIntsRequest randomUnsignedIntsRequest ->
+                                AddRandomUnsignedIntsRequest randomUnsignedIntsRequest.count |> InterfaceWithReceiveDiff
 
-                    DocumentEventListen listen ->
-                        AddDocumentEventListen listen.eventName |> InterfaceWithReceiveDiff
+                            DomNodeRender domElementToRender ->
+                                ReplaceDomNode
+                                    { path = []
+                                    , domNode = domElementToRender |> domNodeToId
+                                    }
+                                    |> InterfaceWithReceiveDiff
 
-                    NavigationReplaceUrl url ->
-                        AddNavigationReplaceUrl url |> InterfaceWithoutReceiveDiff
+                            HttpRequest httpRequest ->
+                                AddHttpRequest (httpRequest |> httpRequestToId) |> InterfaceWithReceiveDiff
 
-                    NavigationPushUrl url ->
-                        AddNavigationPushUrl url |> InterfaceWithoutReceiveDiff
+                            WindowSizeRequest _ ->
+                                AddWindowSizeRequest |> InterfaceWithReceiveDiff
 
-                    NavigationGo urlSteps ->
-                        AddNavigationGo urlSteps |> InterfaceWithoutReceiveDiff
+                            WindowEventListen listen ->
+                                AddWindowEventListen listen.eventName |> InterfaceWithReceiveDiff
 
-                    NavigationLoad url ->
-                        url |> AddNavigationLoad |> InterfaceWithoutReceiveDiff
+                            WindowAnimationFrameListen _ ->
+                                AddWindowAnimationFrameListen |> InterfaceWithReceiveDiff
 
-                    NavigationReload ->
-                        AddNavigationReload |> InterfaceWithoutReceiveDiff
+                            NavigationUrlRequest _ ->
+                                AddNavigationUrlRequest |> InterfaceWithReceiveDiff
 
-                    FileDownloadUnsignedInt8List config ->
-                        AddFileDownloadUnsignedInt8List config |> InterfaceWithoutReceiveDiff
+                            DocumentEventListen listen ->
+                                AddDocumentEventListen listen.eventName |> InterfaceWithReceiveDiff
                 )
                     |> List.singleton
 
@@ -1374,7 +1354,12 @@ programSubscriptions appConfig =
                                 |> KeysSet.toList interfaceKeys
                                 |> listFirstJust
                                     (\stateInterface ->
-                                        eventDataAndConstructStateJsonDecoder interfaceDiff stateInterface
+                                        case stateInterface of
+                                            InterfaceWithoutReceive _ ->
+                                                Nothing
+
+                                            InterfaceWithReceive withReceive ->
+                                                eventDataAndConstructStateJsonDecoder interfaceDiff withReceive
                                     )
                         of
                             Just eventDataDecoderToConstructedEvent ->
@@ -1524,7 +1509,7 @@ headerJsonDecoder =
         |> Json.Decode.Local.andMap (Json.Decode.index 1 Json.Decode.string)
 
 
-eventDataAndConstructStateJsonDecoder : InterfaceWithReceiveDiff -> InterfaceSingle state -> Maybe (Json.Decode.Decoder state)
+eventDataAndConstructStateJsonDecoder : InterfaceWithReceiveDiff -> InterfaceSingleWithReceive state -> Maybe (Json.Decode.Decoder state)
 eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
     case interface of
         TimePosixRequest requestTimeNow ->
@@ -1594,15 +1579,6 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
 
                 _ ->
                     Nothing
-
-        ConsoleLog _ ->
-            Nothing
-
-        ConsoleWarn _ ->
-            Nothing
-
-        ConsoleError _ ->
-            Nothing
 
         DomNodeRender domElementToRender ->
             case interfaceAddDiff of
@@ -1713,24 +1689,6 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
 
                 _ ->
                     Nothing
-
-        NavigationPushUrl _ ->
-            Nothing
-
-        NavigationReplaceUrl _ ->
-            Nothing
-
-        NavigationGo _ ->
-            Nothing
-
-        NavigationLoad _ ->
-            Nothing
-
-        NavigationReload ->
-            Nothing
-
-        FileDownloadUnsignedInt8List _ ->
-            Nothing
 
 
 domElementAtReversePath : List Int -> (DomNode state -> Maybe (DomNode state))
