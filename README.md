@@ -31,7 +31,7 @@ programConfig : Web.ProgramConfig State
 programConfig =
     { initialState = 0
     , interface =
-        \counter ->
+        \state ->
             case state of
                 Counter counter ->
                     [ Web.Dom.element "div"
