@@ -47,7 +47,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             sendToElm(crypto.getRandomValues(new Uint32Array(config)))
         },
         "addEditDom": (config, sendToElm) => {
-            editDom(config.path, config.replace, sendToElm)
+            editDom(config.path, config.replacement, sendToElm)
         },
         "addHttpRequest": (config, sendToElm) => {
             const abortController = new AbortController()
@@ -127,6 +127,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         }
     }
 }
+
+const eventListenerAbortControllers: { domElement: Element, abortController: AbortController }[] = []
 function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replacement: any, path: number[], sendToElm: (v: any) => void) {
     if (replacement?.styles) {
         domNodeToEdit.removeAttribute("style")
@@ -146,9 +148,14 @@ function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replac
         }
         domElementAddAttributesNamespaced(domNodeToEdit, replacement.attributesNamespaced)
     } else if (replacement?.eventListens) {
-        // https://stackoverflow.com/a/73409567
-        domNodeToEdit.replaceWith(domNodeToEdit.cloneNode(true))
+        eventListenerAbortControllers.forEach(eventListener => {
+            if (eventListener.domElement === domNodeToEdit) {
+                eventListener.abortController.abort()
+            }
+        })
         domElementAddEventListens(domNodeToEdit, replacement.eventListens, path, sendToElm)
+    } else {
+        console.error("unknown replacement kind", replacement)
     }
 }
 
@@ -217,6 +224,7 @@ function domElementAddAttributesNamespaced(domElement: Element, attributesNamesp
 }
 function domElementAddEventListens(domElement: Element, eventListens: any, path: number[], sendToElm: (v: any) => any) {
     for (let [eventListenName, defaultActionHandling] of Object.entries(eventListens)) {
+        const abortController: AbortController = new AbortController()
         domElement.addEventListener(
             eventListenName,
             (triggeredEvent) => {
@@ -224,8 +232,10 @@ function domElementAddEventListens(domElement: Element, eventListens: any, path:
                 if (defaultActionHandling === "DefaultActionPrevent") {
                     triggeredEvent.preventDefault()
                 }
-            }
+            },
+            { signal: abortController.signal }
         )
+        eventListenerAbortControllers.push({ domElement: domElement, abortController: abortController })
     }
 }
 
