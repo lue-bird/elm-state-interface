@@ -1,6 +1,6 @@
 {
     "name": "@lue-bird/elm-state-interface",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "TEA but simpler, safer and more declarative",
     "main": "runner-compiled/index.js",
     "types": "runner-compiled/index.d.ts",
