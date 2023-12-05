@@ -128,7 +128,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     }
 }
 
-const eventListenerAbortControllers: { domElement: Element, abortController: AbortController }[] = []
+let eventListenerAbortControllers: { domElement: Element, abortController: AbortController }[] = []
 function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replacement: any, path: number[], sendToElm: (v: any) => void) {
     if (replacement?.styles) {
         domNodeToEdit.removeAttribute("style")
@@ -148,11 +148,14 @@ function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replac
         }
         domElementAddAttributesNamespaced(domNodeToEdit, replacement.attributesNamespaced)
     } else if (replacement?.eventListens) {
-        eventListenerAbortControllers.forEach(eventListener => {
-            if (eventListener.domElement === domNodeToEdit) {
-                eventListener.abortController.abort()
-            }
-        })
+        eventListenerAbortControllers = eventListenerAbortControllers
+            .filter(eventListener => {
+                if (eventListener.domElement === domNodeToEdit) {
+                    eventListener.abortController.abort()
+                    return false
+                }
+                return true
+            })
         domElementAddEventListens(domNodeToEdit, replacement.eventListens, path, sendToElm)
     } else {
         console.error("unknown replacement kind", replacement)
