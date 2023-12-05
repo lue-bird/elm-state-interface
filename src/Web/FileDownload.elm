@@ -22,7 +22,7 @@ import Web
 
 
 {-| An [`Interface`](Web#Interface) for downloading a given file
-with a list of [`Bit`](https://dark.elm.dmy.fr/packages/lue-bird/elm-bits/latest/)s as its content,
+with [`Bytes`](https://dark.elm.dmy.fr/packages/elm/bytes/latest/) as its content,
 a given type and and a given default name.
 
 Replacement for [`File.Download.bytes`](https://dark.elm.dmy.fr/packages/elm/file/latest/File-Download#bytes)
