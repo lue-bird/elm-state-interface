@@ -205,8 +205,7 @@ type alias HttpHeader =
 {-| Describe what you expect to be returned in an http response body.
 -}
 type HttpExpect state
-    = HttpExpectJson (Result HttpError Json.Decode.Value -> state)
-    | HttpExpectString (Result HttpError String -> state)
+    = HttpExpectString (Result HttpError String -> state)
     | HttpExpectWhatever (Result HttpError () -> state)
 
 
@@ -247,8 +246,7 @@ type alias HttpRequestId =
 {-| Safe to ignore. Identifier for an [`HttpExpect`](#HttpExpect)
 -}
 type HttpExpectId
-    = IdHttpExpectJson
-    | IdHttpExpectString
+    = IdHttpExpectString
     | IdHttpExpectWhatever
 
 
@@ -506,9 +504,6 @@ httpRequestMap stateChange =
 
                 HttpExpectString expectString ->
                     (\string -> expectString string |> stateChange) |> HttpExpectString
-
-                HttpExpectJson expectJson ->
-                    (\json -> expectJson json |> stateChange) |> HttpExpectJson
         }
 
 
@@ -733,9 +728,6 @@ httpExpectToId =
             HttpExpectString _ ->
                 IdHttpExpectString
 
-            HttpExpectJson _ ->
-                IdHttpExpectJson
-
 
 interfaceWithReceiveToId : InterfaceSingleWithReceive state_ -> InterfaceSingleWithReceiveId
 interfaceWithReceiveToId =
@@ -926,9 +918,6 @@ httpExpectIdToComparable : HttpExpectId -> Comparable
 httpExpectIdToComparable =
     \httpExpectId ->
         case httpExpectId of
-            IdHttpExpectJson ->
-                "IdHttpExpectJson" |> ComparableString
-
             IdHttpExpectString ->
                 "IdHttpExpectString" |> ComparableString
 
@@ -1232,9 +1221,6 @@ httpExpectIdToJson =
         case httpExpectId of
             IdHttpExpectString ->
                 Json.Encode.string "STRING"
-
-            IdHttpExpectJson ->
-                Json.Encode.string "JSON"
 
             IdHttpExpectWhatever ->
                 Json.Encode.string "WHATEVER"
@@ -1665,7 +1651,6 @@ httpExpectIdJsonDecoder : Json.Decode.Decoder HttpExpectId
 httpExpectIdJsonDecoder =
     Json.Decode.oneOf
         [ Json.Decode.map (\() -> IdHttpExpectString) (jsonDecodeStringOnly "STRING")
-        , Json.Decode.map (\() -> IdHttpExpectJson) (jsonDecodeStringOnly "JSON")
         , Json.Decode.map (\() -> IdHttpExpectWhatever) (jsonDecodeStringOnly "WHATEVER")
         ]
 
@@ -1910,9 +1895,6 @@ httpExpectOnError : HttpExpect state -> (HttpError -> state)
 httpExpectOnError =
     \httpExpect ->
         case httpExpect of
-            HttpExpectJson toState ->
-                \e -> e |> Err |> toState
-
             HttpExpectString toState ->
                 \e -> e |> Err |> toState
 
@@ -1936,24 +1918,6 @@ httpExpectJsonDecoder expect =
                 in
                 Json.Decode.field "body"
                     (case expect of
-                        HttpExpectJson toState ->
-                            Json.Decode.map toState
-                                (if isOk then
-                                    Json.Decode.string
-                                        |> Json.Decode.map
-                                            (\jsonString ->
-                                                case jsonString |> Json.Decode.decodeString Json.Decode.value of
-                                                    Err jsonError ->
-                                                        Err (HttpBadBody { metadata = meta, actualBody = jsonString, jsonError = jsonError })
-
-                                                    Ok json ->
-                                                        Ok json
-                                            )
-
-                                 else
-                                    badStatusJsonDecoder
-                                )
-
                         HttpExpectString toState ->
                             Json.Decode.map toState
                                 (if isOk then
@@ -2157,7 +2121,6 @@ type HttpError
     | HttpTimeout
     | HttpNetworkError
     | HttpBadStatus { metadata : HttpMetadata, body : Json.Decode.Value }
-    | HttpBadBody { metadata : HttpMetadata, actualBody : String, jsonError : Json.Decode.Error }
 
 
 {-| Extra information about the response:

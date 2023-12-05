@@ -341,7 +341,7 @@ interface HttpRequest {
     timeout: number | null
     body: string | null
 }
-type Expect = "STRING" | "JSON" | "WHATEVER"
+type Expect = "STRING" | "WHATEVER"
 
 type HttpResponse = { ok: ResponseSuccess } | { err: any }
 interface ResponseSuccess {
@@ -366,7 +366,7 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
         .then((res: Response) => {
             const headers = Object.fromEntries(res.headers.entries());
             switch (request.expect) {
-                case "JSON": case "STRING": {
+                case "STRING": {
                     return res.text().then((x) => ({
                         ok: {
                             url: res.url,

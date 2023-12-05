@@ -33,10 +33,31 @@ bodyJson value =
 
 
 {-| Expect the response body to be `JSON`, decode it using the supplied decoder.
+
+The result will either be
+
+  - `Err` with an [`HttpError`](Web#HttpError) if it didn't succeed
+  - `Ok` if there was a result with either
+      - `Ok` with the [`Json.Decode.Value`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Value)
+      - `Err` with a [`Json.Decode.Error`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Error) the actual text response
+
 -}
-expectJson : HttpExpect (Result HttpError Json.Decode.Value)
+expectJson : HttpExpect (Result HttpError (Result { actualBody : String, jsonError : Json.Decode.Error } Json.Decode.Value))
 expectJson =
-    Web.HttpExpectJson identity
+    Web.HttpExpectString
+        (\result ->
+            case result of
+                Ok jsonString ->
+                    case jsonString |> Json.Decode.decodeString Json.Decode.value of
+                        Err jsonError ->
+                            Ok (Err { actualBody = jsonString, jsonError = jsonError })
+
+                        Ok json ->
+                            Ok (Ok json)
+
+                Err httpError ->
+                    Err httpError
+        )
 
 
 {-| Expect the response body to be a `String`.
