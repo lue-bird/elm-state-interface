@@ -4,7 +4,7 @@ module Web.Svg exposing (element)
 
 @docs element
 
-for text, attributes etc use the re
+for text, attributes etc use the helpers in [`Web.Dom`](Web-Dom)
 
 -}
 
