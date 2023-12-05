@@ -1939,7 +1939,18 @@ httpExpectJsonDecoder expect =
                         HttpExpectJson toState ->
                             Json.Decode.map toState
                                 (if isOk then
-                                    Json.Decode.map Ok Json.Decode.value
+                                    Json.Decode.map toState
+                                        (Json.Decode.string
+                                            |> Json.Decode.map
+                                                (\jsonString ->
+                                                    case jsonString |> Json.Decode.decodeString Json.Decode.value of
+                                                        Err jsonError ->
+                                                            Err (HttpBadBody { metadata = meta, actualBody = jsonString, jsonError = jsonError })
+
+                                                        Ok json ->
+                                                            Ok json
+                                                )
+                                        )
 
                                  else
                                     badStatusJsonDecoder
@@ -2148,6 +2159,7 @@ type HttpError
     | HttpTimeout
     | HttpNetworkError
     | HttpBadStatus { metadata : HttpMetadata, body : Json.Decode.Value }
+    | HttpBadBody { metadata : HttpMetadata, actualBody : String, jsonError : Json.Decode.Error }
 
 
 {-| Extra information about the response:

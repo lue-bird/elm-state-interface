@@ -354,19 +354,19 @@ interface ResponseSuccess {
 
 function httpFetch(request: HttpRequest, abortController: AbortController): Promise<HttpResponse> {
     if (request.timeout) {
-        setTimeout(() => abortController?.abort(), request.timeout);
+        setTimeout(() => abortController.abort(), request.timeout);
     }
 
     return fetch(request.url, {
         method: request.method,
         body: request.body || null,
         headers: new Headers(request.headers),
-        signal: abortController?.signal,
+        signal: abortController.signal,
     })
         .then((res: Response) => {
             const headers = Object.fromEntries(res.headers.entries());
             switch (request.expect) {
-                case "STRING": {
+                case "JSON": case "STRING": {
                     return res.text().then((x) => ({
                         ok: {
                             url: res.url,
@@ -375,18 +375,7 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
                             statusText: res.statusText,
                             body: x || null,
                         }
-                    }));
-                }
-                case "JSON": {
-                    return res.json().then((x) => ({
-                        ok: {
-                            url: res.url,
-                            headers: headers,
-                            statusCode: res.status,
-                            statusText: res.statusText,
-                            body: x || null,
-                        }
-                    }));
+                    }))
                 }
                 case "WHATEVER": {
                     return {
