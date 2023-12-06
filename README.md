@@ -29,7 +29,7 @@ type CounterEvent
 
 programConfig : Web.ProgramConfig State
 programConfig =
-    { initialState = 0
+    { initialState = WaitingForInitialUrl
     , interface =
         \state ->
             case state of
