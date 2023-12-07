@@ -2,4 +2,5 @@
 
 ## 2.0.0
 
-  - `HttpExpectJson` was removed in favor of explicit `Json.Decode.Error` handling in `Web.Http.expectJson`
+  - remove `HttpExpectJson` in favor of explicit `Json.Decode.Error` handling in `Web.Http.expectJson`
+  - add `module Web.Audio`
