@@ -4,6 +4,7 @@ module Web exposing
     , programInit, programUpdate, programSubscriptions
     , Interface, interfaceBatch, interfaceNone, interfaceMap
     , DomNode(..), DomElement, DefaultActionHandling(..)
+    , Audio, AudioSource, AudioSourceLoadError(..), AudioVolumeTimeline, EditAudioDiff(..)
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceSingle(..), InterfaceSingleWithReceive(..), InterfaceSingleWithoutReceive(..)
     , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
@@ -40,6 +41,11 @@ Types used by [`Web.Dom`](Web-Dom)
 @docs DomNode, DomElement, DefaultActionHandling
 
 
+## Audio
+
+@docs Audio, AudioSource, AudioSourceLoadError, AudioVolumeTimeline, EditAudioDiff
+
+
 ## HTTP
 
 Types used by [`Web.Http`](Web-Http)
@@ -56,10 +62,11 @@ Types used by [`Web.Http`](Web-Http)
 
 -}
 
-import AndOr
+import AndOr exposing (AndOr)
 import AppUrl exposing (AppUrl)
 import Array exposing (Array)
 import Dict exposing (Dict)
+import Duration exposing (Duration)
 import Emptiable exposing (Emptiable)
 import Json.Decode
 import Json.Decode.Local
@@ -159,6 +166,20 @@ type InterfaceSingleWithoutReceive
     | NavigationReload
     | FileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
     | ClipboardReplaceBy String
+    | AudioPlay Audio
+
+
+{-| These are possible errors we can get when loading an audio source file.
+
+  - `AudioSourceLoadDecodeError`: This means we got the data but we couldn't decode it. One likely reason for this is that your url points to the wrong place and you're trying to decode a 404 page instead.
+  - `AudioSourceLoadNetworkError`: We couldn't reach the url. Either it's some kind of CORS issue, the server is down, or you're disconnected from the internet.
+  - `AudioSourceLoadUnknownError`: the audio source didn't for some other reason!
+
+-}
+type AudioSourceLoadError
+    = AudioSourceLoadDecodeError
+    | AudioSourceLoadNetworkError
+    | AudioSourceLoadUnknownError String
 
 
 {-| An [`InterfaceSingle`](#InterfaceSingle) that will notify elm some time in the future.
@@ -177,6 +198,7 @@ type InterfaceSingleWithReceive state
     | WindowAnimationFrameListen (Time.Posix -> state)
     | NavigationUrlRequest (AppUrl -> state)
     | ClipboardRequest (String -> state)
+    | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> state }
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -306,6 +328,7 @@ type InterfaceSingleWithReceiveId
     | IdNavigationUrlRequest
     | IdDocumentEventListen String
     | IdClipboardRequest
+    | IdAudioSourceLoad String
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -487,6 +510,9 @@ interfaceWithReceiveMap stateChange =
 
             ClipboardRequest toState ->
                 (\event -> toState event |> stateChange) |> ClipboardRequest
+
+            AudioSourceLoad load ->
+                { url = load.url, on = \event -> load.on event |> stateChange } |> AudioSourceLoad
 
 
 httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
@@ -773,6 +799,9 @@ interfaceWithReceiveToId =
             ClipboardRequest _ ->
                 IdClipboardRequest
 
+            AudioSourceLoad load ->
+                IdAudioSourceLoad load.url
+
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
@@ -853,6 +882,12 @@ idInterfaceWithoutReceiveToComparable =
 
             IdClipboardRequest ->
                 ComparableString "IdClipboardRequest"
+
+            IdAudioSourceLoad url ->
+                ComparableList
+                    [ ComparableString "IdAudioSourceLoad"
+                    , ComparableString url
+                    ]
 
 
 httpRequestIdToComparable : HttpRequestId -> Comparable
@@ -990,6 +1025,13 @@ interfaceWithoutReceiveToComparable =
                     , ComparableString replacement
                     ]
 
+            AudioPlay audio ->
+                ComparableList
+                    [ ComparableString "AudioPlay"
+                    , audio.url |> ComparableString
+                    , audio.startTime |> Time.posixToMillis |> String.fromInt |> ComparableString
+                    ]
+
 
 interfaceDiffs :
     { old : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
@@ -1019,7 +1061,7 @@ domNodeToId domNode =
             DomElementId (element |> domElementToId)
 
 
-interfaceOldAndOrUpdatedDiffs : AndOr.AndOr (InterfaceSingle state) (InterfaceSingle state) -> List InterfaceDiff
+interfaceOldAndOrUpdatedDiffs : AndOr (InterfaceSingle state) (InterfaceSingle state) -> List InterfaceDiff
 interfaceOldAndOrUpdatedDiffs =
     \interfaceAndOr ->
         case interfaceAndOr of
@@ -1027,6 +1069,16 @@ interfaceOldAndOrUpdatedDiffs =
                 ( domElementPreviouslyRendered, domElementToRender )
                     |> domNodeDiff []
                     |> List.map (\diff -> diff |> AddEditDom |> InterfaceWithReceiveDiff)
+
+            AndOr.Both ( InterfaceWithoutReceive (AudioPlay previouslyPlayed), InterfaceWithoutReceive (AudioPlay toPlay) ) ->
+                ( previouslyPlayed, toPlay )
+                    |> audioDiff
+                    |> List.map
+                        (\diff ->
+                            { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
+                                |> AddEditAudio
+                                |> InterfaceWithoutReceiveDiff
+                        )
 
             AndOr.Both _ ->
                 []
@@ -1078,91 +1130,129 @@ interfaceOldAndOrUpdatedDiffs =
 
                             ClipboardRequest _ ->
                                 []
+
+                            AudioSourceLoad _ ->
+                                []
                 )
                     |> List.map InterfaceWithoutReceiveDiff
 
             AndOr.Only (Or.Second onlyUpdated) ->
                 (case onlyUpdated of
                     InterfaceWithoutReceive interfaceWithoutReceive ->
-                        case interfaceWithoutReceive of
+                        (case interfaceWithoutReceive of
                             ConsoleLog string ->
-                                AddConsoleLog string |> InterfaceWithoutReceiveDiff
+                                AddConsoleLog string
 
                             ConsoleWarn string ->
-                                AddConsoleWarn string |> InterfaceWithoutReceiveDiff
+                                AddConsoleWarn string
 
                             ConsoleError string ->
-                                AddConsoleError string |> InterfaceWithoutReceiveDiff
+                                AddConsoleError string
 
                             NavigationReplaceUrl url ->
-                                AddNavigationReplaceUrl url |> InterfaceWithoutReceiveDiff
+                                AddNavigationReplaceUrl url
 
                             NavigationPushUrl url ->
-                                AddNavigationPushUrl url |> InterfaceWithoutReceiveDiff
+                                AddNavigationPushUrl url
 
                             NavigationGo urlSteps ->
-                                AddNavigationGo urlSteps |> InterfaceWithoutReceiveDiff
+                                AddNavigationGo urlSteps
 
                             NavigationLoad url ->
-                                url |> AddNavigationLoad |> InterfaceWithoutReceiveDiff
+                                url |> AddNavigationLoad
 
                             NavigationReload ->
-                                AddNavigationReload |> InterfaceWithoutReceiveDiff
+                                AddNavigationReload
 
                             FileDownloadUnsignedInt8s config ->
-                                AddFileDownloadUnsignedInt8s config |> InterfaceWithoutReceiveDiff
+                                AddFileDownloadUnsignedInt8s config
 
                             ClipboardReplaceBy replacement ->
-                                AddClipboardReplaceBy replacement |> InterfaceWithoutReceiveDiff
+                                AddClipboardReplaceBy replacement
+
+                            AudioPlay audio ->
+                                AddAudio audio
+                        )
+                            |> InterfaceWithoutReceiveDiff
 
                     InterfaceWithReceive interfaceWithReceive ->
-                        case interfaceWithReceive of
+                        (case interfaceWithReceive of
                             TimePosixRequest _ ->
-                                AddTimePosixRequest |> InterfaceWithReceiveDiff
+                                AddTimePosixRequest
 
                             TimezoneOffsetRequest _ ->
-                                AddTimezoneOffsetRequest |> InterfaceWithReceiveDiff
+                                AddTimezoneOffsetRequest
 
                             TimezoneNameRequest _ ->
-                                AddTimezoneNameRequest |> InterfaceWithReceiveDiff
+                                AddTimezoneNameRequest
 
                             TimePeriodicallyListen timePeriodicallyListen ->
                                 AddTimePeriodicallyListen
                                     { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-                                    |> InterfaceWithReceiveDiff
 
                             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
-                                AddRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count |> InterfaceWithReceiveDiff
+                                AddRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count
 
                             DomNodeRender domElementToRender ->
                                 { path = []
                                 , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
                                 }
                                     |> AddEditDom
-                                    |> InterfaceWithReceiveDiff
 
                             HttpRequest httpRequest ->
-                                AddHttpRequest (httpRequest |> httpRequestToId) |> InterfaceWithReceiveDiff
+                                AddHttpRequest (httpRequest |> httpRequestToId)
 
                             WindowSizeRequest _ ->
-                                AddWindowSizeRequest |> InterfaceWithReceiveDiff
+                                AddWindowSizeRequest
 
                             WindowEventListen listen ->
-                                AddWindowEventListen listen.eventName |> InterfaceWithReceiveDiff
+                                AddWindowEventListen listen.eventName
 
                             WindowAnimationFrameListen _ ->
-                                AddWindowAnimationFrameListen |> InterfaceWithReceiveDiff
+                                AddWindowAnimationFrameListen
 
                             NavigationUrlRequest _ ->
-                                AddNavigationUrlRequest |> InterfaceWithReceiveDiff
+                                AddNavigationUrlRequest
 
                             DocumentEventListen listen ->
-                                AddDocumentEventListen listen.eventName |> InterfaceWithReceiveDiff
+                                AddDocumentEventListen listen.eventName
 
                             ClipboardRequest _ ->
-                                AddClipboardRequest |> InterfaceWithReceiveDiff
+                                AddClipboardRequest
+
+                            AudioSourceLoad load ->
+                                AddAudioSourceLoad load.url
+                        )
+                            |> InterfaceWithReceiveDiff
                 )
                     |> List.singleton
+
+
+audioDiff : ( Audio, Audio ) -> List EditAudioDiff
+audioDiff =
+    \( previous, new ) ->
+        [ if previous.volume == new.volume then
+            Nothing
+
+          else
+            ReplacementAudioVolume new.volume |> Just
+        , if previous.detune == new.detune then
+            Nothing
+
+          else
+            ReplacementAudioDetune new.detune |> Just
+        , if previous.speed == new.speed then
+            Nothing
+
+          else
+            ReplacementAudioSpeed new.speed |> Just
+        , if previous.volumeTimelines == new.volumeTimelines then
+            Nothing
+
+          else
+            ReplacementAudioVolumeTimelines new.volumeTimelines |> Just
+        ]
+            |> List.filterMap identity
 
 
 interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
@@ -1358,7 +1448,15 @@ interfaceWithReceiveDiffToJson =
 
                 AddClipboardRequest ->
                     ( "addClipboardRequest", Json.Encode.null )
+
+                AddAudioSourceLoad audioSourceLoad ->
+                    ( "addAudioSourceLoad", audioSourceLoad |> Json.Encode.string )
             ]
+
+
+audioVolumeTimelineToJson : AudioVolumeTimeline -> Json.Encode.Value
+audioVolumeTimelineToJson =
+    Json.Encode.dict String.fromInt Json.Encode.float
 
 
 interfaceWithoutReceiveDiffToJson : InterfaceWithoutReceiveDiff -> Json.Encode.Value
@@ -1406,6 +1504,33 @@ interfaceWithoutReceiveDiffToJson =
                     , replacement |> Json.Encode.string
                     )
 
+                AddAudio audio ->
+                    ( "addAudio", audio |> audioToJson )
+
+                AddEditAudio audioEdit ->
+                    ( "addEditAudio"
+                    , Json.Encode.object
+                        [ ( "url", audioEdit.url |> Json.Encode.string )
+                        , ( "startTime", audioEdit.startTime |> Time.posixToMillis |> Json.Encode.int )
+                        , ( "replacement"
+                          , Json.Encode.object
+                                [ case audioEdit.replacement of
+                                    ReplacementAudioDetune newDetune ->
+                                        ( "detune", newDetune |> Json.Encode.float )
+
+                                    ReplacementAudioSpeed newSpeed ->
+                                        ( "speed", newSpeed |> Json.Encode.float )
+
+                                    ReplacementAudioVolume newVolume ->
+                                        ( "volume", newVolume |> Json.Encode.float )
+
+                                    ReplacementAudioVolumeTimelines newVolumeTimelines ->
+                                        ( "volumeTimelines", newVolumeTimelines |> Json.Encode.list audioVolumeTimelineToJson )
+                                ]
+                          )
+                        ]
+                    )
+
                 RemoveTimePeriodicallyListen intervalDuration ->
                     ( "removeTimePeriodicallyListen"
                     , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
@@ -1425,7 +1550,27 @@ interfaceWithoutReceiveDiffToJson =
 
                 RemoveDocumentEventListen eventName ->
                     ( "removeDocumentEventListen", eventName |> Json.Encode.string )
+
+                RemoveAudio audioId ->
+                    ( "removeAudio"
+                    , Json.Encode.object
+                        [ ( "url", audioId.url |> Json.Encode.string )
+                        , ( "startTime", audioId.startTime |> Time.posixToMillis |> Json.Encode.int )
+                        ]
+                    )
             ]
+
+
+audioToJson : Audio -> Json.Encode.Value
+audioToJson audio =
+    Json.Encode.object
+        [ ( "url", audio.url |> Json.Encode.string )
+        , ( "startTime", audio.startTime |> Time.posixToMillis |> Json.Encode.int )
+        , ( "volume", Json.Encode.float audio.volume )
+        , ( "volumeTimelines", audio.volumeTimelines |> Json.Encode.list audioVolumeTimelineToJson )
+        , ( "speed", Json.Encode.float audio.speed )
+        , ( "detune", Json.Encode.float audio.detune )
+        ]
 
 
 {-| The "init" part for an embedded program
@@ -1597,6 +1742,8 @@ interfaceDiffWithReceiveJsonDecoder =
             (Json.Decode.field "addNavigationUrlRequest" (Json.Decode.null ()))
         , Json.Decode.map AddDocumentEventListen
             (Json.Decode.field "addDocumentEventListen" Json.Decode.string)
+        , Json.Decode.map AddAudioSourceLoad
+            (Json.Decode.field "addAudioSourceLoad" Json.Decode.string)
         ]
 
 
@@ -1866,6 +2013,44 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
             case interfaceAddDiff of
                 AddClipboardRequest ->
                     Json.Decode.map toState Json.Decode.string |> Just
+
+                _ ->
+                    Nothing
+
+        AudioSourceLoad load ->
+            case interfaceAddDiff of
+                AddAudioSourceLoad loadedUrl ->
+                    if loadedUrl == load.url then
+                        Json.Decode.map load.on
+                            (Json.Decode.oneOf
+                                [ Json.Decode.map (\duration -> Ok { url = loadedUrl, duration = duration })
+                                    (Json.Decode.field "ok"
+                                        (Json.Decode.field "durationInSeconds"
+                                            (Json.Decode.map Duration.seconds Json.Decode.float)
+                                        )
+                                    )
+                                , Json.Decode.map
+                                    (\errorMessage ->
+                                        case errorMessage of
+                                            "NetworkError" ->
+                                                Err AudioSourceLoadNetworkError
+
+                                            "MediaDecodeAudioDataUnknownContentType" ->
+                                                Err AudioSourceLoadDecodeError
+
+                                            "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
+                                                Err AudioSourceLoadDecodeError
+
+                                            unknownMessage ->
+                                                Err (AudioSourceLoadUnknownError unknownMessage)
+                                    )
+                                    (Json.Decode.field "err" Json.Decode.string)
+                                ]
+                            )
+                            |> Just
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
@@ -2164,12 +2349,15 @@ type InterfaceWithoutReceiveDiff
     | AddNavigationReload
     | AddFileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
     | AddClipboardReplaceBy String
+    | AddAudio Audio
+    | AddEditAudio { url : String, startTime : Time.Posix, replacement : EditAudioDiff }
     | RemoveTimePeriodicallyListen { milliSeconds : Int }
     | RemoveHttpRequest HttpRequestId
     | RemoveDom
     | RemoveWindowEventListen String
     | RemoveWindowAnimationFrameListen
     | RemoveDocumentEventListen String
+    | RemoveAudio { url : String, startTime : Time.Posix }
 
 
 {-| Actions that will notify elm some time in the future
@@ -2188,6 +2376,67 @@ type InterfaceWithReceiveDiff
     | AddWindowAnimationFrameListen
     | AddNavigationUrlRequest
     | AddClipboardRequest
+    | AddAudioSourceLoad String
+
+
+{-| What parts of an [`Audio`](#Audio) are replaced
+-}
+type EditAudioDiff
+    = ReplacementAudioVolume Float
+    | ReplacementAudioDetune Float
+    | ReplacementAudioSpeed Float
+    | ReplacementAudioVolumeTimelines (List AudioVolumeTimeline)
+
+
+{-| Some kind of sound we want to play. To create `Audio` start with [`Web.Audio.fromSource`](Web-Audio#fromSource)
+-}
+type alias Audio =
+    RecordWithoutConstructorFunction
+        { url : String
+        , startTime : Time.Posix
+        , volume : Float
+        , volumeTimelines : List AudioVolumeTimeline
+        , speed : Float
+        , detune : Float
+        }
+
+
+{-| Audio data we can use to play sounds.
+Use [`Web.Audio.sourceLoad`](Web-Audio#sourceLoad) to fetch an [`AudioSource`](#AudioSource).
+
+You can for example use the contained source `duration` to loop:
+
+    audioLoop : AudioSource -> Time.Posix -> Time.Posix -> Audio
+    audioLoop source initialTime lastTick =
+        Web.Audio.fromSource source
+            (Duration.addTo
+                initialTime
+                (source.duration
+                    |> Quantity.multiplyBy
+                        (((Duration.from initialTime lastTick |> Duration.inSeconds)
+                            / (source.duration |> Duration.inSeconds)
+                         )
+                            |> floor
+                            |> toFloat
+                        )
+                )
+            )
+
+-}
+type alias AudioSource =
+    RecordWithoutConstructorFunction
+        { url : String
+        , duration : Duration
+        }
+
+
+{-| defining how loud a sound should be at any point in time
+-}
+type alias AudioVolumeTimeline =
+    Dict
+        -- in milliseconds
+        Int
+        Float
 
 
 {-| Change the current node at a given path using a given [`ReplacementInEditDomDiff`](#ReplacementInEditDomDiff)

@@ -17,9 +17,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addNavigationReload": (_config: null) => { reload() },
         "addFileDownloadUnsignedInt8s": (config) => { fileDownloadBytes(config) },
         "addClipboardReplaceBy": (config: string) => { navigator.clipboard.writeText(config) },
+        "addAudio": addAudio,
+        "addEditAudio": editAudio,
         "removeTimePeriodicallyListen": removeTimePeriodicallyListen,
         "removeDom": (_config: null) => { appConfig.domElement.replaceChildren() },
-        "removeHttpRequest": (config) => {
+        "removeHttpRequest": (config: string) => {
             const maybeAbortController = httpRequestAbortControllers[config]
             if (maybeAbortController) {
                 maybeAbortController.abort()
@@ -27,7 +29,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         },
         "removeWindowEventListen": windowEventListenRemove,
         "removeAnimationFrameListen": (_config: null) => { removeAnimationFrameListen() },
-        "removeDocumentEventListen": documentEventListenRemove
+        "removeDocumentEventListen": documentEventListenRemove,
+        "removeAudio": removeAudio
     }
     const interfaceWithSendToElmImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
         "addTimePosixRequest": (_config: null, sendToElm) => {
@@ -67,7 +70,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addDocumentEventListen": documentEventListenAdd,
         "addClipboardRequest": (_config: null, sendToElm) => {
             navigator.clipboard.readText().then(sendToElm)
-        }
+        },
+        "addAudioSourceLoad": audioSourceLoad
     }
 
 
@@ -165,7 +169,7 @@ function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replac
 const httpRequestAbortControllers: { [key: string]: AbortController } = {}
 
 const timePeriodicallyListens: { [key: number]: number } = {}
-function addTimePeriodicallyListen(intervalDuration: { milliSeconds: number }, sendToElm: (v: any) => any) {
+function addTimePeriodicallyListen(intervalDuration: { milliSeconds: number }, sendToElm: (v: any) => void) {
     timePeriodicallyListens[intervalDuration.milliSeconds] =
         window.setInterval(
             () => { sendToElm(Date.now()) },
@@ -183,12 +187,12 @@ function removeTimePeriodicallyListen(intervalDuration: { milliSeconds: number }
 function getTimezoneName(): string | number {
     try {
         return Intl.DateTimeFormat().resolvedOptions().timeZone
-    } catch (e) {
+    } catch (err) {
         return new Date().getTimezoneOffset()
     }
 }
 
-function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => any): Element | Text {
+function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => void): Element | Text {
     if (node?.text) {
         return document.createTextNode(node.text)
     } else { // if (node?.element)
@@ -225,7 +229,7 @@ function domElementAddAttributesNamespaced(domElement: Element, attributesNamesp
         domElement.setAttributeNS(attributeNamespaced.namespace, attributeNamespaced.key, attributeNamespaced.value)
     })
 }
-function domElementAddEventListens(domElement: Element, eventListens: any, path: number[], sendToElm: (v: any) => any) {
+function domElementAddEventListens(domElement: Element, eventListens: any, path: number[], sendToElm: (v: any) => void) {
     for (let [eventListenName, defaultActionHandling] of Object.entries(eventListens)) {
         const abortController: AbortController = new AbortController()
         domElement.addEventListener(
@@ -259,14 +263,14 @@ function noScript(tag: string) {
     return RE_script.test(tag) ? 'p' : tag
 }
 
-function windowEventListenAdd(eventName: string, sendToElm: (v: any) => any) {
+function windowEventListenAdd(eventName: string, sendToElm: (v: any) => void) {
     (window as { [key: string]: any })["on" + eventName] = sendToElm
 }
 function windowEventListenRemove(eventName: string) {
     (window as { [key: string]: any })["on" + eventName] = null
 }
 
-function documentEventListenAdd(eventName: string, sendToElm: (v: any) => any) {
+function documentEventListenAdd(eventName: string, sendToElm: (v: any) => void) {
     (window as { [key: string]: any })["on" + eventName] = sendToElm
 }
 function documentEventListenRemove(eventName: string) {
@@ -291,8 +295,7 @@ function reload() {
 function load(url: string) {
     try {
         window.location.href = url
-    }
-    catch (err) {
+    } catch (err) {
         // Only Firefox can throw a NS_ERROR_MALFORMED_URI exception here.
         // Other browsers reload the page, so let's be consistent about that.
         reload()
@@ -300,7 +303,7 @@ function load(url: string) {
 }
 
 let runningAnimationFrameLoopId: number | undefined = undefined
-function addAnimationFrameListen(sendToElm: (v: any) => any) {
+function addAnimationFrameListen(sendToElm: (v: any) => void) {
     runningAnimationFrameLoopId =
         window.requestAnimationFrame(_timestamp => {
             if (runningAnimationFrameLoopId) {
@@ -357,9 +360,8 @@ interface ResponseSuccess {
 
 function httpFetch(request: HttpRequest, abortController: AbortController): Promise<HttpResponse> {
     if (request.timeout) {
-        setTimeout(() => abortController.abort(), request.timeout);
+        setTimeout(() => abortController.abort(), request.timeout)
     }
-
     return fetch(request.url, {
         method: request.method,
         body: request.body || null,
@@ -367,7 +369,7 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
         signal: abortController.signal,
     })
         .then((res: Response) => {
-            const headers = Object.fromEntries(res.headers.entries());
+            const headers = Object.fromEntries(res.headers.entries())
             switch (request.expect) {
                 case "STRING": {
                     return res.text().then((x) => ({
@@ -394,4 +396,165 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
             }
         })
         .catch((e) => { return { err: e } })
+}
+
+
+type AudioInfo = {
+    url: string,
+    volume: number,
+    startTime: number,
+    speed: number,
+    volumeTimelines: VolumeTimeline[],
+    detune: number
+}
+type VolumeTimeline = { volume: number, time: number }[]
+
+const audioBuffers: { [key: string]: AudioBuffer } = {}
+const audioContext = new AudioContext()
+let audioPlaying: { url: string, startTime: number, sourceNode: AudioBufferSourceNode, gainNode: GainNode, volumeTimelineGainNodes: GainNode[] }[] = []
+
+function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
+    const request = new XMLHttpRequest()
+    request.open("GET", url, true)
+    request.responseType = "arraybuffer"
+    request.onerror = function () {
+        sendToElm({ err: "NetworkError" })
+    }
+    request.onload = function () {
+        audioContext.decodeAudioData(
+            request.response,
+            function (buffer) {
+                audioBuffers[url] = buffer
+                sendToElm({
+                    ok: {
+                        durationInSeconds: buffer.length / buffer.sampleRate
+                    }
+                })
+            },
+            function (error) {
+                sendToElm({ err: error.message })
+            })
+    }
+    request.send()
+}
+
+function createVolumeTimelineGainNodes(volumeTimelines: VolumeTimeline[], currentTime: number) {
+    return volumeTimelines.map((volumeTimeline: VolumeTimeline) => {
+        const gainNode = audioContext.createGain();
+        if (volumeTimeline[0]) { // should be present
+            gainNode.gain.setValueAtTime(volumeTimeline[0].volume, 0)
+            gainNode.gain.linearRampToValueAtTime(volumeTimeline[0].volume, 0)
+        }
+        const currentTime_ = posixToContextTime(currentTime, currentTime)
+        forEachConsecutive(volumeTimeline, pair => {
+            const previousTime = posixToContextTime(pair.current.time, currentTime)
+            const nextTime = posixToContextTime(pair.next.time, currentTime)
+
+            if (nextTime > currentTime_ && currentTime_ >= previousTime) {
+                const currentVolume = interpolate(previousTime, pair.current.volume, nextTime, pair.next.volume, currentTime_);
+                gainNode.gain.setValueAtTime(currentVolume, 0)
+                gainNode.gain.linearRampToValueAtTime(pair.next.volume, nextTime)
+            } else if (nextTime > currentTime_) {
+                gainNode.gain.linearRampToValueAtTime(pair.next.volume, nextTime)
+            } else {
+                gainNode.gain.setValueAtTime(pair.next.volume, 0)
+            }
+        })
+        return gainNode
+    });
+}
+
+function addAudio(config: AudioInfo) {
+    let buffer = audioBuffers[config.url]
+    if (buffer) {
+        createAudio(config, buffer)
+    } else {
+        console.warn("lue-bird/elm-state-interface: tried to play audio from source that isn't loaded. Have you used Web.Audio.sourceLoad?")
+    }
+}
+function createAudio(config: AudioInfo, buffer: AudioBuffer) {
+    const currentTime = new Date().getTime()
+    const source = audioContext.createBufferSource()
+    source.buffer = buffer
+    source.playbackRate.value = config.speed
+    source.detune.value = config.detune
+
+    const timelineGainNodes = createVolumeTimelineGainNodes(config.volumeTimelines, currentTime)
+    const gainNode = audioContext.createGain()
+    gainNode.gain.setValueAtTime(config.volume, 0)
+
+    forEachConsecutive([source, gainNode, ...timelineGainNodes, audioContext.destination], pair => {
+        pair.current.connect(pair.next)
+    })
+
+    if (config.startTime >= currentTime) {
+        source.start(posixToContextTime(config.startTime, currentTime), 0)
+    } else {
+        source.start(0, (currentTime - config.startTime) / 1000)
+    }
+    audioPlaying.push({
+        url: config.url,
+        startTime: config.startTime,
+        sourceNode: source,
+        gainNode: gainNode,
+        volumeTimelineGainNodes: timelineGainNodes
+    })
+}
+function removeAudio(config: { url: string, startTime: number }) {
+    audioPlaying = audioPlaying.filter(audio => {
+        if (audio.url === config.url && audio.startTime === config.startTime) {
+            audio.sourceNode.stop()
+            audio.sourceNode.disconnect()
+            audio.gainNode.disconnect()
+            audio.volumeTimelineGainNodes.map(node => { node.disconnect() })
+            return false
+        }
+        return true
+    })
+}
+function editAudio(config: { url: string, startTime: number, replacement: any }) {
+    audioPlaying.forEach(value => {
+        if (value.url === config.url && value.startTime === config.startTime) {
+            if (config.replacement?.volume) {
+                value.gainNode.gain.setValueAtTime(config.replacement.volume, 0)
+            } else if (config.replacement?.volumeTimelines) {
+                const currentTime = new Date().getTime()
+                value.volumeTimelineGainNodes.forEach(node => { node.disconnect() })
+                value.gainNode.disconnect()
+                const newVolumeTimelineGainNodes =
+                    createVolumeTimelineGainNodes(config.replacement.volumeTimelines, currentTime)
+                forEachConsecutive([value.gainNode, ...newVolumeTimelineGainNodes, audioContext.destination], c => {
+                    c.current.connect(c.next)
+                })
+                value.volumeTimelineGainNodes = newVolumeTimelineGainNodes
+            } else if (config.replacement?.speed) {
+                value.sourceNode.playbackRate.setValueAtTime(config.replacement.speed, 0)
+            } else if (config.replacement?.detune) {
+                value.sourceNode.detune.setValueAtTime(config.replacement.detune, 0)
+            }
+        }
+    })
+}
+
+// helpers
+function posixToContextTime(posix: number, currentTimePosix: number) {
+    return (posix - currentTimePosix) / 1000 + audioContext.currentTime
+}
+
+function interpolate(startAt: number, startValue: number, endAt: number, endValue: number, time: number) {
+    let t = (time - startAt) / (endAt - startAt);
+    return Number.isFinite(t) ?
+        t * (endValue - startValue) + startValue
+        :
+        startValue
+}
+
+function forEachConsecutive<element>(array: element[], forPair: ((pair: { current: element, next: element }) => void)) {
+    for (let i = 0; i <= array.length - 2; i++) {
+        const current: element | undefined = array[i]
+        const next: element | undefined = array[i + 1]
+        if (current && next) { // should always work
+            forPair({ current: current, next: next })
+        }
+    }
 }

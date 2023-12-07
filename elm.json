@@ -15,7 +15,8 @@
         "Web.Navigation",
         "Web.Random",
         "Web.FileDownload",
-        "Web.Clipboard"
+        "Web.Clipboard",
+        "Web.Audio"
     ],
     "elm-version": "0.19.1 <= v < 20.0.0",
     "dependencies": {

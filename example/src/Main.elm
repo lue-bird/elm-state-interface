@@ -15,6 +15,7 @@ import Set
 import Time
 import Url
 import Web
+import Web.Audio
 import Web.Dom
 import Web.Navigation
 import Web.Svg
@@ -454,6 +455,8 @@ atSignInterface =
                                 , appleLocation = { x = 3, y = 2 }
                                 , appleCountBefore = state.appleCount
                                 , pickedAppleCount = 0
+                                , eatAppleAudio = Nothing
+                                , eatAppleTimes = []
                                 }
                 )
 
@@ -485,6 +488,8 @@ type alias PickApplesState =
         , tailSegments : List PickApplesLocation
         , appleLocation : PickApplesLocation
         , pickedAppleCount : Int
+        , eatAppleAudio : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
+        , eatAppleTimes : List Time.Posix
         }
 
 
@@ -499,6 +504,7 @@ type PickApplesEvent
     = PickApplesKeyPressed (Result Json.Decode.Error String)
     | PickApplesSimulationTick Time.Posix
     | WindowSizeReceived { width : Int, height : Int }
+    | EatAppleAudioReceived (Result Web.AudioSourceLoadError Web.AudioSource)
 
 
 worldSizeCells : { x : Int, y : Int }
@@ -508,7 +514,17 @@ worldSizeCells =
 
 pickApplesInterface : PickApplesState -> Web.Interface InitializedState
 pickApplesInterface state =
-    [ Web.Time.periodicallyListen (Duration.milliseconds 125)
+    [ case state.eatAppleAudio of
+        Just (Ok eatAppleAudio) ->
+            state.eatAppleTimes
+                |> List.map (\eatAppleTime -> Web.Audio.fromSource eatAppleAudio eatAppleTime)
+                |> List.map Web.Audio.play
+                |> Web.interfaceBatch
+
+        _ ->
+            Web.Audio.sourceLoad "/eat-apple.mp3"
+                |> Web.interfaceMap EatAppleAudioReceived
+    , Web.Time.periodicallyListen (Duration.milliseconds 125)
         |> Web.interfaceMap PickApplesSimulationTick
     , [ Web.Window.sizeRequest, Web.Window.resizeListen ]
         |> Web.interfaceBatch
@@ -648,7 +664,7 @@ pickApplesInterface state =
                     WindowSizeReceived windowSize ->
                         PickingApples { state | windowSize = windowSize }
 
-                    PickApplesSimulationTick _ ->
+                    PickApplesSimulationTick newTime ->
                         let
                             headMovement =
                                 directionToXYOffset state.headDirection
@@ -690,6 +706,12 @@ pickApplesInterface state =
 
                                         else
                                             state.pickedAppleCount
+                                    , eatAppleTimes =
+                                        if applePicked then
+                                            state.eatAppleTimes |> (::) newTime
+
+                                        else
+                                            state.eatAppleTimes
                                     , headLocation = newHeadLocation
                                     , tailSegments = newTailSegments
                                     , appleLocation =
@@ -734,6 +756,9 @@ pickApplesInterface state =
 
                             Just snakeDirection ->
                                 PickingApples { state | headDirection = snakeDirection }
+
+                    EatAppleAudioReceived received ->
+                        PickingApples { state | eatAppleAudio = received |> Just }
             )
 
 
@@ -794,8 +819,6 @@ uiFrame modifiers subs =
          , Web.Dom.style "right" "0"
          , Web.Dom.style "bottom" "0"
          , Web.Dom.style "left" "0"
-
-         --, Web.Dom.style "height" "100vh"
          , Web.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
          , Web.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
          ]
@@ -1040,6 +1063,8 @@ pickApplesStateCodec =
             , tailSegments = tailSegments
             , appleLocation = appleLocation
             , windowSize = dummyWindowSize
+            , eatAppleAudio = Nothing
+            , eatAppleTimes = []
             }
         )
         |> Codec.field "name" .name Codec.string

@@ -8,8 +8,8 @@
         "direct": {
             "NeoVier/elm-review-no-function-outside-of-modules": "2.0.0",
             "SiriusStarr/elm-review-no-single-pattern-case": "2.1.2",
-            "SiriusStarr/elm-review-no-unsorted": "1.1.6",
-            "SiriusStarr/elm-review-pipeline-styles": "1.3.8",
+            "SiriusStarr/elm-review-no-unsorted": "1.1.7",
+            "SiriusStarr/elm-review-pipeline-styles": "1.3.9",
             "dillonkearns/elm-review-no-primitive-type-alias": "1.0.0",
             "elm/core": "1.0.5",
             "fysiweb/elm-review-no-import-as": "1.0.1",
@@ -56,12 +56,12 @@
             "elm-community/string-extra": "4.0.1",
             "elm-explorations/test": "2.1.2",
             "miniBill/elm-fast-dict": "1.1.0",
-            "miniBill/elm-unicode": "1.0.3",
+            "miniBill/elm-unicode": "1.1.0",
             "pzp1997/assoc-list": "1.0.0",
             "rtfeldman/elm-hex": "1.0.0",
             "stil4m/elm-syntax": "7.3.2",
             "stil4m/structured-writer": "1.0.3",
-            "the-sett/elm-pretty-printer": "3.0.0",
+            "the-sett/elm-pretty-printer": "3.1.0",
             "the-sett/elm-syntax-dsl": "6.0.2",
             "turboMaCk/non-empty-list-alias": "1.4.0"
         }
