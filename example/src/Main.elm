@@ -68,7 +68,37 @@ programConfig =
                                         initialized
 
                                     Just newState ->
-                                        newState
+                                        case initialized of
+                                            StartingRoom startingRoomState ->
+                                                case newState of
+                                                    StartingRoom newStartingRoomState ->
+                                                        { newStartingRoomState
+                                                            | posix = startingRoomState.posix
+                                                            , timezone = startingRoomState.timezone
+                                                            , mousePoint = startingRoomState.mousePoint
+                                                        }
+                                                            |> StartingRoom
+
+                                                    otherNewState ->
+                                                        otherNewState
+
+                                            AtSign _ ->
+                                                newState
+
+                                            PickingApples pickingApplesState ->
+                                                case newState of
+                                                    PickingApples newPickingApplesState ->
+                                                        { newPickingApplesState
+                                                            | eatAppleAudio = pickingApplesState.eatAppleAudio
+                                                            , eatAppleTimes = pickingApplesState.eatAppleTimes
+                                                        }
+                                                            |> PickingApples
+
+                                                    otherNewState ->
+                                                        otherNewState
+
+                                            ShowingMapWithExit ->
+                                                newState
                             )
                     ]
                         |> Web.interfaceBatch
