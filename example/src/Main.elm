@@ -552,7 +552,7 @@ pickApplesInterface state =
                 |> Web.interfaceBatch
 
         _ ->
-            Web.Audio.sourceLoad "/eat-apple.mp3"
+            Web.Audio.sourceLoad "eat-apple.mp3"
                 |> Web.interfaceMap EatAppleAudioReceived
     , Web.Time.periodicallyListen (Duration.milliseconds 125)
         |> Web.interfaceMap PickApplesSimulationTick
