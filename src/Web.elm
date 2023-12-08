@@ -1456,7 +1456,16 @@ interfaceWithReceiveDiffToJson =
 
 audioVolumeTimelineToJson : AudioVolumeTimeline -> Json.Encode.Value
 audioVolumeTimelineToJson =
-    Json.Encode.dict String.fromInt Json.Encode.float
+    \timeline ->
+        timeline
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( time, volume ) ->
+                    Json.Encode.object
+                        [ ( "time", time |> Json.Encode.int )
+                        , ( "volume", volume |> Json.Encode.float )
+                        ]
+                )
 
 
 interfaceWithoutReceiveDiffToJson : InterfaceWithoutReceiveDiff -> Json.Encode.Value
@@ -1515,17 +1524,20 @@ interfaceWithoutReceiveDiffToJson =
                         , ( "replacement"
                           , Json.Encode.object
                                 [ case audioEdit.replacement of
-                                    ReplacementAudioDetune newDetune ->
-                                        ( "detune", newDetune |> Json.Encode.float )
+                                    ReplacementAudioDetune new ->
+                                        ( "detune", new |> Json.Encode.float )
 
-                                    ReplacementAudioSpeed newSpeed ->
-                                        ( "speed", newSpeed |> Json.Encode.float )
+                                    ReplacementAudioSpeed new ->
+                                        ( "speed", new |> Json.Encode.float )
 
-                                    ReplacementAudioVolume newVolume ->
-                                        ( "volume", newVolume |> Json.Encode.float )
+                                    ReplacementAudioVolume new ->
+                                        ( "volume", new |> Json.Encode.float )
 
-                                    ReplacementAudioVolumeTimelines newVolumeTimelines ->
-                                        ( "volumeTimelines", newVolumeTimelines |> Json.Encode.list audioVolumeTimelineToJson )
+                                    ReplacementAudioPan new ->
+                                        ( "pan", new |> Json.Encode.float )
+
+                                    ReplacementAudioVolumeTimelines new ->
+                                        ( "volumeTimelines", new |> Json.Encode.list audioVolumeTimelineToJson )
                                 ]
                           )
                         ]
@@ -1566,10 +1578,11 @@ audioToJson audio =
     Json.Encode.object
         [ ( "url", audio.url |> Json.Encode.string )
         , ( "startTime", audio.startTime |> Time.posixToMillis |> Json.Encode.int )
-        , ( "volume", Json.Encode.float audio.volume )
+        , ( "volume", audio.volume |> Json.Encode.float )
         , ( "volumeTimelines", audio.volumeTimelines |> Json.Encode.list audioVolumeTimelineToJson )
-        , ( "speed", Json.Encode.float audio.speed )
-        , ( "detune", Json.Encode.float audio.detune )
+        , ( "speed", audio.speed |> Json.Encode.float )
+        , ( "detune", audio.detune |> Json.Encode.float )
+        , ( "pan", audio.pan |> Json.Encode.float )
         ]
 
 
@@ -2385,6 +2398,7 @@ type EditAudioDiff
     = ReplacementAudioVolume Float
     | ReplacementAudioDetune Float
     | ReplacementAudioSpeed Float
+    | ReplacementAudioPan Float
     | ReplacementAudioVolumeTimelines (List AudioVolumeTimeline)
 
 
@@ -2398,6 +2412,7 @@ type alias Audio =
         , volumeTimelines : List AudioVolumeTimeline
         , speed : Float
         , detune : Float
+        , pan : Float
         }
 
 

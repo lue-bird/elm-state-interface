@@ -1,6 +1,6 @@
 module Web.Audio exposing
     ( sourceLoad, fromSource, play
-    , volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, detuneByCents
+    , volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, detuneByCents, pan
     )
 
 {-| Play [`Audio`](Web#Audio) as part of an [`Interface`](Web#Interface).
@@ -45,7 +45,7 @@ Documentation and js implementation inspired by [MartinSStewart/elm-audio](https
     }
 
 @docs sourceLoad, fromSource, play
-@docs volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, detuneByCents
+@docs volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, detuneByCents, pan
 
 -}
 
@@ -71,6 +71,24 @@ For example, `Web.Audio.detuneByCents -1200` means it will be pitched down by on
 detuneByCents : Duration -> (Audio -> Audio)
 detuneByCents delay =
     \a -> { a | startTime = Duration.addTo a.startTime delay }
+
+
+{-| Change the stereo panning with a given a signed percentage.
+
+For example `Web.Audio.pan -0.9` means that the sound is almost fully balanced towards the left speaker
+
+-}
+pan : Float -> (Audio -> Audio)
+pan signedPercentage =
+    \a ->
+        { a
+            | pan =
+                if signedPercentage < 0 then
+                    a.pan + (Basics.min 1 (abs signedPercentage) * (-1 - a.pan))
+
+                else
+                    a.pan + (Basics.min 1 (abs signedPercentage) * (1 - a.pan))
+        }
 
 
 {-| Scale the playback rate by a given factor.
@@ -159,6 +177,7 @@ fromSource source startTime =
     , volumeTimelines = []
     , speed = 1
     , detune = 0
+    , pan = 0
     }
 
 

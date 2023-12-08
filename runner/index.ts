@@ -405,13 +405,21 @@ type AudioInfo = {
     startTime: number,
     speed: number,
     volumeTimelines: VolumeTimeline[],
-    detune: number
+    detune: number,
+    pan: number
 }
-type VolumeTimeline = { volume: number, time: number }[]
+type VolumeTimeline = { time: number, volume: number }[]
 
 const audioBuffers: { [key: string]: AudioBuffer } = {}
 const audioContext = new AudioContext()
-let audioPlaying: { url: string, startTime: number, sourceNode: AudioBufferSourceNode, gainNode: GainNode, volumeTimelineGainNodes: GainNode[] }[] = []
+let audioPlaying: {
+    url: string,
+    startTime: number,
+    sourceNode: AudioBufferSourceNode,
+    gainNode: GainNode,
+    volumeTimelineGainNodes: GainNode[],
+    panNode: StereoPannerNode
+}[] = []
 
 function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
     const request = new XMLHttpRequest()
@@ -433,29 +441,30 @@ function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
             },
             function (error) {
                 sendToElm({ err: error.message })
-            })
+            }
+        )
     }
     request.send()
 }
 
 function createVolumeTimelineGainNodes(volumeTimelines: VolumeTimeline[], currentTime: number) {
     return volumeTimelines.map((volumeTimeline: VolumeTimeline) => {
-        const gainNode = audioContext.createGain();
+        const gainNode = audioContext.createGain()
         if (volumeTimeline[0]) { // should be present
             gainNode.gain.setValueAtTime(volumeTimeline[0].volume, 0)
             gainNode.gain.linearRampToValueAtTime(volumeTimeline[0].volume, 0)
         }
-        const currentTime_ = posixToContextTime(currentTime, currentTime)
+        const currentContextTime = posixToContextTime(currentTime, currentTime)
         forEachConsecutive(volumeTimeline, pair => {
-            const previousTime = posixToContextTime(pair.current.time, currentTime)
-            const nextTime = posixToContextTime(pair.next.time, currentTime)
+            const pairCurrentTime = posixToContextTime(pair.current.time, currentTime)
+            const pairNextTime = posixToContextTime(pair.next.time, currentTime)
 
-            if (nextTime > currentTime_ && currentTime_ >= previousTime) {
-                const currentVolume = interpolate(previousTime, pair.current.volume, nextTime, pair.next.volume, currentTime_);
+            if (pairNextTime > currentContextTime && currentContextTime >= pairCurrentTime) {
+                const currentVolume = interpolate(pairCurrentTime, pair.current.volume, pairNextTime, pair.next.volume, currentContextTime);
                 gainNode.gain.setValueAtTime(currentVolume, 0)
-                gainNode.gain.linearRampToValueAtTime(pair.next.volume, nextTime)
-            } else if (nextTime > currentTime_) {
-                gainNode.gain.linearRampToValueAtTime(pair.next.volume, nextTime)
+                gainNode.gain.linearRampToValueAtTime(pair.next.volume, pairNextTime)
+            } else if (pairNextTime > currentContextTime) {
+                gainNode.gain.linearRampToValueAtTime(pair.next.volume, pairNextTime)
             } else {
                 gainNode.gain.setValueAtTime(pair.next.volume, 0)
             }
@@ -483,6 +492,9 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer) {
     const gainNode = audioContext.createGain()
     gainNode.gain.setValueAtTime(config.volume, 0)
 
+    const stereoPannerNode = new StereoPannerNode(audioContext)
+    stereoPannerNode.pan.setValueAtTime(config.pan, 0)
+
     forEachConsecutive([source, gainNode, ...timelineGainNodes, audioContext.destination], pair => {
         pair.current.connect(pair.next)
     })
@@ -497,7 +509,8 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer) {
         startTime: config.startTime,
         sourceNode: source,
         gainNode: gainNode,
-        volumeTimelineGainNodes: timelineGainNodes
+        volumeTimelineGainNodes: timelineGainNodes,
+        panNode: stereoPannerNode
     })
 }
 function removeAudio(config: { url: string, startTime: number }) {
@@ -506,6 +519,7 @@ function removeAudio(config: { url: string, startTime: number }) {
             audio.sourceNode.stop()
             audio.sourceNode.disconnect()
             audio.gainNode.disconnect()
+            audio.panNode.disconnect()
             audio.volumeTimelineGainNodes.map(node => { node.disconnect() })
             return false
         }
@@ -531,6 +545,8 @@ function editAudio(config: { url: string, startTime: number, replacement: any })
                 value.sourceNode.playbackRate.setValueAtTime(config.replacement.speed, 0)
             } else if (config.replacement?.detune) {
                 value.sourceNode.detune.setValueAtTime(config.replacement.detune, 0)
+            } else if (config.replacement?.pan) {
+                value.panNode.pan.setValueAtTime(config.replacement.detune, 0)
             }
         }
     })
