@@ -519,7 +519,7 @@ type alias PickApplesState =
         , appleLocation : PickApplesLocation
         , pickedAppleCount : Int
         , eatAppleAudio : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
-        , eatAppleTimes : List Time.Posix
+        , eatAppleTimes : List { time : Time.Posix, nthPickedApple : Int }
         }
 
 
@@ -545,9 +545,13 @@ worldSizeCells =
 pickApplesInterface : PickApplesState -> Web.Interface InitializedState
 pickApplesInterface state =
     [ case state.eatAppleAudio of
-        Just (Ok eatAppleAudio) ->
+        Just (Ok eatAppleAudioSource) ->
             state.eatAppleTimes
-                |> List.map (\eatAppleTime -> Web.Audio.fromSource eatAppleAudio eatAppleTime)
+                |> List.map
+                    (\eatAppleAudio ->
+                        Web.Audio.fromSource eatAppleAudioSource eatAppleAudio.time
+                            |> Web.Audio.detuneByCents (eatAppleAudio.nthPickedApple * 12 |> Basics.toFloat)
+                    )
                 |> List.map Web.Audio.play
                 |> Web.interfaceBatch
 
@@ -738,7 +742,8 @@ pickApplesInterface state =
                                             state.pickedAppleCount
                                     , eatAppleTimes =
                                         if applePicked then
-                                            state.eatAppleTimes |> (::) newTime
+                                            state.eatAppleTimes
+                                                |> (::) { time = newTime, nthPickedApple = state.pickedAppleCount + 1 }
 
                                         else
                                             state.eatAppleTimes
