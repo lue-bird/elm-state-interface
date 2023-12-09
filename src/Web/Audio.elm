@@ -68,9 +68,9 @@ delayBy delay =
 For example, `Web.Audio.detuneByCents -1200` means it will be pitched down by one octave, see [AudioBufferSourceNode.detune](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/detune)
 
 -}
-detuneByCents : Duration -> (Audio -> Audio)
-detuneByCents delay =
-    \a -> { a | startTime = Duration.addTo a.startTime delay }
+detuneByCents : Float -> (Audio -> Audio)
+detuneByCents detuneCents =
+    \a -> { a | detune = a.detune + detuneCents }
 
 
 {-| Change the stereo panning with a given a signed percentage.
