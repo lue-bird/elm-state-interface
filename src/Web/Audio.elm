@@ -116,17 +116,15 @@ The points in time don't need to be sorted but they need to be unique.
 
 Let's define an audio function that fades in to full volume and then fades out until it's muted again.
 
-    1                ________
-                   /         \
-    0 ____________/           \_______
-       t ->    fade in     fade out
-
-:
-
     import Duration
     import Time
     import Web.Audio
 
+
+    -- 1                ________
+    --                /         \
+    -- 0 ____________/           \_______
+    --    t ->    fade in     fade out
     fadeInOut fadeInTime fadeOutTime audio =
         Web.Audio.scaleVolumeAt
             [ ( Duration.subtractFrom fadeInTime Duration.second, 0 )
