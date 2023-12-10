@@ -91,9 +91,9 @@ pan signedPercentage =
         }
 
 
-{-| Scale the playback rate by a given factor.
+{-| Scale the playback rate by a given factor. This will also affect pitch.
 
-For example, `Web.Audio.speedScaleBy 0.5` means playback will take twice as long, see [AudioBufferSourceNode.playbackRate](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/playbackRate)
+For example, `Web.Audio.speedScaleBy 0.5` means playback will take twice as long and the pitch will be lower, see [AudioBufferSourceNode.playbackRate](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/playbackRate)
 
 -}
 speedScaleBy : Float -> (Audio -> Audio)
