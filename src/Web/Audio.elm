@@ -1,6 +1,6 @@
 module Web.Audio exposing
     ( sourceLoad, fromSource, play
-    , volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, detuneByCents, pan
+    , volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, pan
     )
 
 {-| Play [`Audio`](Web#Audio) as part of an [`Interface`](Web#Interface).
@@ -45,7 +45,9 @@ Documentation and js implementation inspired by [MartinSStewart/elm-audio](https
     }
 
 @docs sourceLoad, fromSource, play
-@docs volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, detuneByCents, pan
+@docs volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, pan
+
+To detune, use [`speedScaleBy`](#speedScaleBy). It's documentation also shows which scale relates to which semitone pitch.
 
 -}
 
@@ -61,16 +63,6 @@ import Web exposing (Audio, AudioSource)
 delayBy : Duration -> (Audio -> Audio)
 delayBy delay =
     \a -> { a | startTime = Duration.addTo a.startTime delay }
-
-
-{-| Add a change in pitch [cents](https://en.wikipedia.org/wiki/Cent_%28music%29).
-
-For example, `Web.Audio.detuneByCents -1200` means it will be pitched down by one octave, see [AudioBufferSourceNode.detune](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/detune)
-
--}
-detuneByCents : Float -> (Audio -> Audio)
-detuneByCents detuneCents =
-    \a -> { a | detune = a.detune + detuneCents }
 
 
 {-| Change the stereo panning with a given a signed percentage.
@@ -93,7 +85,11 @@ pan signedPercentage =
 
 {-| Scale the playback rate by a given factor. This will also affect pitch.
 
-For example, `Web.Audio.speedScaleBy 0.5` means playback will take twice as long and the pitch will be lower, see [AudioBufferSourceNode.playbackRate](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/playbackRate)
+For example, `Web.Audio.speedScaleBy 0.5` means playback will take twice as long and the pitch will be one octave lower, see [AudioBufferSourceNode.playbackRate](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/playbackRate)
+
+In general, to pitch by semitones:
+
+    Web.Audio.speedScaleBy (2 ^ (semitones / 12))
 
 Note: It would be possible to modify the signal to compensate for the pitch change,
 see [Audio time stretching and pitch scaling](https://en.wikipedia.org/wiki/Audio_time_stretching_and_pitch_scaling).

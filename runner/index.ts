@@ -405,7 +405,6 @@ type AudioInfo = {
     startTime: number,
     speed: number,
     volumeTimelines: VolumeTimeline[],
-    detune: number,
     pan: number
 }
 type VolumeTimeline = { time: number, volume: number }[]
@@ -486,7 +485,6 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer) {
     const source = audioContext.createBufferSource()
     source.buffer = buffer
     source.playbackRate.value = config.speed
-    source.detune.value = config.detune
 
     const timelineGainNodes = createVolumeTimelineGainNodes(config.volumeTimelines, currentTime)
     const gainNode = audioContext.createGain()
@@ -543,10 +541,8 @@ function editAudio(config: { url: string, startTime: number, replacement: any })
                 value.volumeTimelineGainNodes = newVolumeTimelineGainNodes
             } else if (config.replacement?.speed) {
                 value.sourceNode.playbackRate.setValueAtTime(config.replacement.speed, 0)
-            } else if (config.replacement?.detune) {
-                value.sourceNode.detune.setValueAtTime(config.replacement.detune, 0)
             } else if (config.replacement?.pan) {
-                value.panNode.pan.setValueAtTime(config.replacement.detune, 0)
+                value.panNode.pan.setValueAtTime(config.replacement.pan, 0)
             }
         }
     })

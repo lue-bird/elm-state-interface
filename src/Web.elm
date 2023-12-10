@@ -1236,11 +1236,6 @@ audioDiff =
 
           else
             ReplacementAudioVolume new.volume |> Just
-        , if previous.detune == new.detune then
-            Nothing
-
-          else
-            ReplacementAudioDetune new.detune |> Just
         , if previous.speed == new.speed then
             Nothing
 
@@ -1524,9 +1519,6 @@ interfaceWithoutReceiveDiffToJson =
                         , ( "replacement"
                           , Json.Encode.object
                                 [ case audioEdit.replacement of
-                                    ReplacementAudioDetune new ->
-                                        ( "detune", new |> Json.Encode.float )
-
                                     ReplacementAudioSpeed new ->
                                         ( "speed", new |> Json.Encode.float )
 
@@ -2396,7 +2388,6 @@ type InterfaceWithReceiveDiff
 -}
 type EditAudioDiff
     = ReplacementAudioVolume Float
-    | ReplacementAudioDetune Float
     | ReplacementAudioSpeed Float
     | ReplacementAudioPan Float
     | ReplacementAudioVolumeTimelines (List AudioVolumeTimeline)
@@ -2411,7 +2402,6 @@ type alias Audio =
         , volume : Float
         , volumeTimelines : List AudioVolumeTimeline
         , speed : Float
-        , detune : Float
         , pan : Float
         }
 
