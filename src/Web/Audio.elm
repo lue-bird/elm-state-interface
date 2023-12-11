@@ -174,7 +174,6 @@ fromSource source startTime =
     , volume = 1
     , volumeTimelines = []
     , speed = 1
-    , detune = 0
     , pan = 0
     }
 
