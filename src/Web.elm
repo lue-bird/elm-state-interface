@@ -1573,7 +1573,6 @@ audioToJson audio =
         , ( "volume", audio.volume |> Json.Encode.float )
         , ( "volumeTimelines", audio.volumeTimelines |> Json.Encode.list audioVolumeTimelineToJson )
         , ( "speed", audio.speed |> Json.Encode.float )
-        , ( "detune", audio.detune |> Json.Encode.float )
         , ( "pan", audio.pan |> Json.Encode.float )
         ]
 
