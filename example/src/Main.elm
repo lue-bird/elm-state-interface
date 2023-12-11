@@ -550,7 +550,8 @@ pickApplesInterface state =
                 |> List.map
                     (\eatAppleAudio ->
                         Web.Audio.fromSource eatAppleAudioSource eatAppleAudio.time
-                            |> Web.Audio.detuneByCents (eatAppleAudio.nthPickedApple * 12 |> Basics.toFloat)
+                            |> Web.Audio.speedScaleBy
+                                (2 ^ ((eatAppleAudio.nthPickedApple |> Basics.toFloat) * 0.01))
                     )
                 |> List.map Web.Audio.play
                 |> Web.interfaceBatch
