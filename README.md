@@ -54,10 +54,10 @@ programConfig =
                         , queryParameters = Dict.singleton "counter" [ counter |> String.fromInt ]
                         , fragment = Nothing
                         }
-                    , Web.Navigation.movementListen |> Web.interfaceMap UserWentToUrl
+                    , Web.Navigation.movementListen |> Web.interfaceStateMap UserWentToUrl
                     ]
                         |> Web.interfaceBatch
-                        |> Web.interfaceMap
+                        |> Web.interfaceStateMap
                             (\event ->
                                 case event of
                                     MinusClicked ->
@@ -72,7 +72,7 @@ programConfig =
                 
                 WaitingForInitialUrl ->
                     Web.Navigation.urlRequest
-                        |> Web.interfaceMap
+                        |> Web.interfaceStateMap
                             (\initialUrl ->
                                 Counter (initialUrl |> counterUrlParse |> Maybe.withDefault 0)
                             )
@@ -109,8 +109,6 @@ Web.programStart({
 })
 ```
 
-Big thanks to [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) 🌱 for many of the js implementations in this package and to the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) as the motivation to make a package out of it.
-
 > The complete example and more in [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
 
 ## `Interface` for an action ≠ `Cmd`
@@ -139,7 +137,7 @@ Web.Window.resizeListen : Interface { width : Int, height : Int }
 So, trying to use `sizeRequest` to keep your window size state updated is not going to work.
 ```elm
 Web.Window.sizeRequest
-    |> Web.interfaceMap (\windowSize -> { state | windowSize = windowSize })
+    |> Web.interfaceStateMap (\windowSize -> { state | windowSize = windowSize })
 ```
 As discussed in the previous section, the request will only be executed once.
 
@@ -147,7 +145,7 @@ So the full solution to always get the current window size is
 ```elm
 [ Web.Window.sizeRequest, Web.Window.resizeListen ]
     |> Web.interfaceBatch
-    |> Web.interfaceMap (\windowSize -> { state | windowSize = windowSize })
+    |> Web.interfaceStateMap (\windowSize -> { state | windowSize = windowSize })
 ```
   - `sizeRequest` will send you the initial window size first, then never again
   - `resizeListen` sends you all the changes to the size
@@ -157,7 +155,7 @@ Why can't we do the same in the counter + url example above?
 ```elm
 [ Navigation.urlRequest, Web.Navigation.movementListen ]
     |> Web.interfaceBatch
-    |> Web.interfaceMap UserWentToUrl
+    |> Web.interfaceStateMap UserWentToUrl
 ```
 In combination with editing the url programmatically
 you have to keep one thing in mind:
@@ -230,13 +228,13 @@ type alias State =
                         Web.interfaceNone
                     Err _ ->
                         Http.request { url = "...", decoder = Image.jsonDecoder }
-                            |> Web.interfaceMap (\result -> { state | icon = result })
+                            |> Web.interfaceStateMap (\result -> { state | icon = result })
                 , case state.content of
                     Ok _ ->
                         Web.interfaceNone
                     Err _ ->
                         Http.request { url = "...", decoder = Json.Decode.string }
-                            |> Web.interfaceMap (\result -> { state | content = result })
+                            |> Web.interfaceStateMap (\result -> { state | content = result })
                 , ..error ui..
                 ]
                     |> Web.interfaceBatch
@@ -266,3 +264,8 @@ a basic implementation using ports, [come by](https://github.com/lue-bird/elm-st
 Note: The package is very much not designed to be easily extensible.
 Adding stuff _will_ force a major version bump.
 The module and interface structure is also not equipped to support multiple platforms.
+
+## thanks 🌱
+  - [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) was used as a base for many of the js implementations
+  - [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) gave me the motivation to make a package out of it
+  - [`kageurufu/elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) was used as a base for the websocket js implementation

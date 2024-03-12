@@ -4,8 +4,8 @@ module Web.Dom exposing
     , element, elementNamespaced
     , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style
     , listenTo, listenToPreventingDefaultAction
-    , modifierMap, modifierBatch, modifierNone
-    , map, render
+    , modifierStateMap, modifierBatch, modifierNone
+    , stateMap, render
     )
 
 {-| Helpers for [DOM node types](Web#DomNode) as part of an [`Interface`](Web#Interface).
@@ -18,8 +18,8 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 @docs element, elementNamespaced
 @docs Modifier, ModifierSingle, attribute, attributeNamespaced, style
 @docs listenTo, listenToPreventingDefaultAction
-@docs modifierMap, modifierBatch, modifierNone
-@docs map, render
+@docs modifierStateMap, modifierBatch, modifierNone
+@docs stateMap, render
 
 -}
 
@@ -54,7 +54,7 @@ render =
 {-| Wire events from this [`DomNode`](Web#DomNode) to a specific event.
 
     buttonUi "start"
-        |> Web.Dom.map (\Clicked -> StartButtonClicked)
+        |> Web.Dom.stateMap (\Clicked -> StartButtonClicked)
 
 with e.g.
 
@@ -62,7 +62,7 @@ with e.g.
     buttonUi subs =
         Web.Dom.element "button"
             [ Web.Dom.listenTo "click"
-                |> Web.Dom.modifierMap (\_ -> Clicked)
+                |> Web.Dom.modifierStateMap (\_ -> Clicked)
             ]
             [ Web.Dom.text label ]
 
@@ -70,8 +70,8 @@ with e.g.
         = Clicked
 
 -}
-map : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
-map stateChange =
+stateMap : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
+stateMap stateChange =
     \domElementToMap ->
         case domElementToMap of
             Web.DomText string ->
@@ -98,7 +98,7 @@ elementMap stateChange =
                         }
                     )
         , subs =
-            domElementToMap.subs |> Array.map (map stateChange)
+            domElementToMap.subs |> Array.map (stateMap stateChange)
         }
 
 
@@ -296,7 +296,7 @@ style key value =
 
 
 {-| Listen for a specific DOM event on the [`DomElement`](Web#DomElement).
-Use [`modifierMap`](#modifierMap) to wire this to a specific event.
+Use [`modifierStateMap`](#modifierStateMap) to wire this to a specific event.
 
 If you want to override the browser's default behavior for that event,
 use [`listenToPreventingDefaultAction`](#listenToPreventingDefaultAction)
@@ -317,7 +317,7 @@ prevents the form from changing the page’s location:
     submitListen : Web.Dom.Modifier ()
     submitListen =
         Web.Dom.listenToPreventingDefaultAction "submit"
-            |> Web.Dom.modifierMap (\_ -> ())
+            |> Web.Dom.modifierStateMap (\_ -> ())
 
 -}
 listenToPreventingDefaultAction : String -> Modifier Json.Decode.Value
@@ -329,11 +329,11 @@ listenToPreventingDefaultAction eventName =
 
 {-| Wire events from this [`Modifier`](#Modifier) to a specific event.
 
-    Web.Dom.listen "click" |> Web.Dom.modifierMap (\_ -> ButtonClicked)
+    Web.Dom.listen "click" |> Web.Dom.modifierStateMap (\_ -> ButtonClicked)
 
 -}
-modifierMap : (state -> mappedState) -> (Modifier state -> Modifier mappedState)
-modifierMap stateChange =
+modifierStateMap : (state -> mappedState) -> (Modifier state -> Modifier mappedState)
+modifierStateMap stateChange =
     \modifier ->
         modifier |> Rope.map (\modifierSingle -> modifierSingle |> modifierSingleMap stateChange)
 

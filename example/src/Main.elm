@@ -16,6 +16,7 @@ import Time
 import Url
 import Web
 import Web.Audio
+import Web.Audio.Parameter
 import Web.Dom
 import Web.Navigation
 import Web.Svg
@@ -36,7 +37,7 @@ programConfig =
             case stateChoice of
                 WaitingForInitialUrl ->
                     Web.Navigation.urlRequest
-                        |> Web.interfaceMap
+                        |> Web.interfaceStateMap
                             (\initialUrl ->
                                 case initialUrl |> appUrlToState of
                                     Just initialState ->
@@ -57,7 +58,7 @@ programConfig =
                     [ initialized |> initializedInterface
                     , Web.Navigation.pushUrl (initialized |> stateToAppUrl)
                     , Web.Navigation.movementListen
-                        |> Web.interfaceMap
+                        |> Web.interfaceStateMap
                             (\newUrl ->
                                 case newUrl |> appUrlToState of
                                     Nothing ->
@@ -102,7 +103,7 @@ programConfig =
                             )
                     ]
                         |> Web.interfaceBatch
-                        |> Web.interfaceMap Initialized
+                        |> Web.interfaceStateMap Initialized
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
@@ -161,7 +162,7 @@ startingRoomInterface =
     \state ->
         [ narrativeUiFrame
             [ Web.Dom.listenTo "mousemove"
-                |> Web.Dom.modifierMap
+                |> Web.Dom.modifierStateMap
                     (\mouseEvent ->
                         mouseEvent
                             |> Json.Decode.decodeValue
@@ -259,11 +260,11 @@ startingRoomInterface =
                 |> Web.Dom.map (\() -> WalkToSignClicked)
             ]
             |> Web.Dom.render
-        , Web.Time.zoneRequest |> Web.interfaceMap TimeZoneReceived
-        , Web.Time.periodicallyListen Duration.second |> Web.interfaceMap TimePassed
+        , Web.Time.zoneRequest |> Web.interfaceStateMap TimeZoneReceived
+        , Web.Time.periodicallyListen Duration.second |> Web.interfaceStateMap TimePassed
         ]
             |> Web.interfaceBatch
-            |> Web.interfaceMap
+            |> Web.interfaceStateMap
                 (\event ->
                     case event of
                         MouseMovedTo (Ok newMousePoint) ->
@@ -451,7 +452,7 @@ atSignInterface =
             |> Web.Dom.render
         ]
             |> Web.interfaceBatch
-            |> Web.interfaceMap
+            |> Web.interfaceStateMap
                 (\event ->
                     case event of
                         TalkToBirdClicked ->
@@ -551,21 +552,23 @@ pickApplesInterface state =
                     (\eatAppleAudio ->
                         Web.Audio.fromSource eatAppleAudioSource eatAppleAudio.time
                             |> Web.Audio.speedScaleBy
-                                (2 ^ ((eatAppleAudio.nthPickedApple |> Basics.toFloat) * 0.01))
+                                (Web.Audio.Parameter.at
+                                    (2 ^ ((eatAppleAudio.nthPickedApple |> Basics.toFloat) * 0.01))
+                                )
                     )
                 |> List.map Web.Audio.play
                 |> Web.interfaceBatch
 
         _ ->
             Web.Audio.sourceLoad "eat-apple.mp3"
-                |> Web.interfaceMap EatAppleAudioReceived
+                |> Web.interfaceStateMap EatAppleAudioReceived
     , Web.Time.periodicallyListen (Duration.milliseconds 125)
-        |> Web.interfaceMap PickApplesSimulationTick
+        |> Web.interfaceStateMap PickApplesSimulationTick
     , [ Web.Window.sizeRequest, Web.Window.resizeListen ]
         |> Web.interfaceBatch
-        |> Web.interfaceMap WindowSizeReceived
+        |> Web.interfaceStateMap WindowSizeReceived
     , Web.Dom.documentEventListen "keydown"
-        |> Web.interfaceMap
+        |> Web.interfaceStateMap
             (\event ->
                 event
                     |> Json.Decode.decodeValue
@@ -693,7 +696,7 @@ pickApplesInterface state =
         |> Web.Dom.render
     ]
         |> Web.interfaceBatch
-        |> Web.interfaceMap
+        |> Web.interfaceStateMap
             (\event ->
                 case event of
                     WindowSizeReceived windowSize ->
@@ -879,7 +882,7 @@ buttonUi : List (Web.Dom.Modifier ()) -> List (Web.DomNode ()) -> Web.DomNode ()
 buttonUi modifiers subs =
     Web.Dom.element "button"
         ([ Web.Dom.listenTo "click"
-            |> Web.Dom.modifierMap (\_ -> ())
+            |> Web.Dom.modifierStateMap (\_ -> ())
          , Web.Dom.style "background-color" "#000000"
          , Web.Dom.style "border" "3px solid"
          , Web.Dom.style "border-radius" "50px"
@@ -909,7 +912,7 @@ textInputUi currentInputValue =
                     inputValue
             )
         , Web.Dom.listenTo "input"
-            |> Web.Dom.modifierMap
+            |> Web.Dom.modifierStateMap
                 (Json.Decode.decodeValue
                     (Json.Decode.field "target" (Json.Decode.field "value" Json.Decode.string))
                 )
