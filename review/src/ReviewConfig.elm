@@ -38,7 +38,6 @@ import NoSimpleLetBody
 import NoSinglePatternCase
 import NoUnnecessaryTrailingUnderscore
 import NoUnoptimizedRecursion
-import NoUnsafeDivision
 import NoUnsafePorts
 import NoUnsortedCases
 import NoUnsortedLetDeclarations
@@ -196,7 +195,6 @@ config =
         |> NoUnoptimizedRecursion.rule
     , NoSimpleLetBody.rule
     , NoUnnecessaryTrailingUnderscore.rule
-    , NoUnsafeDivision.rule
     , Review.Pattern.Record.forbid
     , Review.Pattern.As.forbid
     ]

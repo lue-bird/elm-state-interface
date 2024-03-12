@@ -18,6 +18,20 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addFileDownloadUnsignedInt8s": (config) => { fileDownloadBytes(config) },
         "addClipboardReplaceBy": (config: string) => { navigator.clipboard.writeText(config) },
         "addAudio": addAudio,
+        "addSocketDisconnect": (index: number) => {
+            const socketToDisconnect = sockets.at(index)
+            if (socketToDisconnect) {
+                socketToDisconnect.close()
+            } else { } // socket is already closed
+        },
+        "addSocketMessage": (config: { id: number, data: string }) => {
+            const socketToDisconnect = sockets.at(config.id)
+            if (socketToDisconnect) {
+                socketToDisconnect.send(config.data)
+            } else {
+                console.warn("trying to send messages on closed socket")
+            }
+        },
         "addEditAudio": editAudio,
         "removeTimePeriodicallyListen": removeTimePeriodicallyListen,
         "removeDom": (_config: null) => { appConfig.domElement.replaceChildren() },
@@ -30,7 +44,27 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "removeWindowEventListen": windowEventListenRemove,
         "removeAnimationFrameListen": (_config: null) => { removeAnimationFrameListen() },
         "removeDocumentEventListen": documentEventListenRemove,
-        "removeAudio": removeAudio
+        "removeAudio": removeAudio,
+        "removeSocketConnect": (config: { address: string }) => {
+            sockets
+                .flatMap(socket => socket ? [socket] : [])
+                .filter(socket => socket.url == config.address)
+                .forEach(socketToStopFromConnecting => {
+                    socketToStopFromConnecting.onopen = null
+                })
+        },
+        "removeSocketDisconnectListen": (index: number) => {
+            const socket = sockets.at(index)
+            if (socket) {
+                socket.onclose = null
+            } else { } // already removed
+        },
+        "removeSocketMessageListen": (index: number) => {
+            const socketToListenToMessagesFrom = sockets.at(index)
+            if (socketToListenToMessagesFrom) {
+                socketToListenToMessagesFrom.onmessage = null
+            } else { } // already removed
+        }
     }
     const interfaceWithSendToElmImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
         "addTimePosixRequest": (_config: null, sendToElm) => {
@@ -71,7 +105,33 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         "addClipboardRequest": (_config: null, sendToElm) => {
             navigator.clipboard.readText().then(sendToElm)
         },
-        "addAudioSourceLoad": audioSourceLoad
+        "addAudioSourceLoad": audioSourceLoad,
+        "addSocketConnect": (config: { address: string }, sendToElm) => {
+            const createdSocket = new WebSocket(config.address)
+            sockets.push(createdSocket)
+            createdSocket.onopen = _event => {
+                sendToElm(sockets.length)
+                createdSocket.onopen = null
+            }
+        },
+        "addSocketDisconnectListen": (index: number, sendToElm) => {
+            const socketToDisconnect = sockets.at(index)
+            if (socketToDisconnect) {
+                socketToDisconnect.onclose = (event) => {
+                    sendToElm({ code: event.code, reason: event.reason })
+                }
+            } else { } // socket is already closed
+        },
+        "addSocketMessageListen": (index: number, sendToElm) => {
+            const socketToListenToMessagesFrom = sockets.at(index)
+            if (socketToListenToMessagesFrom) {
+                socketToListenToMessagesFrom.onmessage = (event) => {
+                    sendToElm(event.data)
+                }
+            } else {
+                console.warn("trying to listen to messages on closed socket")
+            }
+        }
     }
 
 
@@ -131,6 +191,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         }
     }
 }
+
+let sockets: (WebSocket | undefined)[] = []
 
 let eventListenerAbortControllers: { domElement: Element, abortController: AbortController }[] = []
 function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replacement: any, path: number[], sendToElm: (v: any) => void) {

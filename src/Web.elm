@@ -6,6 +6,7 @@ module Web exposing
     , DomNode(..), DomElement, DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
+    , SocketId(..)
     , InterfaceSingle(..), InterfaceSingleWithReceive(..), InterfaceSingleWithoutReceive(..)
     , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
     , InterfaceSingleKeys, InterfaceSingleIdOrderTag
@@ -51,6 +52,13 @@ Types used by [`Web.Dom`](Web-Dom)
 Types used by [`Web.Http`](Web-Http)
 
 @docs HttpRequest, HttpHeader, HttpBody, HttpExpect, HttpError, HttpMetadata
+
+
+## socket
+
+Types used by [`Web.Socket`](Web-Socket)
+
+@docs SocketId
 
 
 ## internals, safe to ignore
@@ -167,6 +175,8 @@ type InterfaceSingleWithoutReceive
     | FileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
     | ClipboardReplaceBy String
     | AudioPlay Audio
+    | SocketMessage { id : SocketId, data : String }
+    | SocketDisconnect SocketId
 
 
 {-| These are possible errors we can get when loading an audio source file.
@@ -199,6 +209,9 @@ type InterfaceSingleWithReceive state
     | NavigationUrlRequest (AppUrl -> state)
     | ClipboardRequest (String -> state)
     | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> state }
+    | SocketConnect { address : String, on : SocketId -> state }
+    | SocketDisconnectListen { id : SocketId, on : { code : Int, reason : String } -> state }
+    | SocketMessageListen { id : SocketId, on : String -> state }
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -329,6 +342,9 @@ type InterfaceSingleWithReceiveId
     | IdDocumentEventListen String
     | IdClipboardRequest
     | IdAudioSourceLoad String
+    | IdSocketConnect { address : String }
+    | IdSocketDisconnectListen SocketId
+    | IdSocketMessageListen SocketId
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -350,6 +366,12 @@ type alias DomElementId =
 type DomNodeId
     = DomTextId String
     | DomElementId DomElementId
+
+
+{-| Identifier for a [`Web.Socket`](Web-Socket) that can be used to [communicate](Web-Socket#communicate)
+-}
+type SocketId
+    = SocketId Int
 
 
 {-| Combine multiple [`Interface`](#Interface)s into one.
@@ -512,7 +534,20 @@ interfaceWithReceiveMap stateChange =
                 (\event -> toState event |> stateChange) |> ClipboardRequest
 
             AudioSourceLoad load ->
-                { url = load.url, on = \event -> load.on event |> stateChange } |> AudioSourceLoad
+                { url = load.url, on = \event -> load.on event |> stateChange }
+                    |> AudioSourceLoad
+
+            SocketConnect connect ->
+                { address = connect.address, on = \event -> event |> connect.on |> stateChange }
+                    |> SocketConnect
+
+            SocketDisconnectListen disconnectListen ->
+                { id = disconnectListen.id, on = \event -> event |> disconnectListen.on |> stateChange }
+                    |> SocketDisconnectListen
+
+            SocketMessageListen messageListen ->
+                { id = messageListen.id, on = \event -> event |> messageListen.on |> stateChange }
+                    |> SocketMessageListen
 
 
 httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
@@ -802,6 +837,15 @@ interfaceWithReceiveToId =
             AudioSourceLoad load ->
                 IdAudioSourceLoad load.url
 
+            SocketConnect connect ->
+                IdSocketConnect { address = connect.address }
+
+            SocketDisconnectListen disconnectListen ->
+                IdSocketDisconnectListen disconnectListen.id
+
+            SocketMessageListen messageListen ->
+                IdSocketMessageListen messageListen.id
+
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
@@ -823,6 +867,11 @@ interfaceSingleIdToComparable =
 intToComparable : Int -> Comparable
 intToComparable =
     \int -> int |> String.fromInt |> ComparableString
+
+
+socketIdToComparable : SocketId -> Comparable
+socketIdToComparable =
+    \(SocketId raw) -> raw |> intToComparable
 
 
 idInterfaceWithoutReceiveToComparable : InterfaceSingleWithReceiveId -> Comparable
@@ -887,6 +936,24 @@ idInterfaceWithoutReceiveToComparable =
                 ComparableList
                     [ ComparableString "IdAudioSourceLoad"
                     , ComparableString url
+                    ]
+
+            IdSocketConnect connect ->
+                ComparableList
+                    [ ComparableString "IdSocketConnect"
+                    , ComparableString connect.address
+                    ]
+
+            IdSocketDisconnectListen id ->
+                ComparableList
+                    [ ComparableString "IdSocketConnect"
+                    , id |> socketIdToComparable
+                    ]
+
+            IdSocketMessageListen id ->
+                ComparableList
+                    [ ComparableString "IdSocketConnect"
+                    , id |> socketIdToComparable
                     ]
 
 
@@ -1032,6 +1099,19 @@ interfaceWithoutReceiveToComparable =
                     , audio.startTime |> Time.posixToMillis |> String.fromInt |> ComparableString
                     ]
 
+            SocketMessage message ->
+                ComparableList
+                    [ ComparableString "SocketMessage"
+                    , message.id |> socketIdToComparable
+                    , message.data |> ComparableString
+                    ]
+
+            SocketDisconnect id ->
+                ComparableList
+                    [ ComparableString "SocketMessage"
+                    , id |> socketIdToComparable
+                    ]
+
 
 interfaceDiffs :
     { old : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
@@ -1133,46 +1213,22 @@ interfaceOldAndOrUpdatedDiffs =
 
                             AudioSourceLoad _ ->
                                 []
+
+                            SocketConnect connect ->
+                                RemoveSocketConnect { address = connect.address } |> List.singleton
+
+                            SocketDisconnectListen disconnectListen ->
+                                RemoveSocketDisconnectListen disconnectListen.id |> List.singleton
+
+                            SocketMessageListen messageListen ->
+                                RemoveSocketMessageListen messageListen.id |> List.singleton
                 )
                     |> List.map InterfaceWithoutReceiveDiff
 
             AndOr.Only (Or.Second onlyUpdated) ->
                 (case onlyUpdated of
                     InterfaceWithoutReceive interfaceWithoutReceive ->
-                        (case interfaceWithoutReceive of
-                            ConsoleLog string ->
-                                AddConsoleLog string
-
-                            ConsoleWarn string ->
-                                AddConsoleWarn string
-
-                            ConsoleError string ->
-                                AddConsoleError string
-
-                            NavigationReplaceUrl url ->
-                                AddNavigationReplaceUrl url
-
-                            NavigationPushUrl url ->
-                                AddNavigationPushUrl url
-
-                            NavigationGo urlSteps ->
-                                AddNavigationGo urlSteps
-
-                            NavigationLoad url ->
-                                url |> AddNavigationLoad
-
-                            NavigationReload ->
-                                AddNavigationReload
-
-                            FileDownloadUnsignedInt8s config ->
-                                AddFileDownloadUnsignedInt8s config
-
-                            ClipboardReplaceBy replacement ->
-                                AddClipboardReplaceBy replacement
-
-                            AudioPlay audio ->
-                                AddAudio audio
-                        )
+                        Add interfaceWithoutReceive
                             |> InterfaceWithoutReceiveDiff
 
                     InterfaceWithReceive interfaceWithReceive ->
@@ -1222,6 +1278,15 @@ interfaceOldAndOrUpdatedDiffs =
 
                             AudioSourceLoad load ->
                                 AddAudioSourceLoad load.url
+
+                            SocketConnect connect ->
+                                AddSocketConnect { address = connect.address }
+
+                            SocketDisconnectListen disconnectListen ->
+                                AddSocketDisconnectListen disconnectListen.id
+
+                            SocketMessageListen messageListen ->
+                                AddSocketMessageListen messageListen.id
                         )
                             |> InterfaceWithReceiveDiff
                 )
@@ -1387,6 +1452,11 @@ defaultActionHandlingToJson =
                 "DefaultActionExecute" |> Json.Encode.string
 
 
+socketIdToJson : SocketId -> Json.Encode.Value
+socketIdToJson =
+    \(SocketId index) -> index |> Json.Encode.int
+
+
 interfaceWithReceiveDiffToJson : InterfaceWithReceiveDiff -> Json.Encode.Value
 interfaceWithReceiveDiffToJson =
     \interfaceAddOrReplaceDiff ->
@@ -1460,6 +1530,15 @@ interfaceWithReceiveDiffToJson =
 
                 AddAudioSourceLoad audioSourceLoad ->
                     ( "addAudioSourceLoad", audioSourceLoad |> Json.Encode.string )
+
+                AddSocketConnect connect ->
+                    ( "addSocketConnect", Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ] )
+
+                AddSocketDisconnectListen id ->
+                    ( "addSocketDisconnectListen", id |> socketIdToJson )
+
+                AddSocketMessageListen id ->
+                    ( "addSocketMessageListen", id |> socketIdToJson )
             ]
 
 
@@ -1487,48 +1566,63 @@ interfaceWithoutReceiveDiffToJson =
     \interfaceRemoveDiff ->
         Json.Encode.object
             [ case interfaceRemoveDiff of
-                AddConsoleLog string ->
-                    ( "addConsoleLog", string |> Json.Encode.string )
+                Add add ->
+                    case add of
+                        ConsoleLog string ->
+                            ( "addConsoleLog", string |> Json.Encode.string )
 
-                AddConsoleWarn string ->
-                    ( "addConsoleWarn", string |> Json.Encode.string )
+                        ConsoleWarn string ->
+                            ( "addConsoleWarn", string |> Json.Encode.string )
 
-                AddConsoleError string ->
-                    ( "addConsoleError", string |> Json.Encode.string )
+                        ConsoleError string ->
+                            ( "addConsoleError", string |> Json.Encode.string )
 
-                AddNavigationPushUrl url ->
-                    ( "addNavigationPushUrl", url |> AppUrl.toString |> Json.Encode.string )
+                        NavigationPushUrl url ->
+                            ( "addNavigationPushUrl", url |> AppUrl.toString |> Json.Encode.string )
 
-                AddNavigationReplaceUrl url ->
-                    ( "addNavigationReplaceUrl", url |> AppUrl.toString |> Json.Encode.string )
+                        NavigationReplaceUrl url ->
+                            ( "addNavigationReplaceUrl", url |> AppUrl.toString |> Json.Encode.string )
 
-                AddNavigationGo urlSteps ->
-                    ( "addNavigationGo", urlSteps |> Json.Encode.int )
+                        NavigationGo urlSteps ->
+                            ( "addNavigationGo", urlSteps |> Json.Encode.int )
 
-                AddNavigationLoad url ->
-                    ( "addNavigationLoad", url |> Url.toString |> Json.Encode.string )
+                        NavigationLoad url ->
+                            ( "addNavigationLoad", url |> Url.toString |> Json.Encode.string )
 
-                AddNavigationReload ->
-                    ( "addNavigationReload", Json.Encode.null )
+                        NavigationReload ->
+                            ( "addNavigationReload", Json.Encode.null )
 
-                AddFileDownloadUnsignedInt8s config ->
-                    ( "addFileDownloadUnsignedInt8s"
-                    , Json.Encode.object
-                        [ ( "name", config.name |> Json.Encode.string )
-                        , ( "mimeType", config.mimeType |> Json.Encode.string )
-                        , ( "content"
-                          , config.content |> Json.Encode.list Json.Encode.int
-                          )
-                        ]
-                    )
+                        FileDownloadUnsignedInt8s config ->
+                            ( "addFileDownloadUnsignedInt8s"
+                            , Json.Encode.object
+                                [ ( "name", config.name |> Json.Encode.string )
+                                , ( "mimeType", config.mimeType |> Json.Encode.string )
+                                , ( "content"
+                                  , config.content |> Json.Encode.list Json.Encode.int
+                                  )
+                                ]
+                            )
 
-                AddClipboardReplaceBy replacement ->
-                    ( "addClipboardReplaceBy"
-                    , replacement |> Json.Encode.string
-                    )
+                        ClipboardReplaceBy replacement ->
+                            ( "addClipboardReplaceBy"
+                            , replacement |> Json.Encode.string
+                            )
 
-                AddAudio audio ->
-                    ( "addAudio", audio |> audioToJson )
+                        AudioPlay audio ->
+                            ( "addAudio", audio |> audioToJson )
+
+                        SocketMessage message ->
+                            ( "addSocketMessage"
+                            , Json.Encode.object
+                                [ ( "id", message.id |> socketIdToJson )
+                                , ( "data", message.data |> Json.Encode.string )
+                                ]
+                            )
+
+                        SocketDisconnect id ->
+                            ( "addSocketDisconnect"
+                            , id |> socketIdToJson
+                            )
 
                 AddEditAudio audioEdit ->
                     ( "addEditAudio"
@@ -1605,6 +1699,15 @@ interfaceWithoutReceiveDiffToJson =
                         , ( "startTime", audioId.startTime |> Time.posixToMillis |> Json.Encode.int )
                         ]
                     )
+
+                RemoveSocketConnect connect ->
+                    ( "removeSocketConnect", Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ] )
+
+                RemoveSocketDisconnectListen id ->
+                    ( "removeSocketDisconnectListen", id |> socketIdToJson )
+
+                RemoveSocketMessageListen id ->
+                    ( "removeSocketMessageListen", id |> socketIdToJson )
             ]
 
 
@@ -1758,8 +1861,14 @@ defaultActionHandlingJsonDecoder =
         Json.Decode.string
 
 
+socketIdJsonDecoder : Json.Decode.Decoder SocketId
+socketIdJsonDecoder =
+    Json.Decode.map SocketId Json.Decode.int
+
+
 interfaceDiffWithReceiveJsonDecoder : Json.Decode.Decoder InterfaceWithReceiveDiff
 interfaceDiffWithReceiveJsonDecoder =
+    -- TODO find a way to nicely integrate a reminder to add all variants (or switch to codec I guess)
     Json.Decode.oneOf
         [ Json.Decode.map (\() -> AddTimePosixRequest)
             (Json.Decode.field "addTimePosixRequest" (Json.Decode.null ()))
@@ -1811,6 +1920,16 @@ interfaceDiffWithReceiveJsonDecoder =
             (Json.Decode.field "addDocumentEventListen" Json.Decode.string)
         , Json.Decode.map AddAudioSourceLoad
             (Json.Decode.field "addAudioSourceLoad" Json.Decode.string)
+        , Json.Decode.map AddSocketConnect
+            (Json.Decode.field "addSocketConnect"
+                (Json.Decode.map (\address -> { address = address })
+                    (Json.Decode.field "address" Json.Decode.string)
+                )
+            )
+        , Json.Decode.map AddSocketDisconnectListen
+            (Json.Decode.field "addSocketDisconnectListen" socketIdJsonDecoder)
+        , Json.Decode.map AddSocketMessageListen
+            (Json.Decode.field "addSocketMessageListen" socketIdJsonDecoder)
         ]
 
 
@@ -2122,6 +2241,50 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                 _ ->
                     Nothing
 
+        SocketConnect connect ->
+            case interfaceAddDiff of
+                AddSocketConnect addConnect ->
+                    if addConnect.address == connect.address then
+                        socketIdJsonDecoder
+                            |> Json.Decode.map connect.on
+                            |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        SocketDisconnectListen disconnectListen ->
+            case interfaceAddDiff of
+                AddSocketDisconnectListen addId ->
+                    if addId == disconnectListen.id then
+                        Json.Decode.map2 (\code reason -> { code = code, reason = reason })
+                            (Json.Decode.field "code" Json.Decode.int)
+                            (Json.Decode.field "reason" Json.Decode.string)
+                            |> Json.Decode.map disconnectListen.on
+                            |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        SocketMessageListen messageListen ->
+            case interfaceAddDiff of
+                AddSocketMessageListen addId ->
+                    if addId == messageListen.id then
+                        Json.Decode.string
+                            |> Json.Decode.map messageListen.on
+                            |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
 
 domElementAtReversePath : List Int -> (DomNode state -> Maybe (DomNode state))
 domElementAtReversePath path domNode =
@@ -2292,7 +2455,8 @@ programUpdate appConfig =
                     , ("bug in lue-bird/elm-state-interface: interface diff failed to decode: "
                         ++ (jsonError |> Json.Decode.errorToString)
                       )
-                        |> AddConsoleError
+                        |> ConsoleError
+                        |> Add
                         |> InterfaceWithoutReceiveDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
@@ -2305,7 +2469,8 @@ programUpdate appConfig =
                     , ("bug in lue-bird/elm-state-interface: interface event data failed to decode: "
                         ++ (jsonError |> Json.Decode.errorToString)
                       )
-                        |> AddConsoleError
+                        |> ConsoleError
+                        |> Add
                         |> InterfaceWithoutReceiveDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
@@ -2406,17 +2571,7 @@ type InterfaceDiff
 {-| Actions that will never notify elm again
 -}
 type InterfaceWithoutReceiveDiff
-    = AddConsoleLog String
-    | AddConsoleWarn String
-    | AddConsoleError String
-    | AddNavigationReplaceUrl AppUrl
-    | AddNavigationPushUrl AppUrl
-    | AddNavigationGo Int
-    | AddNavigationLoad Url
-    | AddNavigationReload
-    | AddFileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
-    | AddClipboardReplaceBy String
-    | AddAudio Audio
+    = Add InterfaceSingleWithoutReceive
     | AddEditAudio { url : String, startTime : Time.Posix, replacement : EditAudioDiff }
     | RemoveTimePeriodicallyListen { milliSeconds : Int }
     | RemoveHttpRequest HttpRequestId
@@ -2425,6 +2580,9 @@ type InterfaceWithoutReceiveDiff
     | RemoveWindowAnimationFrameListen
     | RemoveDocumentEventListen String
     | RemoveAudio { url : String, startTime : Time.Posix }
+    | RemoveSocketConnect { address : String }
+    | RemoveSocketDisconnectListen SocketId
+    | RemoveSocketMessageListen SocketId
 
 
 {-| Actions that will notify elm some time in the future
@@ -2444,6 +2602,9 @@ type InterfaceWithReceiveDiff
     | AddNavigationUrlRequest
     | AddClipboardRequest
     | AddAudioSourceLoad String
+    | AddSocketConnect { address : String }
+    | AddSocketDisconnectListen SocketId
+    | AddSocketMessageListen SocketId
 
 
 {-| What parts of an [`Audio`](#Audio) are replaced

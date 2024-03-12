@@ -268,4 +268,5 @@ The module and interface structure is also not equipped to support multiple plat
 ## thanks 🌱
   - [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) was used as a base for many of the js implementations
   - [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) gave me the motivation to make a package out of it
-  - [`kageurufu/elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) was used as a base for the websocket js implementation
+  - feedback from [@a-teammate](https://github.com/a-teammate) 💚
+  - [`kageurufu/elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) inspired my to also provide a websocket API
