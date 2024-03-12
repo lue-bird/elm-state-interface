@@ -401,13 +401,18 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
 
 type AudioInfo = {
     url: string,
-    volume: number,
     startTime: number,
-    speed: number,
-    volumeTimelines: VolumeTimeline[],
-    pan: number
+    volume: AudioParameterTimeline,
+    speed: AudioParameterTimeline,
+    stereoPan: AudioParameterTimeline,
+    linearConvolutions: { sourceUrl: string }[],
+    lowpasses: { cutoffFrequency: AudioParameterTimeline }[],
+    highpasses: { cutoffFrequency: AudioParameterTimeline }[]
 }
-type VolumeTimeline = { time: number, volume: number }[]
+type AudioParameterTimeline = {
+    startValue: number,
+    keyFrames: { time: number, value: number }[]
+}
 
 const audioBuffers: { [key: string]: AudioBuffer } = {}
 const audioContext = new AudioContext()
@@ -416,8 +421,8 @@ let audioPlaying: {
     startTime: number,
     sourceNode: AudioBufferSourceNode,
     gainNode: GainNode,
-    volumeTimelineGainNodes: GainNode[],
-    panNode: StereoPannerNode
+    stereoPanNode: StereoPannerNode,
+    processingNodes: AudioNode[]
 }[] = []
 
 function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
@@ -446,56 +451,56 @@ function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
     request.send()
 }
 
-function createVolumeTimelineGainNodes(volumeTimelines: VolumeTimeline[], currentTime: number) {
-    return volumeTimelines.map((volumeTimeline: VolumeTimeline) => {
-        const gainNode = audioContext.createGain()
-        if (volumeTimeline[0]) { // should be present
-            gainNode.gain.setValueAtTime(volumeTimeline[0].volume, 0)
-            gainNode.gain.linearRampToValueAtTime(volumeTimeline[0].volume, 0)
+function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioParameterTimeline) {
+    const currentTime = audioContext.currentTime
+    audioParam.cancelScheduledValues(currentTime)
+    const fullTimeline = [
+        { time: currentTime, value: timeline.startValue },
+        ...timeline.keyFrames.map(keyframe => { return { value: keyframe.value, time: posixToContextTime(keyframe.time, currentTime) } })
+    ]
+    forEachConsecutive(fullTimeline, pair => {
+        if (currentTime >= pair.current.time) {
+            audioParam.setValueAtTime(
+                linearlyInterpolate(
+                    pair.current.value,
+                    pair.next.value,
+                    // since start / duration
+                    (currentTime - pair.current.time) / (pair.next.time - pair.current.time)
+                ),
+                0
+            )
         }
-        const currentContextTime = posixToContextTime(currentTime, currentTime)
-        forEachConsecutive(volumeTimeline, pair => {
-            const pairCurrentTime = posixToContextTime(pair.current.time, currentTime)
-            const pairNextTime = posixToContextTime(pair.next.time, currentTime)
-
-            if (pairNextTime > currentContextTime && currentContextTime >= pairCurrentTime) {
-                const currentVolume = interpolate(pairCurrentTime, pair.current.volume, pairNextTime, pair.next.volume, currentContextTime);
-                gainNode.gain.setValueAtTime(currentVolume, 0)
-                gainNode.gain.linearRampToValueAtTime(pair.next.volume, pairNextTime)
-            } else if (pairNextTime > currentContextTime) {
-                gainNode.gain.linearRampToValueAtTime(pair.next.volume, pairNextTime)
-            } else {
-                gainNode.gain.setValueAtTime(pair.next.volume, 0)
-            }
-        })
-        return gainNode
-    });
+        audioParam.linearRampToValueAtTime(pair.next.value, pair.next.time - pair.current.time)
+    })
+    return audioParam
 }
 
 function addAudio(config: AudioInfo) {
-    let buffer = audioBuffers[config.url]
+    const buffer = audioBuffers[config.url]
     if (buffer) {
         createAudio(config, buffer)
     } else {
-        console.warn("lue-bird/elm-state-interface: tried to play audio from source that isn't loaded. Have you used Web.Audio.sourceLoad?")
+        console.warn("lue-bird/elm-state-interface: tried to play audio from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
     }
 }
 function createAudio(config: AudioInfo, buffer: AudioBuffer) {
     const currentTime = new Date().getTime()
     const source = audioContext.createBufferSource()
     source.buffer = buffer
-    source.playbackRate.value = config.speed
+    audioParameterTimelineApplyTo(source.playbackRate, config.speed)
 
-    const timelineGainNodes = createVolumeTimelineGainNodes(config.volumeTimelines, currentTime)
     const gainNode = audioContext.createGain()
-    gainNode.gain.setValueAtTime(config.volume, 0)
+    audioParameterTimelineApplyTo(gainNode.gain, config.volume)
 
     const stereoPannerNode = new StereoPannerNode(audioContext)
-    stereoPannerNode.pan.setValueAtTime(config.pan, 0)
+    audioParameterTimelineApplyTo(stereoPannerNode.pan, config.stereoPan)
 
-    forEachConsecutive([source, gainNode, ...timelineGainNodes, audioContext.destination], pair => {
-        pair.current.connect(pair.next)
-    })
+    const processingNodes = createProcessingNodes(config)
+
+    forEachConsecutive(
+        [source, gainNode, stereoPannerNode, ...processingNodes, audioContext.destination],
+        pair => { pair.current.connect(pair.next) }
+    )
 
     if (config.startTime >= currentTime) {
         source.start(posixToContextTime(config.startTime, currentTime), 0)
@@ -507,9 +512,46 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer) {
         startTime: config.startTime,
         sourceNode: source,
         gainNode: gainNode,
-        volumeTimelineGainNodes: timelineGainNodes,
-        panNode: stereoPannerNode
+        stereoPanNode: stereoPannerNode,
+        processingNodes: processingNodes,
     })
+}
+function createProcessingNodes(config: {
+    linearConvolutions: { sourceUrl: string }[],
+    lowpasses: { cutoffFrequency: AudioParameterTimeline }[],
+    highpasses: { cutoffFrequency: AudioParameterTimeline }[]
+}): AudioNode[] {
+    const convolverNodes =
+        config.linearConvolutions
+            .map(linearConvolution => {
+                const convolverNode = new ConvolverNode(audioContext)
+                const buffer = audioBuffers[linearConvolution.sourceUrl]
+                if (buffer) {
+                    convolverNode.buffer = buffer
+                } else {
+                    console.warn("lue-bird/elm-state-interface: tried to create a linear convolution from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
+                }
+                return convolverNode
+            })
+
+    const lowpassNodes =
+        config.lowpasses
+            .map(lowpass => {
+                const biquadNode = new BiquadFilterNode(audioContext)
+                biquadNode.type = "lowpass"
+                audioParameterTimelineApplyTo(biquadNode.frequency, lowpass.cutoffFrequency)
+                return biquadNode
+            })
+
+    const highpassNodes =
+        config.highpasses
+            .map(highpass => {
+                const biquadNode = new BiquadFilterNode(audioContext)
+                biquadNode.type = "highpass"
+                audioParameterTimelineApplyTo(biquadNode.frequency, highpass.cutoffFrequency)
+                return biquadNode
+            })
+    return [...convolverNodes, ...lowpassNodes, ...highpassNodes]
 }
 function removeAudio(config: { url: string, startTime: number }) {
     audioPlaying = audioPlaying.filter(audio => {
@@ -517,8 +559,8 @@ function removeAudio(config: { url: string, startTime: number }) {
             audio.sourceNode.stop()
             audio.sourceNode.disconnect()
             audio.gainNode.disconnect()
-            audio.panNode.disconnect()
-            audio.volumeTimelineGainNodes.map(node => { node.disconnect() })
+            audio.stereoPanNode.disconnect()
+            audio.processingNodes.forEach(node => { node.disconnect() })
             return false
         }
         return true
@@ -528,35 +570,35 @@ function editAudio(config: { url: string, startTime: number, replacement: any })
     audioPlaying.forEach(value => {
         if (value.url === config.url && value.startTime === config.startTime) {
             if (config.replacement?.volume) {
-                value.gainNode.gain.setValueAtTime(config.replacement.volume, 0)
-            } else if (config.replacement?.volumeTimelines) {
-                const currentTime = new Date().getTime()
-                value.volumeTimelineGainNodes.forEach(node => { node.disconnect() })
-                value.gainNode.disconnect()
-                const newVolumeTimelineGainNodes =
-                    createVolumeTimelineGainNodes(config.replacement.volumeTimelines, currentTime)
-                forEachConsecutive([value.gainNode, ...newVolumeTimelineGainNodes, audioContext.destination], c => {
-                    c.current.connect(c.next)
-                })
-                value.volumeTimelineGainNodes = newVolumeTimelineGainNodes
+                audioParameterTimelineApplyTo(value.gainNode.gain, config.replacement.volume)
             } else if (config.replacement?.speed) {
-                value.sourceNode.playbackRate.setValueAtTime(config.replacement.speed, 0)
-            } else if (config.replacement?.pan) {
-                value.panNode.pan.setValueAtTime(config.replacement.pan, 0)
+                audioParameterTimelineApplyTo(value.sourceNode.playbackRate, config.replacement.speed)
+            } else if (config.replacement?.stereoPan) {
+                audioParameterTimelineApplyTo(value.stereoPanNode.pan, config.replacement.stereoPan)
+            } else if (config.replacement?.processing) {
+                value.stereoPanNode.disconnect()
+                value.processingNodes.forEach(node => { node.disconnect() })
+
+                value.processingNodes = createProcessingNodes(config.replacement.processing)
+
+                forEachConsecutive(
+                    [value.stereoPanNode, ...value.processingNodes, audioContext.destination],
+                    pair => { pair.current.connect(pair.next) }
+                )
             }
         }
     })
 }
 
 // helpers
+
 function posixToContextTime(posix: number, currentTimePosix: number) {
     return (posix - currentTimePosix) / 1000 + audioContext.currentTime
 }
 
-function interpolate(startAt: number, startValue: number, endAt: number, endValue: number, time: number) {
-    let t = (time - startAt) / (endAt - startAt);
-    return Number.isFinite(t) ?
-        t * (endValue - startValue) + startValue
+function linearlyInterpolate(startValue: number, endValue: number, progress: number) {
+    return Number.isFinite(progress) ?
+        progress * (endValue - startValue) + startValue
         :
         startValue
 }
