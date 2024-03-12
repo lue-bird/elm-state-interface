@@ -2,9 +2,9 @@ module Web exposing
     ( ProgramConfig
     , program, ProgramState(..), ProgramEvent(..)
     , programInit, programUpdate, programSubscriptions
-    , Interface, interfaceBatch, interfaceNone, interfaceMap
+    , Interface, interfaceBatch, interfaceNone, interfaceStateMap
     , DomNode(..), DomElement, DefaultActionHandling(..)
-    , Audio, AudioSource, AudioSourceLoadError(..), AudioVolumeTimeline, EditAudioDiff(..)
+    , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , InterfaceSingle(..), InterfaceSingleWithReceive(..), InterfaceSingleWithoutReceive(..)
     , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
@@ -31,7 +31,7 @@ If you just want to replace a part of your elm app with this architecture. Make 
 
 # interface types
 
-@docs Interface, interfaceBatch, interfaceNone, interfaceMap
+@docs Interface, interfaceBatch, interfaceNone, interfaceStateMap
 
 
 ## DOM
@@ -43,7 +43,7 @@ Types used by [`Web.Dom`](Web-Dom)
 
 ## Audio
 
-@docs Audio, AudioSource, AudioSourceLoadError, AudioVolumeTimeline, EditAudioDiff
+@docs Audio, AudioSource, AudioSourceLoadError, AudioParameterTimeline, EditAudioDiff
 
 
 ## HTTP
@@ -381,12 +381,12 @@ interfaceNone =
 In practice, this is sometimes used like a kind of event-config pattern:
 
     Web.Time.posixRequest
-        |> Web.interfaceMap (\timeNow -> TimeReceived timeNow)
+        |> Web.interfaceStateMap (\timeNow -> TimeReceived timeNow)
 
 sometimes like elm's `update`
 
     ...
-        |> Web.interfaceMap
+        |> Web.interfaceStateMap
             (\event ->
                 case event of
                     MouseMovedTo newMousePoint ->
@@ -409,17 +409,17 @@ and sometimes like elm's `Cmd.map/Task.map/Sub.map/...`:
     interface state =
         case state of
             MenuState menuState ->
-                Web.interfaceMap MenuState (Menu.interface menuState)
+                Web.interfaceStateMap MenuState (Menu.interface menuState)
 
             PlayingState playingState ->
-                Web.interfaceMap PlayingState (Playing.interface playingState)
+                Web.interfaceStateMap PlayingState (Playing.interface playingState)
 
 In all these examples, you end up converting the narrow state representation of part of the interface to a broader representation for
 the parent interface
 
 -}
-interfaceMap : (state -> mappedState) -> (Interface state -> Interface mappedState)
-interfaceMap stateChange =
+interfaceStateMap : (state -> mappedState) -> (Interface state -> Interface mappedState)
+interfaceStateMap stateChange =
     \interface ->
         interface
             |> Rope.toList
@@ -1241,11 +1241,25 @@ audioDiff =
 
           else
             ReplacementAudioSpeed new.speed |> Just
-        , if previous.volumeTimelines == new.volumeTimelines then
+        , if previous.stereoPan == new.stereoPan then
             Nothing
 
           else
-            ReplacementAudioVolumeTimelines new.volumeTimelines |> Just
+            ReplacementAudioStereoPan new.stereoPan |> Just
+        , if
+            (previous.linearConvolutions == new.linearConvolutions)
+                && (previous.lowpasses == new.lowpasses)
+                && (previous.highpasses == new.highpasses)
+          then
+            Nothing
+
+          else
+            { linearConvolutions = new.linearConvolutions
+            , lowpasses = new.lowpasses
+            , highpasses = new.highpasses
+            }
+                |> ReplacementAudioProcessing
+                |> Just
         ]
             |> List.filterMap identity
 
@@ -1449,18 +1463,23 @@ interfaceWithReceiveDiffToJson =
             ]
 
 
-audioVolumeTimelineToJson : AudioVolumeTimeline -> Json.Encode.Value
-audioVolumeTimelineToJson =
+audioParameterTimelineToJson : AudioParameterTimeline -> Json.Encode.Value
+audioParameterTimelineToJson =
     \timeline ->
-        timeline
-            |> Dict.toList
-            |> Json.Encode.list
-                (\( time, volume ) ->
-                    Json.Encode.object
-                        [ ( "time", time |> Json.Encode.int )
-                        , ( "volume", volume |> Json.Encode.float )
-                        ]
-                )
+        Json.Encode.object
+            [ ( "startValue", timeline.startValue |> Json.Encode.float )
+            , ( "keyFrames"
+              , timeline.keyFrames
+                    |> List.sortBy (\keyFrame -> keyFrame.time |> Time.posixToMillis)
+                    |> Json.Encode.list
+                        (\keyFrame ->
+                            Json.Encode.object
+                                [ ( "time", keyFrame.time |> Time.posixToMillis |> Json.Encode.int )
+                                , ( "value", keyFrame.value |> Json.Encode.float )
+                                ]
+                        )
+              )
+            ]
 
 
 interfaceWithoutReceiveDiffToJson : InterfaceWithoutReceiveDiff -> Json.Encode.Value
@@ -1520,16 +1539,40 @@ interfaceWithoutReceiveDiffToJson =
                           , Json.Encode.object
                                 [ case audioEdit.replacement of
                                     ReplacementAudioSpeed new ->
-                                        ( "speed", new |> Json.Encode.float )
+                                        ( "speed", new |> audioParameterTimelineToJson )
 
                                     ReplacementAudioVolume new ->
-                                        ( "volume", new |> Json.Encode.float )
+                                        ( "volume", new |> audioParameterTimelineToJson )
 
-                                    ReplacementAudioPan new ->
-                                        ( "pan", new |> Json.Encode.float )
+                                    ReplacementAudioStereoPan new ->
+                                        ( "stereoPan", new |> audioParameterTimelineToJson )
 
-                                    ReplacementAudioVolumeTimelines new ->
-                                        ( "volumeTimelines", new |> Json.Encode.list audioVolumeTimelineToJson )
+                                    ReplacementAudioProcessing new ->
+                                        ( "processing"
+                                        , Json.Encode.object
+                                            [ ( "linearConvolutions"
+                                              , new.linearConvolutions
+                                                    |> Json.Encode.list
+                                                        (\linearConvolution ->
+                                                            Json.Encode.object [ ( "sourceUrl", linearConvolution.sourceUrl |> Json.Encode.string ) ]
+                                                        )
+                                              )
+                                            , ( "lowpasses"
+                                              , new.lowpasses
+                                                    |> Json.Encode.list
+                                                        (\lowpass ->
+                                                            Json.Encode.object [ ( "cutoffFrequency", lowpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                                                        )
+                                              )
+                                            , ( "highpasses"
+                                              , new.highpasses
+                                                    |> Json.Encode.list
+                                                        (\highpass ->
+                                                            Json.Encode.object [ ( "cutoffFrequency", highpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                                                        )
+                                              )
+                                            ]
+                                        )
                                 ]
                           )
                         ]
@@ -1570,10 +1613,30 @@ audioToJson audio =
     Json.Encode.object
         [ ( "url", audio.url |> Json.Encode.string )
         , ( "startTime", audio.startTime |> Time.posixToMillis |> Json.Encode.int )
-        , ( "volume", audio.volume |> Json.Encode.float )
-        , ( "volumeTimelines", audio.volumeTimelines |> Json.Encode.list audioVolumeTimelineToJson )
-        , ( "speed", audio.speed |> Json.Encode.float )
-        , ( "pan", audio.pan |> Json.Encode.float )
+        , ( "volume", audio.volume |> audioParameterTimelineToJson )
+        , ( "speed", audio.speed |> audioParameterTimelineToJson )
+        , ( "stereoPan", audio.stereoPan |> audioParameterTimelineToJson )
+        , ( "linearConvolutions"
+          , audio.linearConvolutions
+                |> Json.Encode.list
+                    (\linearConvolution ->
+                        Json.Encode.object [ ( "sourceUrl", linearConvolution.sourceUrl |> Json.Encode.string ) ]
+                    )
+          )
+        , ( "lowpasses"
+          , audio.lowpasses
+                |> Json.Encode.list
+                    (\lowpass ->
+                        Json.Encode.object [ ( "cutoffFrequency", lowpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                    )
+          )
+        , ( "highpasses"
+          , audio.highpasses
+                |> Json.Encode.list
+                    (\highpass ->
+                        Json.Encode.object [ ( "cutoffFrequency", highpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                    )
+          )
         ]
 
 
@@ -2386,10 +2449,14 @@ type InterfaceWithReceiveDiff
 {-| What parts of an [`Audio`](#Audio) are replaced
 -}
 type EditAudioDiff
-    = ReplacementAudioVolume Float
-    | ReplacementAudioSpeed Float
-    | ReplacementAudioPan Float
-    | ReplacementAudioVolumeTimelines (List AudioVolumeTimeline)
+    = ReplacementAudioVolume AudioParameterTimeline
+    | ReplacementAudioSpeed AudioParameterTimeline
+    | ReplacementAudioStereoPan AudioParameterTimeline
+    | ReplacementAudioProcessing
+        { linearConvolutions : List { sourceUrl : String }
+        , lowpasses : List { cutoffFrequency : AudioParameterTimeline }
+        , highpasses : List { cutoffFrequency : AudioParameterTimeline }
+        }
 
 
 {-| Some kind of sound we want to play. To create `Audio` start with [`Web.Audio.fromSource`](Web-Audio#fromSource)
@@ -2398,17 +2465,19 @@ type alias Audio =
     RecordWithoutConstructorFunction
         { url : String
         , startTime : Time.Posix
-        , volume : Float
-        , volumeTimelines : List AudioVolumeTimeline
-        , speed : Float
-        , pan : Float
+        , volume : AudioParameterTimeline
+        , speed : AudioParameterTimeline
+        , stereoPan : AudioParameterTimeline
+        , linearConvolutions : List { sourceUrl : String }
+        , lowpasses : List { cutoffFrequency : AudioParameterTimeline }
+        , highpasses : List { cutoffFrequency : AudioParameterTimeline }
         }
 
 
 {-| Audio data we can use to play sounds.
 Use [`Web.Audio.sourceLoad`](Web-Audio#sourceLoad) to fetch an [`AudioSource`](#AudioSource).
 
-You can for example use the contained source `duration` to loop:
+You can also use the contained source `duration`, for example to find fade-out times or to create a loop:
 
     audioLoop : AudioSource -> Time.Posix -> Time.Posix -> Audio
     audioLoop source initialTime lastTick =
@@ -2436,11 +2505,10 @@ type alias AudioSource =
 
 {-| defining how loud a sound should be at any point in time
 -}
-type alias AudioVolumeTimeline =
-    Dict
-        -- in milliseconds
-        Int
-        Float
+type alias AudioParameterTimeline =
+    { startValue : Float
+    , keyFrames : List { time : Time.Posix, value : Float }
+    }
 
 
 {-| Change the current node at a given path using a given [`ReplacementInEditDomDiff`](#ReplacementInEditDomDiff)

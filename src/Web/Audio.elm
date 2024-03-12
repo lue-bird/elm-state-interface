@@ -1,6 +1,7 @@
 module Web.Audio exposing
     ( sourceLoad, fromSource, play
-    , volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, pan
+    , volumeScaleBy, speedScaleBy, stereoPan
+    , addLinearConvolutionWith, addHighpassFromFrequency, addLowpassUntilFrequency
     )
 
 {-| Play [`Audio`](Web#Audio) as part of an [`Interface`](Web#Interface).
@@ -39,30 +40,25 @@ Documentation and js implementation inspired by [MartinSStewart/elm-audio](https
 
                 _ ->
                     Web.Audio.sourceLoad "https://cors-anywhere.herokuapp.com/https://freepd.com/music/Wakka%20Wakka.mp3"
-                        |> Web.interfaceMap
+                        |> Web.interfaceStateMap
                             (\result -> { state | musicSource = result |> Just })
     , ...
     }
 
 @docs sourceLoad, fromSource, play
-@docs volumeScaleBy, delayBy, speedScaleBy, volumeScaleTimeline, pan
+@docs volumeScaleBy, speedScaleBy, stereoPan
+@docs addLinearConvolutionWith, addHighpassFromFrequency, addLowpassUntilFrequency
 
 To detune, use [`speedScaleBy`](#speedScaleBy). It's documentation also shows which scale relates to which semitone pitch.
 
 -}
 
-import Dict
-import Duration exposing (Duration)
+import Duration
 import Rope
 import Time
-import Web exposing (Audio, AudioSource)
-
-
-{-| Start later by a given [Duration](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/Duration)
--}
-delayBy : Duration -> (Audio -> Audio)
-delayBy delay =
-    \a -> { a | startTime = Duration.addTo a.startTime delay }
+import Web exposing (Audio, AudioParameterTimeline, AudioSource)
+import Web.Audio.Parameter
+import Web.Audio.Parameter.Internal
 
 
 {-| Change the stereo panning with a given a signed percentage.
@@ -70,16 +66,14 @@ delayBy delay =
 For example `Web.Audio.pan -0.9` means that the sound is almost fully balanced towards the left speaker
 
 -}
-pan : Float -> (Audio -> Audio)
-pan signedPercentage =
+stereoPan : AudioParameterTimeline -> (Audio -> Audio)
+stereoPan signedPercentageTimeline =
     \a ->
         { a
-            | pan =
-                if signedPercentage < 0 then
-                    a.pan + (Basics.min 1 (abs signedPercentage) * (-1 - a.pan))
-
-                else
-                    a.pan + (Basics.min 1 (abs signedPercentage) * (1 - a.pan))
+            | stereoPan =
+                a.stereoPan
+                    |> Web.Audio.Parameter.Internal.scaleAlongParameter a.startTime
+                        signedPercentageTimeline
         }
 
 
@@ -96,72 +90,86 @@ see [Audio time stretching and pitch scaling](https://en.wikipedia.org/wiki/Audi
 Help appreciated!
 
 -}
-speedScaleBy : Float -> (Audio -> Audio)
-speedScaleBy speedScaleFactor =
-    \a -> { a | speed = a.speed * speedScaleFactor }
+speedScaleBy : AudioParameterTimeline -> (Audio -> Audio)
+speedScaleBy speedScaleFactorTimeline =
+    \a ->
+        { a
+            | speed =
+                a.speed
+                    |> Web.Audio.Parameter.Internal.scaleAlongParameter a.startTime
+                        speedScaleFactorTimeline
+        }
 
 
 {-| Scale how loud it is.
 1 preserves the current volume, 0.5 halves it, and 0 mutes it.
 If the the volume is less than 0, 0 will be used instead.
 -}
-volumeScaleBy : Float -> (Audio -> Audio)
+volumeScaleBy : AudioParameterTimeline -> (Audio -> Audio)
 volumeScaleBy volumeScaleFactor =
-    \a -> { a | volume = a.volume * Basics.max 0 volumeScaleFactor }
-
-
-{-| Scale how loud it is at different points in time.
-The volume will transition linearly between those points.
-The points in time don't need to be sorted but they need to be unique.
-
-Let's define an audio function that fades in to full volume and then fades out until it's muted again.
-
-    import Duration
-    import Time
-    import Web.Audio
-
-
-    -- 1                ________
-    --                /         \
-    -- 0 ____________/           \_______
-    --    t ->    fade in     fade out
-    fadeInOut fadeInTime fadeOutTime audio =
-        Web.Audio.scaleVolumeAt
-            [ ( Duration.subtractFrom fadeInTime Duration.second, 0 )
-            , ( fadeInTime, 1 )
-            , ( fadeOutTime, 1 )
-            , ( Duration.addTo fadeOutTime Duration.second, 0 )
-            ]
-            audio
-
-(`Duration` is from [ianmackenzie/elm-units](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/), `Time` is from [elm/time](https://dark.elm.dmy.fr/packages/elm/time/latest/))
-
--}
-volumeScaleTimeline : List ( Time.Posix, Float ) -> (Audio -> Audio)
-volumeScaleTimeline volumeTimesAndScale =
     \a ->
         { a
-            | volumeTimelines =
-                (case volumeTimesAndScale of
-                    [] ->
-                        Dict.singleton 0 1
+            | volume =
+                a.volume
+                    |> Web.Audio.Parameter.Internal.scaleAlongParameter a.startTime
+                        volumeScaleFactor
+        }
 
-                    firstVolumeAt :: secondToLastVolumeAt ->
-                        (firstVolumeAt :: secondToLastVolumeAt)
-                            |> List.map (\( at, value ) -> ( at |> Time.posixToMillis, value |> Basics.max 0 ))
-                            |> Dict.fromList
-                )
-                    :: a.volumeTimelines
+
+{-| Usually used to apply reverb and or echo.
+Given a loaded [`AudioSource`](Web#AudioSource) containing the impulse response,
+it performs a [Convolution](https://en.wikipedia.org/wiki/Convolution) with the [`Audio`](Web#Audio)
+
+If you need some nice impulse wavs to try it out, there's a few at [`dhiogoboza/audio-convolution`](https://github.com/dhiogoboza/audio-convolution/tree/master/impulses).
+If you know more nice ones, don't hesitate to open an issue or a PR.
+
+-}
+addLinearConvolutionWith : AudioSource -> (Audio -> Audio)
+addLinearConvolutionWith bufferAudioSource =
+    \a ->
+        { a
+            | linearConvolutions =
+                a.linearConvolutions ++ [ { sourceUrl = bufferAudioSource.url } ]
+        }
+
+
+{-| Frequencies below a given cutoff [parameter](Web#AudioParameterTimeline) pass through;
+frequencies above it are attenuated.
+
+Has a 12dB/octave rolloff and no peak at the cutoff.
+
+-}
+addLowpassUntilFrequency : AudioParameterTimeline -> (Audio -> Audio)
+addLowpassUntilFrequency cutoffFrequency =
+    \a ->
+        { a
+            | lowpasses =
+                a.lowpasses ++ [ { cutoffFrequency = cutoffFrequency } ]
+        }
+
+
+{-| Frequencies below a given cutoff [parameter](Web#AudioParameterTimeline) are attenuated;
+frequencies above it pass through.
+
+Has a 12dB/octave rolloff and no peak at the cutoff.
+
+-}
+addHighpassFromFrequency : AudioParameterTimeline -> (Audio -> Audio)
+addHighpassFromFrequency cutoffFrequency =
+    \a ->
+        { a
+            | highpasses =
+                a.highpasses ++ [ { cutoffFrequency = cutoffFrequency } ]
         }
 
 
 {-| Play audio from an audio source at a given time.
 
-    -- Here we play a song at half speed and it skips the first 15 seconds of the song.
+    -- play a song at half speed and wait 15 seconds after the usual song start time before starting
     Web.Audio.fromSource
         myCoolSong
         songStartTime
-        |> Web.Audio.speedScaleBy 0.5
+        |> Web.Audio.speedScaleBy (Web.Audio.Parameter.at 0.5)
         |> Web.Audio.delayBy (Duration.seconds 15)
 
 Note that in some browsers audio will be muted until the user interacts with the webpage.
@@ -171,10 +179,12 @@ fromSource : AudioSource -> Time.Posix -> Audio
 fromSource source startTime =
     { url = source.url
     , startTime = startTime
-    , volume = 1
-    , volumeTimelines = []
-    , speed = 1
-    , pan = 0
+    , volume = Web.Audio.Parameter.at 1
+    , speed = Web.Audio.Parameter.at 1
+    , stereoPan = Web.Audio.Parameter.at 0
+    , linearConvolutions = []
+    , lowpasses = []
+    , highpasses = []
     }
 
 
@@ -200,6 +210,12 @@ To play multiple audios:
 play : Audio -> Web.Interface state_
 play audio =
     Web.AudioPlay
-        { audio | startTime = Duration.addTo audio.startTime (Duration.milliseconds 50) }
+        { audio
+            | startTime = Duration.addTo audio.startTime (Duration.milliseconds 50)
+            , volume = audio.volume |> Web.Audio.Parameter.Internal.valuesAlter (\value -> Basics.max 0 value)
+
+            -- negative speed values are supported by some browsers
+            -- https://stackoverflow.com/questions/9874167/how-can-i-play-audio-in-reverse-with-web-audio-api/9875011#9875011
+        }
         |> Web.InterfaceWithoutReceive
         |> Rope.singleton
