@@ -11,4 +11,3 @@
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
   - TODO: allow http byte body https://github.com/andrewMacmurray/elm-concurrent-task/pull/26/files
-  - TODO use all xss attack protections from virtual-dom

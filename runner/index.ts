@@ -281,9 +281,20 @@ function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles
         domElement.style.setProperty(styleKey, styleValue as string)
     }
 }
-function domElementAddAttributes(domElement: Element, attributes: any) {
+function domElementAddAttributes(domElement: Element, attributes: { [key: string]: string }) {
     for (let [attributeKey, attributeValue] of Object.entries(attributes)) {
-        domElement.setAttribute(attributeKey, attributeValue as string)
+        if (RE_js_html.test(attributeValue)) {
+            console.error("This is an XSS vector. Please use an interface instead.")
+        } else if (attributeKey === "src" && RE_js_html.test(attributeValue)) {
+            console.error("This is an XSS vector. Please use an interface instead.")
+        } else if (attributeKey === "action" || attributeKey === "href" && RE_js.test(attributeValue)) {
+            console.error("This is an XSS vector. Please use an interface instead.")
+        } else {
+            domElement.setAttribute(
+                noOnOrFormAction(attributeKey),
+                attributeValue
+            )
+        }
     }
 }
 function domElementAddAttributesNamespaced(domElement: Element, attributesNamespaced: any) {
@@ -313,17 +324,21 @@ function domElementAddEventListens(domElement: Element, eventListens: any, path:
 //
 // For some reason, tabs can appear in href protocols and it still works.
 // So '\tjava\tSCRIPT:alert("!!!")' and 'javascript:alert("!!!")' are the same
-// in practice.
-//
-// Pulling the regular expressions out to the top level gives a slight speed
-// boost in small benchmarks (4-10%) but hoisting values to reduce allocation
-// can be unpredictable in large programs where JIT may have a harder time with
-// functions are not fully self-contained. The benefit is more that the js and
-// js_html ones are so weird that I prefer to see them near each other.
+// in practice. That is why RE_js and RE_js_html look
+// so freaky.
+
 const RE_script = /^script$/i
+var RE_on_formAction = /^(on|formAction$)/i;
+var RE_js = /^\s*j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:/i;
+var RE_js_html = /^\s*(j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:|d\s*a\s*t\s*a\s*:\s*t\s*e\s*x\s*t\s*\/\s*h\s*t\s*m\s*l\s*(,|;))/i;
+
 function noScript(tag: string) {
     return RE_script.test(tag) ? 'p' : tag
 }
+function noOnOrFormAction(key: string) {
+    return RE_on_formAction.test(key) ? "data-" + key : key
+}
+
 
 function windowEventListenAdd(eventName: string, sendToElm: (v: any) => void) {
     (window as { [key: string]: any })["on" + eventName] = sendToElm
