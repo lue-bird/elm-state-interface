@@ -246,15 +246,17 @@ Note: This example is only supposed to show differences in architecture.
 Unlike [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/), `elm-state-interface` does not allow custom tasks/interfaces.
 Instead, the goal of this package is to publish more browser APIs like webstorage instead of users doing the work only for their own projects. Since I'm a noob in the js world, feedback and contributions are super welcome ❀
 
-## the 1.0.0 release
+## what interfaces are included
 
-Should bring feature-parity with elm's exposed browser APIs ([tell me](https://github.com/lue-bird/elm-state-interface/issues/new) if I've missed some!).
-For now, I also left out some more niche interfaces like [`Browser.Dom.setViewportOf`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Dom#setViewportOf) and [`WebGL.Texture.loadWith`](https://dark.elm.dmy.fr/packages/elm-explorations/webgl/latest/WebGL-Texture#loadWith).
+There should be at least feature-parity with elm's exposed browser APIs ([tell me](https://github.com/lue-bird/elm-state-interface/issues/new) if I've missed some!).
+
+For now, some more niche interfaces like [`Browser.Dom.setViewportOf`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Dom#setViewportOf) and [`WebGL.Texture.loadWith`](https://dark.elm.dmy.fr/packages/elm-explorations/webgl/latest/WebGL-Texture#loadWith) are left out.
+
+Available APIs that elm's exposed browser APIs don't offer include clipboard, console, audio, websockets, real randomness.
 
 ## future
 
   - 🧩 add [example](https://github.com/lue-bird/elm-state-interface/tree/main/example) projects. Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
-  - 🔊 add audio interface similar to [`MartinSStewart/elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/)
   - 🔋 The web API you miss the most. Maybe [notifications](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API), [geolocation](https://developer.mozilla.org/en-US/docs/Web/API/Geolocation_API), [MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API), [speech](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) or [sensors](https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs)?
   - 🗃️ only with help: basic `node` APIs
 
@@ -267,6 +269,7 @@ The module and interface structure is also not equipped to support multiple plat
 
 ## thanks 🌱
   - [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) was used as a base for many of the js implementations
-  - [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) gave me the motivation to make a package out of it
-  - feedback from [@a-teammate](https://github.com/a-teammate) 💚
-  - [`kageurufu/elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) inspired my to also provide a websocket API
+  - the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) gave me the motivation to make a package out of it
+  - [@a-teammate](https://github.com/a-teammate) gave valuable feedback 💚
+  - [`MartinSStewart/elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/) inspired the audio API
+  - [`kageurufu/elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) was the inspiration to also provide a websocket API
