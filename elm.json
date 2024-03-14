@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "lue-bird/elm-state-interface",
-    "summary": "TEA but simpler, safer and more declarative",
+    "summary": "define an app in a simple, safe and declarative way",
     "license": "MIT",
     "version": "1.0.0",
     "exposed-modules": [
