@@ -38,16 +38,16 @@ and [receive](#messageListen) messages
 connectTo : String -> Web.Interface Web.SocketId
 connectTo address =
     Web.SocketConnect { address = address, on = identity }
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) to close a given connection.
 -}
-disconnect : Web.SocketId -> Web.Interface state_
+disconnect : Web.SocketId -> Web.Interface future_
 disconnect id =
     Web.SocketDisconnect id
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -62,7 +62,7 @@ Make sure to set your state's [`SocketId`](Web#SocketId) back to nothing
 disconnectListen : Web.SocketId -> Web.Interface { code : Int, reason : String }
 disconnectListen id =
     Web.SocketDisconnectListen { id = id, on = identity }
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -72,10 +72,10 @@ It's common to pair this with [`Json.Encode.encode 0`](https://dark.elm.dmy.fr/p
 to send json.
 
 -}
-message : Web.SocketId -> String -> Web.Interface state_
+message : Web.SocketId -> String -> Web.Interface future_
 message id data =
     Web.SocketMessage { id = id, data = data }
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -84,5 +84,5 @@ message id data =
 messageListen : Web.SocketId -> Web.Interface String
 messageListen id =
     Web.SocketMessageListen { id = id, on = identity }
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton

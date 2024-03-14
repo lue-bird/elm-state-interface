@@ -24,7 +24,7 @@ Replacement for `elm/time`'s [`Time.now`](https://package.elm-lang.org/packages/
 posixRequest : Web.Interface Time.Posix
 posixRequest =
     Web.TimePosixRequest identity
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -36,7 +36,7 @@ Replacement for `elm/time`'s [`Time.here`](https://package.elm-lang.org/packages
 zoneRequest : Web.Interface Time.Zone
 zoneRequest =
     Web.TimezoneOffsetRequest (\offset -> Time.customZone -offset [])
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -50,7 +50,7 @@ Replacement for `elm/time`'s [`Time.getZoneName`](https://package.elm-lang.org/p
 zoneNameRequest : Web.Interface Time.ZoneName
 zoneNameRequest =
     Web.TimezoneNameRequest identity
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -68,5 +68,5 @@ periodicallyListen intervalDuration =
         { intervalDurationMilliSeconds = intervalDuration |> Duration.inMilliseconds |> Basics.round
         , on = identity
         }
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton

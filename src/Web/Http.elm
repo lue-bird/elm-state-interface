@@ -41,7 +41,7 @@ The result will either be
       - `Err` with a [`Json.Decode.Error`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Error) the actual text response
 
 -}
-expectJson : Json.Decode.Decoder state -> HttpExpect (Result HttpError (Result { actualBody : String, jsonError : Json.Decode.Error } state))
+expectJson : Json.Decode.Decoder future -> HttpExpect (Result HttpError (Result { actualBody : String, jsonError : Json.Decode.Error } future))
 expectJson stateDecoder =
     Web.HttpExpectString
         (\result ->
@@ -82,10 +82,10 @@ expectWhatever =
 get :
     { url : String
     , headers : List HttpHeader
-    , expect : HttpExpect state
+    , expect : HttpExpect future
     , timeout : Maybe Int
     }
-    -> HttpRequest state
+    -> HttpRequest future
 get options =
     { url = options.url
     , method = "GET"
@@ -102,10 +102,10 @@ post :
     { url : String
     , headers : List HttpHeader
     , body : HttpBody
-    , expect : HttpExpect state
+    , expect : HttpExpect future
     , timeout : Maybe Int
     }
-    -> HttpRequest state
+    -> HttpRequest future
 post options =
     { url = options.url
     , method = "POST"
@@ -119,10 +119,10 @@ post options =
 {-| An [`Interface`](Web#Interface) for handling an [`HttpRequest`](Web#HttpRequest)
 using the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
 -}
-request : HttpRequest state -> Web.Interface state
+request : HttpRequest future -> Web.Interface future
 request =
     \httpRequest ->
         httpRequest
             |> Web.HttpRequest
-            |> Web.InterfaceWithReceive
+            |> Web.InterfaceWithFuture
             |> Rope.singleton

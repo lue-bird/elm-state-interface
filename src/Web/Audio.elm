@@ -40,7 +40,7 @@ Documentation and js implementation inspired by [MartinSStewart/elm-audio](https
 
                 _ ->
                     Web.Audio.sourceLoad "https://cors-anywhere.herokuapp.com/https://freepd.com/music/Wakka%20Wakka.mp3"
-                        |> Web.interfaceStateMap
+                        |> Web.interfaceFutureMap
                             (\result -> { state | musicSource = result |> Just })
     , ...
     }
@@ -194,7 +194,7 @@ and returning an [`AudioSource`](Web#AudioSource) to use with [`fromSource`](#fr
 sourceLoad : String -> Web.Interface (Result Web.AudioSourceLoadError Web.AudioSource)
 sourceLoad url =
     Web.AudioSourceLoad { url = url, on = identity }
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -207,7 +207,7 @@ To play multiple audios:
         |> Web.interfaceBatch
 
 -}
-play : Audio -> Web.Interface state_
+play : Audio -> Web.Interface future_
 play audio =
     Web.AudioPlay
         { audio
@@ -217,5 +217,5 @@ play audio =
             -- negative speed values are supported by some browsers
             -- https://stackoverflow.com/questions/9874167/how-can-i-play-audio-in-reverse-with-web-audio-api/9875011#9875011
         }
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton

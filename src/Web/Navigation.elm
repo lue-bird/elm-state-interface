@@ -33,7 +33,7 @@ Note: Uses [`window.location.href`](https://developer.mozilla.org/en-US/docs/Web
 urlRequest : Web.Interface AppUrl
 urlRequest =
     Web.NavigationUrlRequest identity
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -45,10 +45,10 @@ This can be useful if you have search box and you want the ?search=hats in the U
 Replacement for [`Browser.Navigation.replaceUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#replaceUrl)
 
 -}
-replaceUrl : AppUrl -> Web.Interface state_
+replaceUrl : AppUrl -> Web.Interface future_
 replaceUrl appUrl =
     Web.NavigationReplaceUrl appUrl
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -59,10 +59,10 @@ but does not trigger a page load.
 Replacement for [`Browser.Navigation.pushUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#pushUrl)
 
 -}
-pushUrl : AppUrl -> Web.Interface state_
+pushUrl : AppUrl -> Web.Interface future_
 pushUrl appUrl =
     Web.NavigationPushUrl appUrl
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -74,10 +74,10 @@ Note: You only manage the browser history that you created.
 Replacement for [`Browser.Navigation.forward`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#forward)
 
 -}
-moveForward : Int -> Web.Interface state_
+moveForward : Int -> Web.Interface future_
 moveForward urlSteps =
     Web.NavigationGo urlSteps
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -88,17 +88,17 @@ Note: You only manage the browser history that you created.
 Replacement for [`Browser.Navigation.back`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#back)
 
 -}
-moveBack : Int -> Web.Interface state_
+moveBack : Int -> Web.Interface future_
 moveBack urlSteps =
     Web.NavigationGo urlSteps
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) that leaves the current page and loads the given [URL](https://dark.elm.dmy.fr/packages/elm/url/latest/).
 This always results in a page load, even if the provided URL is the same as the current one.
 
-    gotoElmWebsite : Web.Interface state_
+    gotoElmWebsite : Web.Interface future_
     gotoElmWebsite =
         Web.Navigation.load
             -- https://elm-lang.org/
@@ -113,10 +113,10 @@ This always results in a page load, even if the provided URL is the same as the 
 Replacement for [`Browser.Navigation.load`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#load)
 
 -}
-load : Url -> Web.Interface state_
+load : Url -> Web.Interface future_
 load url =
     Web.NavigationLoad url
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -128,10 +128,10 @@ Note: This may grab resources from the browser cache.
 Replacement for [`Browser.Navigation.reload`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#reload)
 
 -}
-reload : Web.Interface state_
+reload : Web.Interface future_
 reload =
     Web.NavigationReload
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -158,5 +158,5 @@ movementListen =
                     ]
                 )
         }
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton

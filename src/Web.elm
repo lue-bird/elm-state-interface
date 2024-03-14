@@ -1,16 +1,17 @@
 module Web exposing
     ( ProgramConfig
-    , program, ProgramState(..), ProgramEvent(..)
-    , programInit, programUpdate, programSubscriptions
-    , Interface, interfaceBatch, interfaceNone, interfaceStateMap
+    , program, Program
+    , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
     , DomNode(..), DomElement, DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketId(..)
-    , InterfaceSingle(..), InterfaceSingleWithReceive(..), InterfaceSingleWithoutReceive(..)
-    , InterfaceDiff(..), InterfaceWithReceiveDiff(..), InterfaceWithoutReceiveDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
+    , programInit, programUpdate, programSubscriptions
+    , ProgramState(..), ProgramEvent(..)
+    , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleWithoutFuture(..)
+    , InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
     , InterfaceSingleKeys, InterfaceSingleIdOrderTag
-    , InterfaceSingleId(..), InterfaceSingleWithReceiveId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
+    , InterfaceSingleId(..), InterfaceSingleWithFutureId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program running in the browser
@@ -18,21 +19,14 @@ module Web exposing
 @docs ProgramConfig
 
 
-## as elm/browser Program
+## as an elm Program
 
-@docs program, ProgramState, ProgramEvent
-
-
-## embed
-
-If you just want to replace a part of your elm app with this architecture. Make sure to wire in all 3:
-
-@docs programInit, programUpdate, programSubscriptions
+@docs program, Program
 
 
-# interface types
+# interfaces
 
-@docs Interface, interfaceBatch, interfaceNone, interfaceStateMap
+@docs Interface, interfaceBatch, interfaceNone, interfaceFutureMap
 
 
 ## DOM
@@ -61,12 +55,20 @@ Types used by [`Web.Socket`](Web-Socket)
 @docs SocketId
 
 
-## internals, safe to ignore
+## embed
 
-@docs InterfaceSingle, InterfaceSingleWithReceive, InterfaceSingleWithoutReceive
-@docs InterfaceDiff, InterfaceWithReceiveDiff, InterfaceWithoutReceiveDiff, EditDomDiff, ReplacementInEditDomDiff
+If you just want to replace a part of your elm app with this architecture. Make sure to wire in all 3:
+
+@docs programInit, programUpdate, programSubscriptions
+
+
+## internals, safe to ignore for users
+
+@docs ProgramState, ProgramEvent
+@docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleWithoutFuture
+@docs InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff
 @docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
-@docs InterfaceSingleId, InterfaceSingleWithReceiveId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
+@docs InterfaceSingleId, InterfaceSingleWithFutureId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
 -}
 
@@ -94,11 +96,16 @@ import Typed
 import Url exposing (Url)
 
 
-{-| Ignore the specific fields, this is just exposed so can annotate a program state like in
+{-| Ignore the specific fields, this is just exposed so can
+for example simulate it more easily in tests, add a debugger etc.
 
-    main : Program () (Web.State YourState) (Web.Event YourState)
+A [`Web.program`](#program) would have this type
+
+    main : Platform.Program () (Web.State YourState) (Web.Event YourState)
     main =
         Web.toProgram ...
+
+In practice, please use [`Web.Program YourState`](#Program)
 
 -}
 type ProgramState appState
@@ -128,8 +135,15 @@ type InterfaceSingleToIdTag
 
 {-| What's needed to create a state-interface program.
 
-  - `state` is what elm calls the model
-  - An [`Interface`](#Interface) can be created using the helpers in `Web.Time`, `Web.Dom`, `Web.Http` etc.
+  - the state is everything the program knows (what The Elm Architecture calls model)
+
+  - The [`Interface`](#Interface) is the face to the outside world and can be created using the helpers in [`Web.Dom`](Web-Dom), [`Web.Time`](Web-Time), [`Web.Http`](Web-Http) etc.
+
+  - connections to and from js
+
+        port toJs : Json.Encode.Value -> Cmd event_
+
+        port fromJs : (Json.Encode.Value -> event) -> Sub event
 
 -}
 type alias ProgramConfig state =
@@ -149,21 +163,21 @@ To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
 To combine multiple, use [`Web.interfaceBatch`](#interfaceBatch) and [`Web.interfaceNone`](#interfaceNone)
 
 -}
-type alias Interface state =
-    Rope (InterfaceSingle state)
+type alias Interface future =
+    Rope (InterfaceSingle future)
 
 
 {-| An "non-batched" [`Interface`](#Interface).
 To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
 -}
-type InterfaceSingle state
-    = InterfaceWithReceive (InterfaceSingleWithReceive state)
-    | InterfaceWithoutReceive InterfaceSingleWithoutReceive
+type InterfaceSingle future
+    = InterfaceWithFuture (InterfaceSingleWithFuture future)
+    | InterfaceWithoutFuture InterfaceSingleWithoutFuture
 
 
 {-| An [`InterfaceSingle`](#InterfaceSingle) that will never notify elm
 -}
-type InterfaceSingleWithoutReceive
+type InterfaceSingleWithoutFuture
     = ConsoleLog String
     | ConsoleWarn String
     | ConsoleError String
@@ -194,24 +208,24 @@ type AudioSourceLoadError
 
 {-| An [`InterfaceSingle`](#InterfaceSingle) that will notify elm some time in the future.
 -}
-type InterfaceSingleWithReceive state
-    = TimePosixRequest (Time.Posix -> state)
-    | TimezoneOffsetRequest (Int -> state)
-    | TimezoneNameRequest (Time.ZoneName -> state)
-    | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> state }
-    | RandomUnsignedInt32sRequest { count : Int, on : List Int -> state }
-    | DocumentEventListen { eventName : String, on : Json.Decode.Decoder state }
-    | DomNodeRender (DomNode state)
-    | HttpRequest (HttpRequest state)
-    | WindowSizeRequest ({ width : Int, height : Int } -> state)
-    | WindowEventListen { eventName : String, on : Json.Decode.Decoder state }
-    | WindowAnimationFrameListen (Time.Posix -> state)
-    | NavigationUrlRequest (AppUrl -> state)
-    | ClipboardRequest (String -> state)
-    | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> state }
-    | SocketConnect { address : String, on : SocketId -> state }
-    | SocketDisconnectListen { id : SocketId, on : { code : Int, reason : String } -> state }
-    | SocketMessageListen { id : SocketId, on : String -> state }
+type InterfaceSingleWithFuture future
+    = TimePosixRequest (Time.Posix -> future)
+    | TimezoneOffsetRequest (Int -> future)
+    | TimezoneNameRequest (Time.ZoneName -> future)
+    | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
+    | RandomUnsignedInt32sRequest { count : Int, on : List Int -> future }
+    | DocumentEventListen { eventName : String, on : Json.Decode.Decoder future }
+    | DomNodeRender (DomNode future)
+    | HttpRequest (HttpRequest future)
+    | WindowSizeRequest ({ width : Int, height : Int } -> future)
+    | WindowEventListen { eventName : String, on : Json.Decode.Decoder future }
+    | WindowAnimationFrameListen (Time.Posix -> future)
+    | NavigationUrlRequest (AppUrl -> future)
+    | ClipboardRequest (String -> future)
+    | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
+    | SocketConnect { address : String, on : SocketId -> future }
+    | SocketDisconnectListen { id : SocketId, on : { code : Int, reason : String } -> future }
+    | SocketMessageListen { id : SocketId, on : String -> future }
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -220,13 +234,13 @@ You can set custom headers as needed.
 The `timeout` can be set to a number of milliseconds you are willing to wait before giving up
 
 -}
-type alias HttpRequest state =
+type alias HttpRequest future =
     RecordWithoutConstructorFunction
         { url : String
         , method : String
         , headers : List HttpHeader
         , body : HttpBody
-        , expect : HttpExpect state
+        , expect : HttpExpect future
         , timeout : Maybe Int
         }
 
@@ -239,9 +253,9 @@ type alias HttpHeader =
 
 {-| Describe what you expect to be returned in an http response body.
 -}
-type HttpExpect state
-    = HttpExpectString (Result HttpError String -> state)
-    | HttpExpectWhatever (Result HttpError () -> state)
+type HttpExpect future
+    = HttpExpectString (Result HttpError String -> future)
+    | HttpExpectWhatever (Result HttpError () -> future)
 
 
 {-| Data send in your http request.
@@ -287,14 +301,14 @@ type HttpExpectId
 
 {-| Plain text or a [`DomElement`](#DomElement) for use in an [`Interface`](#Interface).
 -}
-type DomNode state
+type DomNode future
     = DomText String
-    | DomElement (DomElement state)
+    | DomElement (DomElement future)
 
 
 {-| A tagged DOM node that can itself contain child [node](#DomNode)s
 -}
-type alias DomElement state =
+type alias DomElement future =
     RecordWithoutConstructorFunction
         { namespace : Maybe String
         , tag : String
@@ -304,10 +318,10 @@ type alias DomElement state =
         , eventListens :
             Dict
                 String
-                { on : Json.Decode.Value -> state
+                { on : Json.Decode.Value -> future
                 , defaultActionHandling : DefaultActionHandling
                 }
-        , subs : Array (DomNode state)
+        , subs : Array (DomNode future)
         }
 
 
@@ -321,13 +335,13 @@ type DefaultActionHandling
 {-| Safe to ignore. Identifier for an [`Interface`](#Interface)
 -}
 type InterfaceSingleId
-    = IdInterfaceWithReceive InterfaceSingleWithReceiveId
-    | IdInterfaceWithoutReceive InterfaceSingleWithoutReceive
+    = IdInterfaceWithFuture InterfaceSingleWithFutureId
+    | IdInterfaceWithoutFuture InterfaceSingleWithoutFuture
 
 
-{-| Safe to ignore. Identifier for an [`InterfaceSingleWithReceive`](#InterfaceSingleWithReceive)
+{-| Safe to ignore. Identifier for an [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture)
 -}
-type InterfaceSingleWithReceiveId
+type InterfaceSingleWithFutureId
     = IdTimePosixRequest
     | IdTimezoneOffsetRequest
     | IdTimezoneNameRequest
@@ -376,7 +390,7 @@ type SocketId
 
 {-| Combine multiple [`Interface`](#Interface)s into one.
 -}
-interfaceBatch : List (Interface state) -> Interface state
+interfaceBatch : List (Interface future) -> Interface future
 interfaceBatch =
     \interfaces -> interfaces |> Rope.fromList |> Rope.concat
 
@@ -393,22 +407,25 @@ and
         )
 
 -}
-interfaceNone : Interface state_
+interfaceNone : Interface future_
 interfaceNone =
     Rope.empty
 
 
-{-| Map the state constructed by the [`Interface`](#Interface).
+{-| Take what the [`Interface`](#Interface) can come back with and return a different future value.
 
 In practice, this is sometimes used like a kind of event-config pattern:
 
     Web.Time.posixRequest
-        |> Web.interfaceStateMap (\timeNow -> TimeReceived timeNow)
+        |> Web.interfaceFutureMap (\timeNow -> TimeReceived timeNow)
 
-sometimes like elm's `update`
+    Web.Time.posixRequest
+        |> Web.interfaceFutureMap (\Pressed -> ShowAllEntriesButtonClicked)
+
+sometimes as a way to deal with all events (equivalent to `update` in The Elm Architecture)
 
     ...
-        |> Web.interfaceStateMap
+        |> Web.interfaceFutureMap
             (\event ->
                 case event of
                     MouseMovedTo newMousePoint ->
@@ -421,137 +438,143 @@ sometimes like elm's `update`
                         { state | counter = state.counter + 1 }
             )
 
-and sometimes like elm's `Cmd.map/Task.map/Sub.map/...`:
+and sometimes to nest events (like elm's `Cmd.map/Task.map/Sub.map/...`):
 
-    type State
-        = MenuState Menu.State
-        | PlayingState Playing.State
+    type Event
+        = DirectoryTreeViewEvent TreeUiEvent
+        | SortButtonClicked
+
+    type TreeUiEvent
+        = Expanded TreePath
+        | Collapsed TreePath
 
     interface : State -> Interface State
     interface state =
-        case state of
-            MenuState menuState ->
-                Web.interfaceStateMap MenuState (Menu.interface menuState)
+        ...
+            [ treeUi ..
+                |> Web.interfaceFutureMap DirectoryTreeViewEvent
+            , ...
+            ]
+            |> Web.Dom.render
 
-            PlayingState playingState ->
-                Web.interfaceStateMap PlayingState (Playing.interface playingState)
+    treeUi : ... -> Web.DomNode TreeUiEvent
 
-In all these examples, you end up converting the narrow state representation of part of the interface to a broader representation for
-the parent interface
+In all these examples, you end up converting the narrow future representation of part of the interface
+to a broader representation for the parent interface
 
 -}
-interfaceStateMap : (state -> mappedState) -> (Interface state -> Interface mappedState)
-interfaceStateMap stateChange =
+interfaceFutureMap : (future -> mappedFuture) -> (Interface future -> Interface mappedFuture)
+interfaceFutureMap futureChange =
     \interface ->
         interface
             |> Rope.toList
             |> List.map
                 (\interfaceSingle ->
-                    interfaceSingle |> interfaceSingleMap stateChange
+                    interfaceSingle |> interfaceSingleFutureMap futureChange
                 )
             |> Rope.fromList
 
 
-interfaceSingleMap : (state -> mappedState) -> (InterfaceSingle state -> InterfaceSingle mappedState)
-interfaceSingleMap stateChange =
+interfaceSingleFutureMap : (future -> mappedFuture) -> (InterfaceSingle future -> InterfaceSingle mappedFuture)
+interfaceSingleFutureMap futureChange =
     \interface ->
         case interface of
-            InterfaceWithoutReceive interfaceWithoutReceive ->
-                interfaceWithoutReceive |> InterfaceWithoutReceive
+            InterfaceWithoutFuture interfaceWithoutFuture ->
+                interfaceWithoutFuture |> InterfaceWithoutFuture
 
-            InterfaceWithReceive interfaceWithReceive ->
-                interfaceWithReceive
-                    |> interfaceWithReceiveMap stateChange
-                    |> InterfaceWithReceive
+            InterfaceWithFuture interfaceWithFuture ->
+                interfaceWithFuture
+                    |> interfaceWithFutureMap futureChange
+                    |> InterfaceWithFuture
 
 
-domNodeMap : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
-domNodeMap stateChange =
+domNodeFutureMap : (future -> mappedFuture) -> (DomNode future -> DomNode mappedFuture)
+domNodeFutureMap futureChange =
     \domElementToMap ->
         case domElementToMap of
             DomText text ->
                 DomText text
 
             DomElement domElement ->
-                domElement |> domElementMap stateChange |> DomElement
+                domElement |> domElementMap futureChange |> DomElement
 
 
-interfaceWithReceiveMap : (state -> mappedState) -> (InterfaceSingleWithReceive state -> InterfaceSingleWithReceive mappedState)
-interfaceWithReceiveMap stateChange =
+interfaceWithFutureMap : (future -> mappedFuture) -> (InterfaceSingleWithFuture future -> InterfaceSingleWithFuture mappedFuture)
+interfaceWithFutureMap futureChange =
     \interface ->
         case interface of
             TimePosixRequest requestTimeNow ->
-                (\event -> requestTimeNow event |> stateChange)
+                (\event -> requestTimeNow event |> futureChange)
                     |> TimePosixRequest
 
             TimezoneOffsetRequest requestTimezone ->
-                (\event -> requestTimezone event |> stateChange)
+                (\event -> requestTimezone event |> futureChange)
                     |> TimezoneOffsetRequest
 
             TimezoneNameRequest requestTimezoneName ->
-                (\event -> requestTimezoneName event |> stateChange)
+                (\event -> requestTimezoneName event |> futureChange)
                     |> TimezoneNameRequest
 
             TimePeriodicallyListen timePeriodicallyListen ->
                 { intervalDurationMilliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds
-                , on = \posix -> timePeriodicallyListen.on posix |> stateChange
+                , on = \posix -> timePeriodicallyListen.on posix |> futureChange
                 }
                     |> TimePeriodicallyListen
 
             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
                 { count = randomUnsignedInt32sRequest.count
-                , on = \ints -> randomUnsignedInt32sRequest.on ints |> stateChange
+                , on = \ints -> randomUnsignedInt32sRequest.on ints |> futureChange
                 }
                     |> RandomUnsignedInt32sRequest
 
             DomNodeRender domElementToRender ->
-                domElementToRender |> domNodeMap stateChange |> DomNodeRender
+                domElementToRender |> domNodeFutureMap futureChange |> DomNodeRender
 
             HttpRequest httpRequest ->
                 httpRequest
-                    |> httpRequestMap stateChange
+                    |> httpRequestMap futureChange
                     |> HttpRequest
 
             WindowSizeRequest toState ->
-                (\event -> toState event |> stateChange)
+                (\event -> toState event |> futureChange)
                     |> WindowSizeRequest
 
             WindowEventListen listen ->
-                { eventName = listen.eventName, on = listen.on |> Json.Decode.map stateChange }
+                { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
                     |> WindowEventListen
 
             WindowAnimationFrameListen toState ->
-                (\event -> toState event |> stateChange) |> WindowAnimationFrameListen
+                (\event -> toState event |> futureChange) |> WindowAnimationFrameListen
 
             NavigationUrlRequest toState ->
-                (\event -> toState event |> stateChange) |> NavigationUrlRequest
+                (\event -> toState event |> futureChange) |> NavigationUrlRequest
 
             DocumentEventListen listen ->
-                { eventName = listen.eventName, on = listen.on |> Json.Decode.map stateChange }
+                { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
                     |> DocumentEventListen
 
             ClipboardRequest toState ->
-                (\event -> toState event |> stateChange) |> ClipboardRequest
+                (\event -> toState event |> futureChange) |> ClipboardRequest
 
             AudioSourceLoad load ->
-                { url = load.url, on = \event -> load.on event |> stateChange }
+                { url = load.url, on = \event -> load.on event |> futureChange }
                     |> AudioSourceLoad
 
             SocketConnect connect ->
-                { address = connect.address, on = \event -> event |> connect.on |> stateChange }
+                { address = connect.address, on = \event -> event |> connect.on |> futureChange }
                     |> SocketConnect
 
             SocketDisconnectListen disconnectListen ->
-                { id = disconnectListen.id, on = \event -> event |> disconnectListen.on |> stateChange }
+                { id = disconnectListen.id, on = \event -> event |> disconnectListen.on |> futureChange }
                     |> SocketDisconnectListen
 
             SocketMessageListen messageListen ->
-                { id = messageListen.id, on = \event -> event |> messageListen.on |> stateChange }
+                { id = messageListen.id, on = \event -> event |> messageListen.on |> futureChange }
                     |> SocketMessageListen
 
 
-httpRequestMap : (state -> mappedState) -> (HttpRequest state -> HttpRequest mappedState)
-httpRequestMap stateChange =
+httpRequestMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
+httpRequestMap futureChange =
     \httpRequest ->
         { url = httpRequest.url
         , method = httpRequest.method
@@ -561,15 +584,15 @@ httpRequestMap stateChange =
         , expect =
             case httpRequest.expect of
                 HttpExpectWhatever expectWhatever ->
-                    (\unit -> expectWhatever unit |> stateChange) |> HttpExpectWhatever
+                    (\unit -> expectWhatever unit |> futureChange) |> HttpExpectWhatever
 
                 HttpExpectString expectString ->
-                    (\string -> expectString string |> stateChange) |> HttpExpectString
+                    (\string -> expectString string |> futureChange) |> HttpExpectString
         }
 
 
-domElementMap : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
-domElementMap stateChange =
+domElementMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
+domElementMap futureChange =
     \domElementToMap ->
         { namespace = domElementToMap.namespace
         , tag = domElementToMap.tag
@@ -580,20 +603,25 @@ domElementMap stateChange =
             domElementToMap.eventListens
                 |> Dict.map
                     (\_ listen ->
-                        { on = \event -> listen.on event |> stateChange
+                        { on = \event -> listen.on event |> futureChange
                         , defaultActionHandling = listen.defaultActionHandling
                         }
                     )
         , subs =
-            domElementToMap.subs |> Array.map (domNodeMap stateChange)
+            domElementToMap.subs |> Array.map (domNodeFutureMap futureChange)
         }
 
 
-{-| Ignore the specific variants, this is just exposed so can annotate a program event like in
+{-| Ignore the specific variants, this is just exposed so can
+for example simulate it more easily in tests, add a debugger etc.
 
-    main : Program () (Web.State YourState) (Web.Event YourState)
+A [`Web.program`](#program) would have this type
+
+    main : Platform.Program () (Web.State YourState) (Web.Event YourState)
     main =
         Web.toProgram ...
+
+In practice, please use [`Web.Program YourState`](#Program)
 
 -}
 type ProgramEvent appState
@@ -603,7 +631,7 @@ type ProgramEvent appState
     | AppEventToNewAppState appState
 
 
-domElementToId : DomElement state_ -> DomElementId
+domElementToId : DomElement future_ -> DomElementId
 domElementToId =
     \domElement ->
         { namespace = domElement.namespace
@@ -746,28 +774,28 @@ comparableListOrder =
                         comparableListOrder ( tail0, tail1 )
 
 
-interfaceKeys : Keys (InterfaceSingle state) (InterfaceSingleKeys state) N1
+interfaceKeys : Keys (InterfaceSingle future) (InterfaceSingleKeys future) N1
 interfaceKeys =
     Keys.oneBy interfaceToIdMapping interfaceIdOrder
 
 
-interfaceToIdMapping : Mapping (InterfaceSingle state_) InterfaceSingleToIdTag InterfaceSingleId
+interfaceToIdMapping : Mapping (InterfaceSingle future_) InterfaceSingleToIdTag InterfaceSingleId
 interfaceToIdMapping =
     Map.tag InterfaceSingleToIdTag interfaceSingleToId
 
 
-interfaceSingleToId : InterfaceSingle state_ -> InterfaceSingleId
+interfaceSingleToId : InterfaceSingle future_ -> InterfaceSingleId
 interfaceSingleToId =
     \interface ->
         case interface of
-            InterfaceWithoutReceive interfaceWithoutReceive ->
-                interfaceWithoutReceive |> IdInterfaceWithoutReceive
+            InterfaceWithoutFuture interfaceWithoutFuture ->
+                interfaceWithoutFuture |> IdInterfaceWithoutFuture
 
-            InterfaceWithReceive interfaceWithReceive ->
-                interfaceWithReceive |> interfaceWithReceiveToId |> IdInterfaceWithReceive
+            InterfaceWithFuture interfaceWithFuture ->
+                interfaceWithFuture |> interfaceWithFutureToId |> IdInterfaceWithFuture
 
 
-httpRequestToId : HttpRequest state_ -> HttpRequestId
+httpRequestToId : HttpRequest future_ -> HttpRequestId
 httpRequestToId =
     \httpRequest ->
         { url = httpRequest.url
@@ -779,7 +807,7 @@ httpRequestToId =
         }
 
 
-httpExpectToId : HttpExpect state_ -> HttpExpectId
+httpExpectToId : HttpExpect future_ -> HttpExpectId
 httpExpectToId =
     \httpExpect ->
         case httpExpect of
@@ -790,10 +818,10 @@ httpExpectToId =
                 IdHttpExpectString
 
 
-interfaceWithReceiveToId : InterfaceSingleWithReceive state_ -> InterfaceSingleWithReceiveId
-interfaceWithReceiveToId =
-    \interfaceWithReceive ->
-        case interfaceWithReceive of
+interfaceWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
+interfaceWithFutureToId =
+    \interfaceWithFuture ->
+        case interfaceWithFuture of
             TimePosixRequest _ ->
                 IdTimePosixRequest
 
@@ -857,11 +885,11 @@ interfaceSingleIdToComparable : InterfaceSingleId -> Comparable
 interfaceSingleIdToComparable =
     \interfaceId ->
         case interfaceId of
-            IdInterfaceWithoutReceive interfaceWithoutReceive ->
-                interfaceWithoutReceive |> interfaceWithoutReceiveToComparable
+            IdInterfaceWithoutFuture interfaceWithoutFuture ->
+                interfaceWithoutFuture |> interfaceWithoutFutureToComparable
 
-            IdInterfaceWithReceive idInterfaceWithoutReceive ->
-                idInterfaceWithoutReceive |> idInterfaceWithoutReceiveToComparable
+            IdInterfaceWithFuture idInterfaceWithoutFuture ->
+                idInterfaceWithoutFuture |> idInterfaceWithoutFutureToComparable
 
 
 intToComparable : Int -> Comparable
@@ -874,10 +902,10 @@ socketIdToComparable =
     \(SocketId raw) -> raw |> intToComparable
 
 
-idInterfaceWithoutReceiveToComparable : InterfaceSingleWithReceiveId -> Comparable
-idInterfaceWithoutReceiveToComparable =
-    \idInterfaceWithoutReceive ->
-        case idInterfaceWithoutReceive of
+idInterfaceWithoutFutureToComparable : InterfaceSingleWithFutureId -> Comparable
+idInterfaceWithoutFutureToComparable =
+    \idInterfaceWithoutFuture ->
+        case idInterfaceWithoutFuture of
             IdTimePosixRequest ->
                 ComparableString "IdTimePosixRequest"
 
@@ -1027,10 +1055,10 @@ httpExpectIdToComparable =
                 "IdHttpExpectWhatever" |> ComparableString
 
 
-interfaceWithoutReceiveToComparable : InterfaceSingleWithoutReceive -> Comparable
-interfaceWithoutReceiveToComparable =
-    \interfaceWithoutReceive ->
-        case interfaceWithoutReceive of
+interfaceWithoutFutureToComparable : InterfaceSingleWithoutFuture -> Comparable
+interfaceWithoutFutureToComparable =
+    \interfaceWithoutFuture ->
+        case interfaceWithoutFuture of
             ConsoleLog string ->
                 ComparableList
                     [ ComparableString "ConsoleLog"
@@ -1114,8 +1142,8 @@ interfaceWithoutReceiveToComparable =
 
 
 interfaceDiffs :
-    { old : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
-    , updated : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
+    { old : Emptiable (KeysSet (InterfaceSingle future) (InterfaceSingleKeys future) N1) Possibly
+    , updated : Emptiable (KeysSet (InterfaceSingle future) (InterfaceSingleKeys future) N1) Possibly
     }
     -> List InterfaceDiff
 interfaceDiffs =
@@ -1131,7 +1159,7 @@ interfaceDiffs =
                 )
 
 
-domNodeToId : DomNode state_ -> DomNodeId
+domNodeToId : DomNode future_ -> DomNodeId
 domNodeToId domNode =
     case domNode of
         DomText text ->
@@ -1141,23 +1169,23 @@ domNodeToId domNode =
             DomElementId (element |> domElementToId)
 
 
-interfaceOldAndOrUpdatedDiffs : AndOr (InterfaceSingle state) (InterfaceSingle state) -> List InterfaceDiff
+interfaceOldAndOrUpdatedDiffs : AndOr (InterfaceSingle future) (InterfaceSingle future) -> List InterfaceDiff
 interfaceOldAndOrUpdatedDiffs =
     \interfaceAndOr ->
         case interfaceAndOr of
-            AndOr.Both ( InterfaceWithReceive (DomNodeRender domElementPreviouslyRendered), InterfaceWithReceive (DomNodeRender domElementToRender) ) ->
+            AndOr.Both ( InterfaceWithFuture (DomNodeRender domElementPreviouslyRendered), InterfaceWithFuture (DomNodeRender domElementToRender) ) ->
                 ( domElementPreviouslyRendered, domElementToRender )
                     |> domNodeDiff []
-                    |> List.map (\diff -> diff |> AddEditDom |> InterfaceWithReceiveDiff)
+                    |> List.map (\diff -> diff |> AddEditDom |> InterfaceWithFutureDiff)
 
-            AndOr.Both ( InterfaceWithoutReceive (AudioPlay previouslyPlayed), InterfaceWithoutReceive (AudioPlay toPlay) ) ->
+            AndOr.Both ( InterfaceWithoutFuture (AudioPlay previouslyPlayed), InterfaceWithoutFuture (AudioPlay toPlay) ) ->
                 ( previouslyPlayed, toPlay )
                     |> audioDiff
                     |> List.map
                         (\diff ->
                             { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
                                 |> AddEditAudio
-                                |> InterfaceWithoutReceiveDiff
+                                |> InterfaceWithoutFutureDiff
                         )
 
             AndOr.Both _ ->
@@ -1165,11 +1193,11 @@ interfaceOldAndOrUpdatedDiffs =
 
             AndOr.Only (Or.First onlyOld) ->
                 (case onlyOld of
-                    InterfaceWithoutReceive _ ->
+                    InterfaceWithoutFuture _ ->
                         []
 
-                    InterfaceWithReceive interfaceWithReceive ->
-                        case interfaceWithReceive of
+                    InterfaceWithFuture interfaceWithFuture ->
+                        case interfaceWithFuture of
                             TimePosixRequest _ ->
                                 []
 
@@ -1223,16 +1251,16 @@ interfaceOldAndOrUpdatedDiffs =
                             SocketMessageListen messageListen ->
                                 RemoveSocketMessageListen messageListen.id |> List.singleton
                 )
-                    |> List.map InterfaceWithoutReceiveDiff
+                    |> List.map InterfaceWithoutFutureDiff
 
             AndOr.Only (Or.Second onlyUpdated) ->
                 (case onlyUpdated of
-                    InterfaceWithoutReceive interfaceWithoutReceive ->
-                        Add interfaceWithoutReceive
-                            |> InterfaceWithoutReceiveDiff
+                    InterfaceWithoutFuture interfaceWithoutFuture ->
+                        Add interfaceWithoutFuture
+                            |> InterfaceWithoutFutureDiff
 
-                    InterfaceWithReceive interfaceWithReceive ->
-                        (case interfaceWithReceive of
+                    InterfaceWithFuture interfaceWithFuture ->
+                        (case interfaceWithFuture of
                             TimePosixRequest _ ->
                                 AddTimePosixRequest
 
@@ -1288,7 +1316,7 @@ interfaceOldAndOrUpdatedDiffs =
                             SocketMessageListen messageListen ->
                                 AddSocketMessageListen messageListen.id
                         )
-                            |> InterfaceWithReceiveDiff
+                            |> InterfaceWithFutureDiff
                 )
                     |> List.singleton
 
@@ -1333,11 +1361,11 @@ interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
 interfaceDiffToJson =
     \interfaceDiff ->
         case interfaceDiff of
-            InterfaceWithReceiveDiff addOrReplaceDiff ->
-                addOrReplaceDiff |> interfaceWithReceiveDiffToJson
+            InterfaceWithFutureDiff addOrReplaceDiff ->
+                addOrReplaceDiff |> interfaceWithFutureDiffToJson
 
-            InterfaceWithoutReceiveDiff removeDiff ->
-                removeDiff |> interfaceWithoutReceiveDiffToJson
+            InterfaceWithoutFutureDiff removeDiff ->
+                removeDiff |> interfaceWithoutFutureDiffToJson
 
 
 domNodeIdToJson : DomNodeId -> Json.Encode.Value
@@ -1457,8 +1485,8 @@ socketIdToJson =
     \(SocketId index) -> index |> Json.Encode.int
 
 
-interfaceWithReceiveDiffToJson : InterfaceWithReceiveDiff -> Json.Encode.Value
-interfaceWithReceiveDiffToJson =
+interfaceWithFutureDiffToJson : InterfaceWithFutureDiff -> Json.Encode.Value
+interfaceWithFutureDiffToJson =
     \interfaceAddOrReplaceDiff ->
         Json.Encode.object
             [ case interfaceAddOrReplaceDiff of
@@ -1561,8 +1589,8 @@ audioParameterTimelineToJson =
             ]
 
 
-interfaceWithoutReceiveDiffToJson : InterfaceWithoutReceiveDiff -> Json.Encode.Value
-interfaceWithoutReceiveDiffToJson =
+interfaceWithoutFutureDiffToJson : InterfaceWithoutFutureDiff -> Json.Encode.Value
+interfaceWithoutFutureDiffToJson =
     \interfaceRemoveDiff ->
         Json.Encode.object
             [ case interfaceRemoveDiff of
@@ -1790,7 +1818,7 @@ programSubscriptions appConfig =
         -- re-associate event based on current interface
         appConfig.ports.fromJs
             (\interfaceJson ->
-                case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "diff" interfaceDiffWithReceiveJsonDecoder) of
+                case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "diff" interfaceDiffWithFutureJsonDecoder) of
                     Ok interfaceDiff ->
                         case
                             state.interface
@@ -1798,11 +1826,11 @@ programSubscriptions appConfig =
                                 |> listFirstJust
                                     (\stateInterface ->
                                         case stateInterface of
-                                            InterfaceWithoutReceive _ ->
+                                            InterfaceWithoutFuture _ ->
                                                 Nothing
 
-                                            InterfaceWithReceive withReceive ->
-                                                eventDataAndConstructStateJsonDecoder interfaceDiff withReceive
+                                            InterfaceWithFuture withFuture ->
+                                                eventDataAndConstructStateJsonDecoder interfaceDiff withFuture
                                     )
                         of
                             Just eventDataDecoderToConstructedEvent ->
@@ -1866,8 +1894,8 @@ socketIdJsonDecoder =
     Json.Decode.map SocketId Json.Decode.int
 
 
-interfaceDiffWithReceiveJsonDecoder : Json.Decode.Decoder InterfaceWithReceiveDiff
-interfaceDiffWithReceiveJsonDecoder =
+interfaceDiffWithFutureJsonDecoder : Json.Decode.Decoder InterfaceWithFutureDiff
+interfaceDiffWithFutureJsonDecoder =
     -- TODO find a way to nicely integrate a reminder to add all variants (or switch to codec I guess)
     Json.Decode.oneOf
         [ Json.Decode.map (\() -> AddTimePosixRequest)
@@ -2013,7 +2041,7 @@ headerJsonDecoder =
         |> Json.Decode.Local.andMap (Json.Decode.index 1 Json.Decode.string)
 
 
-eventDataAndConstructStateJsonDecoder : InterfaceWithReceiveDiff -> InterfaceSingleWithReceive state -> Maybe (Json.Decode.Decoder state)
+eventDataAndConstructStateJsonDecoder : InterfaceWithFutureDiff -> InterfaceSingleWithFuture state -> Maybe (Json.Decode.Decoder state)
 eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
     case interface of
         TimePosixRequest requestTimeNow ->
@@ -2286,7 +2314,7 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                     Nothing
 
 
-domElementAtReversePath : List Int -> (DomNode state -> Maybe (DomNode state))
+domElementAtReversePath : List Int -> (DomNode future -> Maybe (DomNode future))
 domElementAtReversePath path domNode =
     case path of
         [] ->
@@ -2306,7 +2334,7 @@ domElementAtReversePath path domNode =
                             domElementAtReversePath parentsOfSub subNodeAtIndex
 
 
-httpExpectOnError : HttpExpect state -> (HttpError -> state)
+httpExpectOnError : HttpExpect future -> (HttpError -> future)
 httpExpectOnError =
     \httpExpect ->
         case httpExpect of
@@ -2317,7 +2345,7 @@ httpExpectOnError =
                 \e -> e |> Err |> toState
 
 
-httpExpectJsonDecoder : HttpExpect state -> Json.Decode.Decoder state
+httpExpectJsonDecoder : HttpExpect future -> Json.Decode.Decoder future
 httpExpectJsonDecoder expect =
     httpMetadataJsonDecoder
         |> Json.Decode.andThen
@@ -2370,7 +2398,7 @@ httpMetadataJsonDecoder =
         |> Json.Decode.Local.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
 
 
-httpErrorJsonDecoder : HttpRequest state_ -> Json.Decode.Decoder HttpError
+httpErrorJsonDecoder : HttpRequest future_ -> Json.Decode.Decoder HttpError
 httpErrorJsonDecoder httpRequest =
     Json.Decode.field "cause" (Json.Decode.field "code" Json.Decode.string)
         |> Json.Decode.andThen
@@ -2457,7 +2485,7 @@ programUpdate appConfig =
                       )
                         |> ConsoleError
                         |> Add
-                        |> InterfaceWithoutReceiveDiff
+                        |> InterfaceWithoutFutureDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
                         |> Cmd.map never
@@ -2471,7 +2499,7 @@ programUpdate appConfig =
                       )
                         |> ConsoleError
                         |> Add
-                        |> InterfaceWithoutReceiveDiff
+                        |> InterfaceWithoutFutureDiff
                         |> interfaceDiffToJson
                         |> appConfig.ports.toJs
                         |> Cmd.map never
@@ -2564,14 +2592,14 @@ type alias HttpMetadata =
 {-| Safe to ignore. Individual messages to js. Also used to identify responses with the same part in the interface
 -}
 type InterfaceDiff
-    = InterfaceWithReceiveDiff InterfaceWithReceiveDiff
-    | InterfaceWithoutReceiveDiff InterfaceWithoutReceiveDiff
+    = InterfaceWithFutureDiff InterfaceWithFutureDiff
+    | InterfaceWithoutFutureDiff InterfaceWithoutFutureDiff
 
 
 {-| Actions that will never notify elm again
 -}
-type InterfaceWithoutReceiveDiff
-    = Add InterfaceSingleWithoutReceive
+type InterfaceWithoutFutureDiff
+    = Add InterfaceSingleWithoutFuture
     | AddEditAudio { url : String, startTime : Time.Posix, replacement : EditAudioDiff }
     | RemoveTimePeriodicallyListen { milliSeconds : Int }
     | RemoveHttpRequest HttpRequestId
@@ -2587,7 +2615,7 @@ type InterfaceWithoutReceiveDiff
 
 {-| Actions that will notify elm some time in the future
 -}
-type InterfaceWithReceiveDiff
+type InterfaceWithFutureDiff
     = AddTimePosixRequest
     | AddTimezoneOffsetRequest
     | AddTimezoneNameRequest
@@ -2699,10 +2727,18 @@ with a given [`Web.ProgramConfig`](#ProgramConfig). Short for
         }
 
 -}
-program : ProgramConfig state -> Program () (ProgramState state) (ProgramEvent state)
+program : ProgramConfig state -> Program state
 program appConfig =
     Platform.worker
         { init = \() -> programInit appConfig
         , update = programUpdate appConfig
         , subscriptions = programSubscriptions appConfig
         }
+
+
+{-| A [`Platform.Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
+that elm can run,
+produced by [`Web.program`](#program)
+-}
+type alias Program state =
+    Platform.Program () (ProgramState state) (ProgramEvent state)

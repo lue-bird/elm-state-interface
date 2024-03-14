@@ -4,8 +4,8 @@ module Web.Dom exposing
     , element, elementNamespaced
     , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style
     , listenTo, listenToPreventingDefaultAction
-    , modifierStateMap, modifierBatch, modifierNone
-    , stateMap, render
+    , modifierFutureMap, modifierBatch, modifierNone
+    , futureMap, render
     )
 
 {-| Helpers for [DOM node types](Web#DomNode) as part of an [`Interface`](Web#Interface).
@@ -18,8 +18,8 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 @docs element, elementNamespaced
 @docs Modifier, ModifierSingle, attribute, attributeNamespaced, style
 @docs listenTo, listenToPreventingDefaultAction
-@docs modifierStateMap, modifierBatch, modifierNone
-@docs stateMap, render
+@docs modifierFutureMap, modifierBatch, modifierNone
+@docs futureMap, render
 
 -}
 
@@ -36,25 +36,25 @@ like like keypress, keydown, keyup, click, mousemove, mousedown, mouseup
 documentEventListen : String -> Web.Interface Json.Decode.Value
 documentEventListen eventName =
     Web.DocumentEventListen { eventName = eventName, on = Json.Decode.value }
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) for displaying a given [`DomNode`](Web#DomNode).
 -}
-render : DomNode state -> Web.Interface state
+render : DomNode future -> Web.Interface future
 render =
     \domNode ->
         domNode
             |> Web.DomNodeRender
-            |> Web.InterfaceWithReceive
+            |> Web.InterfaceWithFuture
             |> Rope.singleton
 
 
 {-| Wire events from this [`DomNode`](Web#DomNode) to a specific event.
 
     buttonUi "start"
-        |> Web.Dom.stateMap (\Clicked -> StartButtonClicked)
+        |> Web.Dom.futureMap (\Clicked -> StartButtonClicked)
 
 with e.g.
 
@@ -62,7 +62,7 @@ with e.g.
     buttonUi subs =
         Web.Dom.element "button"
             [ Web.Dom.listenTo "click"
-                |> Web.Dom.modifierStateMap (\_ -> Clicked)
+                |> Web.Dom.modifierFutureMap (\_ -> Clicked)
             ]
             [ Web.Dom.text label ]
 
@@ -70,19 +70,19 @@ with e.g.
         = Clicked
 
 -}
-stateMap : (state -> mappedState) -> (DomNode state -> DomNode mappedState)
-stateMap stateChange =
+futureMap : (future -> mappedFuture) -> (DomNode future -> DomNode mappedFuture)
+futureMap futureChange =
     \domElementToMap ->
         case domElementToMap of
             Web.DomText string ->
                 Web.DomText string
 
             Web.DomElement domElement ->
-                domElement |> elementMap stateChange |> Web.DomElement
+                domElement |> elementMap futureChange |> Web.DomElement
 
 
-elementMap : (state -> mappedState) -> (DomElement state -> DomElement mappedState)
-elementMap stateChange =
+elementMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
+elementMap futureChange =
     \domElementToMap ->
         { namespace = domElementToMap.namespace
         , tag = domElementToMap.tag
@@ -93,26 +93,26 @@ elementMap stateChange =
             domElementToMap.eventListens
                 |> Dict.map
                     (\_ listen ->
-                        { on = \event -> listen.on event |> stateChange
+                        { on = \event -> listen.on event |> futureChange
                         , defaultActionHandling = listen.defaultActionHandling
                         }
                     )
         , subs =
-            domElementToMap.subs |> Array.map (stateMap stateChange)
+            domElementToMap.subs |> Array.map (futureMap futureChange)
         }
 
 
 {-| Plain text [`DomNode`](Web#DomNode)
 -}
-text : String -> DomNode state_
+text : String -> DomNode future_
 text =
     Web.DomText
 
 
-elementWithMaybeNamespace : Maybe String -> String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+elementWithMaybeNamespace : Maybe String -> String -> List (Modifier future) -> List (DomNode future) -> DomNode future
 elementWithMaybeNamespace maybeNamespace tag modifiers subs =
     let
-        modifierList : List (ModifierSingle state)
+        modifierList : List (ModifierSingle future)
         modifierList =
             modifiers |> modifierBatch |> Rope.toList
     in
@@ -194,7 +194,7 @@ For example to get `<p>flying</p>`
         [ Web.Dom.text "flying" ]
 
 -}
-element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+element : String -> List (Modifier future) -> List (DomNode future) -> DomNode future
 element tag modifiers subs =
     elementWithMaybeNamespace Nothing tag modifiers subs
 
@@ -202,12 +202,12 @@ element tag modifiers subs =
 {-| Create a DOM element with a given namespace, tag, [`Modifier`](#Modifier)s and sub-[node](Web#DomNode)s.
 For example, [`Web.Svg`](Web-Svg) defines its elements using
 
-    element : String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+    element : String -> List (Modifier future) -> List (DomNode future) -> DomNode future
     element tag modifiers subs =
         Web.Dom.elementNamespaced "http://www.w3.org/2000/svg" tag modifiers subs
 
 -}
-elementNamespaced : String -> String -> List (Modifier state) -> List (DomNode state) -> DomNode state
+elementNamespaced : String -> String -> List (Modifier future) -> List (DomNode future) -> DomNode future
 elementNamespaced namespace tag modifiers subs =
     elementWithMaybeNamespace (namespace |> Just) tag modifiers subs
 
@@ -226,13 +226,13 @@ Btw: If you can think of a nicer name for this like "customization", "characteri
 please [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new)!
 
 -}
-type alias Modifier state =
-    Rope (ModifierSingle state)
+type alias Modifier future =
+    Rope (ModifierSingle future)
 
 
 {-| Combine multiple [`Modifier`](#Modifier)s into one.
 -}
-modifierBatch : List (Modifier state) -> Modifier state
+modifierBatch : List (Modifier future) -> Modifier future
 modifierBatch =
     \modifiers -> modifiers |> Rope.fromList |> Rope.concat
 
@@ -250,7 +250,7 @@ and
         )
 
 -}
-modifierNone : Modifier state_
+modifierNone : Modifier future_
 modifierNone =
     Rope.empty
 
@@ -258,19 +258,19 @@ modifierNone =
 {-| An individual [`Modifier`](#Modifier).
 Create using [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo).
 -}
-type ModifierSingle state
+type ModifierSingle future
     = Attribute { namespace : Maybe String, key : String, value : String }
     | Style { key : String, value : String }
     | Listen
         { eventName : String
-        , on : Json.Decode.Value -> state
+        , on : Json.Decode.Value -> future
         , defaultActionHandling : Web.DefaultActionHandling
         }
 
 
 {-| A key-value attribute [`Modifier`](#Modifier)
 -}
-attribute : String -> String -> Modifier state_
+attribute : String -> String -> Modifier future_
 attribute key value =
     { namespace = Nothing, key = key, value = value } |> Attribute |> Rope.singleton
 
@@ -283,20 +283,20 @@ For example, you could define an SVG xlink href attribute as
         Web.Dom.attributeNamespaced "http://www.w3.org/1999/xlink" "xlink:href" value
 
 -}
-attributeNamespaced : String -> String -> String -> Modifier state_
+attributeNamespaced : String -> String -> String -> Modifier future_
 attributeNamespaced namespace key value =
     { namespace = namespace |> Just, key = key, value = value } |> Attribute |> Rope.singleton
 
 
 {-| A key-value style [`Modifier`](#Modifier)
 -}
-style : String -> String -> Modifier state_
+style : String -> String -> Modifier future_
 style key value =
     { key = key, value = value } |> Style |> Rope.singleton
 
 
 {-| Listen for a specific DOM event on the [`DomElement`](Web#DomElement).
-Use [`modifierStateMap`](#modifierStateMap) to wire this to a specific event.
+Use [`modifierFutureMap`](#modifierFutureMap) to wire this to a specific event.
 
 If you want to override the browser's default behavior for that event,
 use [`listenToPreventingDefaultAction`](#listenToPreventingDefaultAction)
@@ -317,7 +317,7 @@ prevents the form from changing the page’s location:
     submitListen : Web.Dom.Modifier ()
     submitListen =
         Web.Dom.listenToPreventingDefaultAction "submit"
-            |> Web.Dom.modifierStateMap (\_ -> ())
+            |> Web.Dom.modifierFutureMap (\_ -> ())
 
 -}
 listenToPreventingDefaultAction : String -> Modifier Json.Decode.Value
@@ -329,17 +329,17 @@ listenToPreventingDefaultAction eventName =
 
 {-| Wire events from this [`Modifier`](#Modifier) to a specific event.
 
-    Web.Dom.listen "click" |> Web.Dom.modifierStateMap (\_ -> ButtonClicked)
+    Web.Dom.listen "click" |> Web.Dom.modifierFutureMap (\_ -> ButtonClicked)
 
 -}
-modifierStateMap : (state -> mappedState) -> (Modifier state -> Modifier mappedState)
-modifierStateMap stateChange =
+modifierFutureMap : (future -> mappedFuture) -> (Modifier future -> Modifier mappedFuture)
+modifierFutureMap futureChange =
     \modifier ->
-        modifier |> Rope.map (\modifierSingle -> modifierSingle |> modifierSingleMap stateChange)
+        modifier |> Rope.map (\modifierSingle -> modifierSingle |> modifierSingleMap futureChange)
 
 
-modifierSingleMap : (state -> mappedState) -> (ModifierSingle state -> ModifierSingle mappedState)
-modifierSingleMap stateChange =
+modifierSingleMap : (future -> mappedFuture) -> (ModifierSingle future -> ModifierSingle mappedFuture)
+modifierSingleMap futureChange =
     \modifier ->
         case modifier of
             Attribute keyValue ->
@@ -350,7 +350,7 @@ modifierSingleMap stateChange =
 
             Listen listen ->
                 { eventName = listen.eventName
-                , on = \json -> listen.on json |> stateChange
+                , on = \json -> listen.on json |> futureChange
                 , defaultActionHandling = listen.defaultActionHandling
                 }
                     |> Listen

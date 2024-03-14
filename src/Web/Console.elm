@@ -13,10 +13,10 @@ import Web
 {-| Like [`Debug.log`](https://dark.elm.dmy.fr/packages/elm/core/latest/Debug#log)
 as an [`Interface`](Web#Interface)
 -}
-log : String -> Web.Interface state_
+log : String -> Web.Interface future_
 log string =
     Web.ConsoleLog string
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -29,10 +29,10 @@ log string =
 Note: uses [`console.warn`](https://developer.mozilla.org/en-US/docs/Web/API/console/warn_static)
 
 -}
-warn : String -> Web.Interface state_
+warn : String -> Web.Interface future_
 warn string =
     Web.ConsoleWarn string
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -43,8 +43,8 @@ warn string =
 Note: uses [`console.error`](https://developer.mozilla.org/en-US/docs/Web/API/console/error_static)
 
 -}
-error : String -> Web.Interface state_
+error : String -> Web.Interface future_
 error string =
     Web.ConsoleError string
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton

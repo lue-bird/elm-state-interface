@@ -28,7 +28,7 @@ a given type and and a given default name.
 Replacement for [`File.Download.bytes`](https://dark.elm.dmy.fr/packages/elm/file/latest/File-Download#bytes)
 
 -}
-bytes : { name : String, mimeType : String, content : Bytes } -> Web.Interface state_
+bytes : { name : String, mimeType : String, content : Bytes } -> Web.Interface future_
 bytes fileDownloadConfig =
     Web.FileDownloadUnsignedInt8s
         { name = fileDownloadConfig.name
@@ -41,7 +41,7 @@ bytes fileDownloadConfig =
                 |> -- above decoder should never fail
                    Maybe.withDefault []
         }
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 

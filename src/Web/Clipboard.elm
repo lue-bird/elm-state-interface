@@ -21,7 +21,7 @@ Note: uses [`navigator.clipboard.readText()`](https://developer.mozilla.org/en-U
 request : Web.Interface String
 request =
     Web.ClipboardRequest identity
-        |> Web.InterfaceWithReceive
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -30,8 +30,8 @@ request =
 Note: uses [`navigator.clipboard.writeText`](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText)
 
 -}
-replaceBy : String -> Web.Interface state_
+replaceBy : String -> Web.Interface future_
 replaceBy replacement =
     Web.ClipboardReplaceBy replacement
-        |> Web.InterfaceWithoutReceive
+        |> Web.InterfaceWithoutFuture
         |> Rope.singleton

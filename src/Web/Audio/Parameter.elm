@@ -20,7 +20,7 @@ at valueAtTheStart =
 {-| Specify a key value at a given absolute point in time.
 The parameter will then transition linearly between those points.
 
-Let's define an audio function that fades in to full volume and then fades out until it's muted again.
+Let's define an audio function that fades in to 1 and then fades out until it's 0 again.
 
     import Duration
     import Time

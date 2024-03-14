@@ -37,7 +37,7 @@ programConfig =
             case stateChoice of
                 WaitingForInitialUrl ->
                     Web.Navigation.urlRequest
-                        |> Web.interfaceStateMap
+                        |> Web.interfaceFutureMap
                             (\initialUrl ->
                                 case initialUrl |> appUrlToState of
                                     Just initialState ->
@@ -58,7 +58,7 @@ programConfig =
                     [ initialized |> initializedInterface
                     , Web.Navigation.pushUrl (initialized |> stateToAppUrl)
                     , Web.Navigation.movementListen
-                        |> Web.interfaceStateMap
+                        |> Web.interfaceFutureMap
                             (\newUrl ->
                                 case newUrl |> appUrlToState of
                                     Nothing ->
@@ -103,7 +103,7 @@ programConfig =
                             )
                     ]
                         |> Web.interfaceBatch
-                        |> Web.interfaceStateMap Initialized
+                        |> Web.interfaceFutureMap Initialized
     , ports = { fromJs = fromJs, toJs = toJs }
     }
 
@@ -162,7 +162,7 @@ startingRoomInterface =
     \state ->
         [ narrativeUiFrame
             [ Web.Dom.listenTo "mousemove"
-                |> Web.Dom.modifierStateMap
+                |> Web.Dom.modifierFutureMap
                     (\mouseEvent ->
                         mouseEvent
                             |> Json.Decode.decodeValue
@@ -191,7 +191,7 @@ startingRoomInterface =
                 , Web.Dom.element "li"
                     []
                     [ "\"How do I know your name " |> Web.Dom.text
-                    , textInputUi state.name |> Web.Dom.map NameChanged
+                    , textInputUi state.name |> Web.Dom.futureMap NameChanged
                     , "?\"" |> Web.Dom.text
                     ]
                 , Web.Dom.element "li"
@@ -233,7 +233,7 @@ startingRoomInterface =
                     , Web.Dom.style "text-align" "center"
                     ]
                     [ "+" |> Web.Dom.text ]
-                    |> Web.Dom.map (\() -> GemCountIncreaseClicked)
+                    |> Web.Dom.futureMap (\() -> GemCountIncreaseClicked)
                 , Web.Dom.element "b"
                     [ Web.Dom.style "padding" "15px 15px"
                     ]
@@ -244,7 +244,7 @@ startingRoomInterface =
                     , Web.Dom.style "text-align" "center"
                     ]
                     [ "-" |> Web.Dom.text ]
-                    |> Web.Dom.map (\() -> GemCountDecreaseClicked)
+                    |> Web.Dom.futureMap (\() -> GemCountDecreaseClicked)
                 ]
             , buttonUi []
                 [ "walk towards the sign as "
@@ -257,14 +257,14 @@ startingRoomInterface =
                        )
                     |> Web.Dom.text
                 ]
-                |> Web.Dom.map (\() -> WalkToSignClicked)
+                |> Web.Dom.futureMap (\() -> WalkToSignClicked)
             ]
             |> Web.Dom.render
-        , Web.Time.zoneRequest |> Web.interfaceStateMap TimeZoneReceived
-        , Web.Time.periodicallyListen Duration.second |> Web.interfaceStateMap TimePassed
+        , Web.Time.zoneRequest |> Web.interfaceFutureMap TimeZoneReceived
+        , Web.Time.periodicallyListen Duration.second |> Web.interfaceFutureMap TimePassed
         ]
             |> Web.interfaceBatch
-            |> Web.interfaceStateMap
+            |> Web.interfaceFutureMap
                 (\event ->
                     case event of
                         MouseMovedTo (Ok newMousePoint) ->
@@ -378,7 +378,7 @@ atSignInterface =
                         [ buttonUi []
                             [ "talk to the bird" |> Web.Dom.text
                             ]
-                            |> Web.Dom.map (\() -> TalkToBirdClicked)
+                            |> Web.Dom.futureMap (\() -> TalkToBirdClicked)
                         , " or " |> Web.Dom.text
                         , buttonUi []
                             [ (case state.appleCount of
@@ -390,7 +390,7 @@ atSignInterface =
                               )
                                 |> Web.Dom.text
                             ]
-                            |> Web.Dom.map (\() -> PickApplesClicked)
+                            |> Web.Dom.futureMap (\() -> PickApplesClicked)
                         ]
 
                 GreetingAndAskingForWhatYouWant ->
@@ -402,12 +402,12 @@ atSignInterface =
                         , buttonUi []
                             [ "Ask for an introduction" |> Web.Dom.text
                             ]
-                            |> Web.Dom.map (\() -> BirdTellAboutYourselfClicked)
+                            |> Web.Dom.futureMap (\() -> BirdTellAboutYourselfClicked)
                         , " or " |> Web.Dom.text
                         , buttonUi []
                             [ "Buy map with the exit" |> Web.Dom.text
                             ]
-                            |> Web.Dom.map (\() -> BuyMapClicked)
+                            |> Web.Dom.futureMap (\() -> BuyMapClicked)
                         ]
 
                 BirdTellAboutItself ->
@@ -424,7 +424,7 @@ atSignInterface =
                         , buttonUi []
                             [ "Buy map with the exit" |> Web.Dom.text
                             ]
-                            |> Web.Dom.map (\() -> BuyMapClicked)
+                            |> Web.Dom.futureMap (\() -> BuyMapClicked)
                         ]
 
                 AskedBirdForMap ->
@@ -435,7 +435,7 @@ atSignInterface =
                         , buttonUi []
                             [ "Open the map" |> Web.Dom.text
                             ]
-                            |> Web.Dom.map (\() -> OpenMapClicked)
+                            |> Web.Dom.futureMap (\() -> OpenMapClicked)
                         ]
 
                 TooHungryToSell ->
@@ -446,13 +446,13 @@ atSignInterface =
                         , buttonUi []
                             [ "pick 🍎s" |> Web.Dom.text
                             ]
-                            |> Web.Dom.map (\() -> PickApplesClicked)
+                            |> Web.Dom.futureMap (\() -> PickApplesClicked)
                         ]
             ]
             |> Web.Dom.render
         ]
             |> Web.interfaceBatch
-            |> Web.interfaceStateMap
+            |> Web.interfaceFutureMap
                 (\event ->
                     case event of
                         TalkToBirdClicked ->
@@ -561,14 +561,14 @@ pickApplesInterface state =
 
         _ ->
             Web.Audio.sourceLoad "eat-apple.mp3"
-                |> Web.interfaceStateMap EatAppleAudioReceived
+                |> Web.interfaceFutureMap EatAppleAudioReceived
     , Web.Time.periodicallyListen (Duration.milliseconds 125)
-        |> Web.interfaceStateMap PickApplesSimulationTick
+        |> Web.interfaceFutureMap PickApplesSimulationTick
     , [ Web.Window.sizeRequest, Web.Window.resizeListen ]
         |> Web.interfaceBatch
-        |> Web.interfaceStateMap WindowSizeReceived
+        |> Web.interfaceFutureMap WindowSizeReceived
     , Web.Dom.documentEventListen "keydown"
-        |> Web.interfaceStateMap
+        |> Web.interfaceFutureMap
             (\event ->
                 event
                     |> Json.Decode.decodeValue
@@ -696,7 +696,7 @@ pickApplesInterface state =
         |> Web.Dom.render
     ]
         |> Web.interfaceBatch
-        |> Web.interfaceStateMap
+        |> Web.interfaceFutureMap
             (\event ->
                 case event of
                     WindowSizeReceived windowSize ->
@@ -831,7 +831,7 @@ directionToXYOffset direction =
             { x = 1, y = 0 }
 
 
-mapWithExitInterface : Web.Interface state_
+mapWithExitInterface : Web.Interface future_
 mapWithExitInterface =
     Web.Navigation.load
         { protocol = Url.Https
@@ -882,7 +882,7 @@ buttonUi : List (Web.Dom.Modifier ()) -> List (Web.DomNode ()) -> Web.DomNode ()
 buttonUi modifiers subs =
     Web.Dom.element "button"
         ([ Web.Dom.listenTo "click"
-            |> Web.Dom.modifierStateMap (\_ -> ())
+            |> Web.Dom.modifierFutureMap (\_ -> ())
          , Web.Dom.style "background-color" "#000000"
          , Web.Dom.style "border" "3px solid"
          , Web.Dom.style "border-radius" "50px"
@@ -912,7 +912,7 @@ textInputUi currentInputValue =
                     inputValue
             )
         , Web.Dom.listenTo "input"
-            |> Web.Dom.modifierStateMap
+            |> Web.Dom.modifierFutureMap
                 (Json.Decode.decodeValue
                     (Json.Decode.field "target" (Json.Decode.field "value" Json.Decode.string))
                 )
