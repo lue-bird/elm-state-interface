@@ -1,12 +1,8 @@
 ### define an app in a simple, safe and declarative way
 
-> Familiar with "The Elm Architecture"? Get a quick [overview on how they compare](#comparison-to-the-elm-architecture)
+> 🌱 New to elm? Check out the [core language](https://guide.elm-lang.org/core_language), [install elm](https://guide.elm-lang.org/install/elm), set up an editor like [vs code](https://github.com/elm-tooling/elm-language-client-vscode?tab=readme-ov-file#install) and read about [types](https://guide.elm-lang.org/types/), [error handling](https://guide.elm-lang.org/error_handling/) and [webapp structure](https://guide.elm-lang.org/webapps/structure)
 
-> 🌱 New to elm?
->   - check out the [core language](https://guide.elm-lang.org/core_language)
->   - [install elm](https://guide.elm-lang.org/install/elm). Most editors have plugins for elm, otherwise I suggest following [this vs code guide](https://github.com/elm-tooling/elm-language-client-vscode?tab=readme-ov-file#install) to get started
->   - read about [types](https://guide.elm-lang.org/types/), [error handling](https://guide.elm-lang.org/error_handling/) and [webapp structure](https://guide.elm-lang.org/webapps/structure)
-
+> Familiar with TEA? Get a quick [overview of the differences](#comparison-to-the-elm-architecture)
 
 Here's a simple app that shows a number and a button that increments it
 
@@ -37,7 +33,8 @@ In our example, this function has the type
 ```elm
 interface : Int -> Interface Int
 ```
-`Interface Int` means that the interface can come back with an `Int` some time in the future.
+`Interface Int` means that the interface can come back with an `Int` some time in the future,
+in our case an incremented counter state.
 The app will use this result as the new state.
 
 We use [`Web.Dom.listedTo`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Dom#listenTo) to be notified when a user clicks the button.
@@ -297,7 +294,6 @@ type CounterEvent
     | PlusClicked
     | UserWentToUrl AppUrl
 
-app : Web.Program State
 app =
     { initialState = WaitingForInitialUrl
     , interface = interface
@@ -361,7 +357,9 @@ counterUrlParse appUrl =
 Since events like a click on the minus button can only happen if we're in the `Counter` state,
 we have everything we need to update the state.
 
-What's the deal with [`movementListen`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Navigation#movementListen) vs [`urlRequest`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Navigation#urlRequest)?
+If you want to learn a bit more about app url parsing and building, visit [lydell/elm-app-url](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/)
+
+And what's the deal with [`movementListen`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Navigation#movementListen) vs [`urlRequest`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Navigation#urlRequest)?
 Don't both just give you the latest url?
 
 > **an `Interface` that requests ≠ `Interface` that listens**
@@ -372,7 +370,7 @@ In state-interface, these 2 look identical:
 Web.Window.sizeRequest : Interface { width : Int, height : Int }
 Web.Window.resizeListen : Interface { width : Int, height : Int }
 ```
-"-Listen" is equivalent to elms subscription, "-Request" is roughly like command/task.
+"-Listen" is equivalent to subscription in The Elm Architecture, "-Request" is roughly like command/task.
 So trying to keep your window size state updated using
 ```elm
 Web.Window.sizeRequest
@@ -447,7 +445,7 @@ Web.programStart({
 
 A complete example and more in [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
 
-If you're not familiar with "The Elm Architecture", skip to ["future"](#future)
+If you're not familiar with The Elm Architecture, skip to ["future"](#future)
 
 ## comparison to The Elm Architecture
 
@@ -565,8 +563,8 @@ Adding stuff _will_ force a major version bump.
 The module and interface structure is also not equipped to support multiple platforms.
 
 ## thanks 🌱
-  - [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) was used as a base for many of the js implementations
-  - the [elm-radio episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) gave me the motivation to make a package out of it
-  - [@a-teammate](https://github.com/a-teammate) gave valuable feedback 💚
-  - [`MartinSStewart/elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/) inspired the audio API
-  - [`kageurufu/elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) was the inspiration to also provide a websocket API
+  - [andrewMacmurray for `elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) which was used as the base for many of the js implementations
+  - [elm-radio hosts for the episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make a package out of it
+  - [@a-teammate](https://github.com/a-teammate) for lots of valuable feedback 💚
+  - [MartinSStewart for `elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/) inspired the audio API
+  - [kageurufu for `elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) which inspired me to also provide a websocket API
