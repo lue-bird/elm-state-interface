@@ -22,6 +22,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             const socketToDisconnect = sockets.at(index)
             if (socketToDisconnect) {
                 socketToDisconnect.close()
+                sockets[index] = undefined
             } else { } // socket is already closed
         },
         "addSocketMessage": (config: { id: number, data: string }) => {
