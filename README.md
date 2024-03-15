@@ -32,7 +32,7 @@ app =
 
 The "state" is everything your app knows internally. Here it's the counter number, starting at 0.
 
-We build the interface to the outside world (html, audio, console logs, ...) based on our current state.
+We build the interface to the outside world (html, audio, console logs, server communication, ...) based on our current state.
 In our example, this function has the type
 ```elm
 interface : Int -> Interface Int
@@ -47,8 +47,8 @@ Web.Dom.element "button" [ Web.Dom.listenTo "click" ] []
     |> Web.Dom.render
 : Interface Json.Decode.Value
 ```
-which means this interface will give us back an event as [json](https://dark.elm.dmy.fr/packages/elm/json/latest/).
-Later, we'll see how to get information out of this event.
+which means this interface will on click come back with an event as [json](https://dark.elm.dmy.fr/packages/elm/json/latest/).
+Later, we'll see how to get information out of this kind of event.
 
 Right now, we use [`Web.Dom.futureMap`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Dom#futureMap) to change the information the interface will send back to us in the future by just ignoring the event `\_ ->` and returning the incremented state.
 
@@ -200,7 +200,7 @@ Soon we'll extend this example app with the ability to manage its url.
 Before that, we have to know when anything from the interface actually triggers something on the outside.
 
 In this example we have a text input field together with
-a text showing whether the text is a palindrome or not.
+a text showing whether the entered text is a palindrome or not.
 
 ```elm
 import Web
@@ -260,10 +260,10 @@ app =
                     )
     }
 ```
-To learn about these "json decoder" things, read [the official guide](https://guide.elm-lang.org/effects/json). You can skip the first section with the app code.
+To learn about these "json decoder" things, you can read [the official guide](https://guide.elm-lang.org/effects/json). You can skip the first section with the app code.
 
 Now, how does the `warnings` thing work?
-> **An `Interface` for an action ≠ performing that action now**
+> **an `Interface` for an action ≠ performing that action now**
 
 ```elm
 interface =
@@ -361,10 +361,10 @@ counterUrlParse appUrl =
 Since events like a click on the minus button can only happen if we're in the `Counter` state,
 we have everything we need to update the state.
 
-And what's the deal with `movementListen` vs `urlRequest`?
+What's the deal with [`movementListen`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Navigation#movementListen) vs [`urlRequest`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Navigation#urlRequest)?
 Don't both just give you the latest url?
 
-> **An `Interface` that requests ≠ `Interface` that listens**
+> **an `Interface` that requests ≠ `Interface` that listens**
 
 The Elm Architecture uses command/task types for one and subscription types for the other.
 In state-interface, these 2 look identical:
@@ -476,7 +476,7 @@ type alias State =
         , content : String
         }
 
-type Event  
+type Event
     = IconAndContentArrived (Result Http.Error { icon : Image, content : String })
 
 { init =
@@ -547,7 +547,7 @@ Instead, the goal of this package is to publish more browser APIs like webstorag
 
 ## what interfaces are included
 
-There should be feature-parity with elm's exposed browser APIs ([tell me](https://github.com/lue-bird/elm-state-interface/issues/new) if I've missed some!) plus a couple of APIs that elm's exposed browser APIs don't offer, including clipboard, console, audio, websockets.
+There should be feature-parity with elm's exposed browser APIs ([tell me](https://github.com/lue-bird/elm-state-interface/issues/new) if I've missed some!) plus a couple of APIs that elm's exposed browser APIs don't offer, including websockets, localstorage, audio, clipboard.
 
 For now, some more niche interfaces like [`Browser.Dom.setViewportOf`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Dom#setViewportOf) and [`WebGL.Texture.loadWith`](https://dark.elm.dmy.fr/packages/elm-explorations/webgl/latest/WebGL-Texture#loadWith) are left out.
 

@@ -5,7 +5,7 @@ module Web.LocalStorage exposing
 
 {-| Saved data for the url origin (protocol, host name, port) across browser sessions.
 
-The data doesn't expire and won't be cleared when the page is closed.
+This data doesn't expire and won't be cleared when the page is closed.
 The only exception is "incognito mode", where all data is cleared once the last "private" tab is closed.
 
 see [mdn on `Window.localStorage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage)

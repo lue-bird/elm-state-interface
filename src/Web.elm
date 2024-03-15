@@ -1,6 +1,5 @@
 module Web exposing
-    ( ProgramConfig
-    , program, Program
+    ( ProgramConfig, program, Program
     , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
     , DomNode(..), DomElement, DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
@@ -14,14 +13,11 @@ module Web exposing
     , InterfaceSingleId(..), InterfaceSingleWithFutureId(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
-{-| A state-interface program running in the browser
+{-| A state-interface program that can run in the browser
 
-@docs ProgramConfig
+@docs ProgramConfig, program, Program
 
-
-## as an elm Program
-
-@docs program, Program
+Tip: you can also [embed](#embed) a state-interface program as part of an existing app that uses The Elm Architecture
 
 
 # interfaces
@@ -37,6 +33,8 @@ Types used by [`Web.Dom`](Web-Dom)
 
 
 ## Audio
+
+Types used by [`Web.Audio`](Web-Audio)
 
 @docs Audio, AudioSource, AudioSourceLoadError, AudioParameterTimeline, EditAudioDiff
 
@@ -60,6 +58,15 @@ Types used by [`Web.Socket`](Web-Socket)
 If you just want to replace a part of your elm app with this architecture. Make sure to wire in all 3:
 
 @docs programInit, programUpdate, programSubscriptions
+
+Under the hood, [`Web.program`](Web#program) is then defined as just
+
+    program config =
+        Platform.worker
+            { init = \() -> Web.programInit yourAppConfig
+            , update = Web.programUpdate yourAppConfig
+            , subscriptions = Web.programSubscriptions yourAppConfig
+            }
 
 
 ## internals, safe to ignore for users
@@ -158,7 +165,7 @@ type alias ProgramConfig state =
 
 
 {-| Incoming and outgoing effects.
-To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
+To create one, use the helpers in [`Web.Time`](Web-Time), [`Web.Dom`](Web-Dom), [`Web.Http`](Web-Http) etc.
 
 To combine multiple, use [`Web.interfaceBatch`](#interfaceBatch) and [`Web.interfaceNone`](#interfaceNone)
 
@@ -198,7 +205,7 @@ type InterfaceSingleWithoutFuture
 
   - `AudioSourceLoadDecodeError`: This means we got the data but we couldn't decode it. One likely reason for this is that your url points to the wrong place and you're trying to decode a 404 page instead.
   - `AudioSourceLoadNetworkError`: We couldn't reach the url. Either it's some kind of CORS issue, the server is down, or you're disconnected from the internet.
-  - `AudioSourceLoadUnknownError`: the audio source didn't for some other reason!
+  - `AudioSourceLoadUnknownError`: the audio source didn't load for a reason I'm not aware of. If this occurs in your app, [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new) with the reason string so a new variant can be added for this
 
 -}
 type AudioSourceLoadError
@@ -344,7 +351,7 @@ type alias DomElement future =
         }
 
 
-{-| Setting for a listen [`Web.Dom.Modifier`](Web-Dom#Modifier) to keep or overwrite the browsers default action.
+{-| Setting for a listen [`Web.Dom.Modifier`](Web-Dom#Modifier) to keep or overwrite the browsers default action
 -}
 type DefaultActionHandling
     = DefaultActionPrevent
@@ -455,7 +462,8 @@ In practice, this is sometimes used like a kind of event-config pattern:
     Web.Time.posixRequest
         |> Web.interfaceFutureMap (\timeNow -> TimeReceived timeNow)
 
-    Web.Time.posixRequest
+    button "show all entries"
+        |> Web.Dom.render
         |> Web.interfaceFutureMap (\Pressed -> ShowAllEntriesButtonClicked)
 
 sometimes as a way to deal with all events (equivalent to `update` in The Elm Architecture)
@@ -474,7 +482,7 @@ sometimes as a way to deal with all events (equivalent to `update` in The Elm Ar
                         { state | counter = state.counter + 1 }
             )
 
-and sometimes to nest events (like elm's `Cmd.map/Task.map/Sub.map/...`):
+and sometimes to nest events (like `Cmd.map/Task.map/Sub.map/...` in The Elm Architecture):
 
     type Event
         = DirectoryTreeViewEvent TreeUiEvent
@@ -2678,14 +2686,7 @@ type ReplacementInEditDomDiff
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
-with a given [`Web.ProgramConfig`](#ProgramConfig). Short for
-
-    Platform.worker
-        { init = \() -> Web.programInit yourAppConfig
-        , update = Web.programUpdate yourAppConfig
-        , subscriptions = Web.programSubscriptions yourAppConfig
-        }
-
+with a given [`Web.ProgramConfig`](#ProgramConfig).
 -}
 program : ProgramConfig state -> Program state
 program appConfig =
