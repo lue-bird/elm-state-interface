@@ -89,7 +89,7 @@ get :
 get options =
     { url = options.url
     , method = "GET"
-    , headers = options.headers
+    , headers = options.headers |> List.map (\( name, value ) -> { name = name, value = value })
     , body = Web.HttpBodyEmpty
     , expect = options.expect
     , timeout = options.timeout
@@ -109,7 +109,7 @@ post :
 post options =
     { url = options.url
     , method = "POST"
-    , headers = options.headers
+    , headers = options.headers |> List.map (\( name, value ) -> { name = name, value = value })
     , body = options.body
     , expect = options.expect
     , timeout = options.timeout
