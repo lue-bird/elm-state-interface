@@ -18,7 +18,7 @@ module Web.Http exposing
 import Json.Decode
 import Json.Encode
 import Rope
-import Web exposing (HttpBody, HttpError, HttpExpect, HttpHeader, HttpRequest)
+import Web exposing (HttpBody, HttpError, HttpExpect, HttpRequest)
 
 
 {-| Put some JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
@@ -81,7 +81,7 @@ expectWhatever =
 -}
 get :
     { url : String
-    , headers : List HttpHeader
+    , headers : List ( String, String )
     , expect : HttpExpect future
     , timeout : Maybe Int
     }
@@ -100,7 +100,7 @@ get options =
 -}
 post :
     { url : String
-    , headers : List HttpHeader
+    , headers : List ( String, String )
     , body : HttpBody
     , expect : HttpExpect future
     , timeout : Maybe Int

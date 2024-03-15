@@ -3,7 +3,7 @@ module Web exposing
     , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
     , DomNode(..), DomElement, DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
-    , HttpRequest, HttpHeader, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
+    , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketId(..)
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
@@ -43,7 +43,7 @@ Types used by [`Web.Audio`](Web-Audio)
 
 Types used by [`Web.Http`](Web-Http)
 
-@docs HttpRequest, HttpHeader, HttpBody, HttpExpect, HttpError, HttpMetadata
+@docs HttpRequest, HttpBody, HttpExpect, HttpError, HttpMetadata
 
 
 ## socket
@@ -264,17 +264,11 @@ type alias HttpRequest future =
     RecordWithoutConstructorFunction
         { url : String
         , method : String
-        , headers : List HttpHeader
+        , headers : List { name : String, value : String }
         , body : HttpBody
         , expect : HttpExpect future
         , timeout : Maybe Int
         }
-
-
-{-| An Http header for configuring a request.
--}
-type alias HttpHeader =
-    ( String, String )
 
 
 {-| Describe what you expect to be returned in an http response body.
@@ -311,7 +305,7 @@ type alias HttpRequestId =
     RecordWithoutConstructorFunction
         { url : String
         , method : String
-        , headers : List HttpHeader
+        , headers : List { name : String, value : String }
         , body : HttpBody
         , expect : HttpExpectId
         , timeout : Maybe Int
@@ -1088,12 +1082,12 @@ httpRequestIdToComparable =
             ]
 
 
-httpHeaderToComparable : HttpHeader -> Comparable
+httpHeaderToComparable : { name : String, value : String } -> Comparable
 httpHeaderToComparable =
-    \( httpHeaderName, httpHeaderValue ) ->
+    \httpHeader ->
         ComparableList
-            [ httpHeaderName |> ComparableString
-            , httpHeaderValue |> ComparableString
+            [ httpHeader.name |> ComparableString
+            , httpHeader.value |> ComparableString
             ]
 
 
@@ -1464,11 +1458,11 @@ listFirstJust tryMapToFound list =
                     listFirstJust tryMapToFound tail
 
 
-headerJsonCodec : JsonCodec HttpHeader
+headerJsonCodec : JsonCodec { name : String, value : String }
 headerJsonCodec =
-    Json.Codec.record (\name value -> ( name, value ))
-        |> Json.Codec.field ( Tuple.first, "name" ) Json.Codec.string
-        |> Json.Codec.field ( Tuple.second, "value" ) Json.Codec.string
+    Json.Codec.record (\name value -> { name = name, value = value })
+        |> Json.Codec.field ( .name, "name" ) Json.Codec.string
+        |> Json.Codec.field ( .value, "value" ) Json.Codec.string
         |> Json.Codec.recordFinish
 
 
@@ -1482,14 +1476,14 @@ httpRequestIdJsonCodec =
                 , ( "headers"
                   , httpRequestId.headers
                         |> addContentTypeForBody httpRequestId.body
-                        |> Json.Encode.list headerJsonCodec.toJson
+                        |> (Json.Codec.list headerJsonCodec).toJson
                   )
                 , ( "expect", httpRequestId.expect |> httpExpectIdJsonCodec.toJson )
                 , ( "body", httpRequestId.body |> httpBodyToJson )
                 , ( "timeout", httpRequestId.timeout |> httpTimeoutJsonCodec.toJson )
                 ]
     , jsonDecoder =
-        headersJsonCodec.jsonDecoder
+        (Json.Codec.list headerJsonCodec).jsonDecoder
             |> Json.Decode.andThen
                 (\headers ->
                     Json.Decode.map5
@@ -1511,10 +1505,10 @@ httpRequestIdJsonCodec =
                                 maybeContentType =
                                     headers
                                         |> listFirstJust
-                                            (\( name, value ) ->
-                                                case name of
+                                            (\header ->
+                                                case header.name of
                                                     "Content-Type" ->
-                                                        value |> Just
+                                                        header.value |> Just
 
                                                     _ ->
                                                         Nothing
@@ -1534,14 +1528,14 @@ httpRequestIdJsonCodec =
     }
 
 
-addContentTypeForBody : HttpBody -> List HttpHeader -> List HttpHeader
+addContentTypeForBody : HttpBody -> (List { name : String, value : String } -> List { name : String, value : String })
 addContentTypeForBody body headers =
     case body of
         HttpBodyEmpty ->
             headers
 
         HttpBodyString stringBodyInfo ->
-            ( "Content-Type", stringBodyInfo.mimeType ) :: headers
+            { name = "Content-Type", value = stringBodyInfo.mimeType } :: headers
 
 
 httpBodyToJson : HttpBody -> Json.Encode.Value
@@ -1571,11 +1565,6 @@ httpExpectIdJsonCodec =
                 IdHttpExpectWhatever ->
                     "whatever"
         )
-
-
-headersJsonCodec : JsonCodec (List HttpHeader)
-headersJsonCodec =
-    Json.Codec.list headerJsonCodec
 
 
 interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
