@@ -475,28 +475,37 @@ interface HttpRequest {
     headers: { name: string, value: string }[]
     expect: Expect
     timeout: number | null
-    body: string | null
+    body: HttpRequestBody
 }
-type Expect = "string" | "whatever"
+type Expect = "string" | "bytes" | "whatever"
+type HttpRequestBody = { tag: "uint8Array", value: Uint8Array }
+    | { tag: "string", value: string } | { tag: "empty" }
 
 type HttpResponse = { ok: ResponseSuccess } | { err: any }
 interface ResponseSuccess {
-    body: any | string | null
+    body: Uint8Array | string | null
     url: string
     headers: { [header: string]: string }
     statusCode: number
     statusText: string
 }
 
+function httpRequestBodyForFetch(body: HttpRequestBody) {
+    switch (body.tag) {
+        case "empty": return null
+        case "string": return body.value || null
+        case "uint8Array": return new Blob([body.value])
+    }
+}
 function httpFetch(request: HttpRequest, abortController: AbortController): Promise<HttpResponse> {
     if (request.timeout) {
         setTimeout(() => abortController.abort(), request.timeout)
     }
     return fetch(request.url, {
         method: request.method,
-        body: request.body || null,
+        body: httpRequestBodyForFetch(request.body),
         headers: new Headers(request.headers.map(header => [header.name, header.value])),
-        signal: abortController.signal,
+        signal: abortController.signal
     })
         .then((res: Response) => {
             const headers = Object.fromEntries(res.headers.entries())
@@ -508,9 +517,21 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
                             headers: headers,
                             statusCode: res.status,
                             statusText: res.statusText,
-                            body: x || null,
+                            body: x || null as (string | null | Uint8Array)
                         }
                     }))
+                case "bytes":
+                    return res.blob()
+                        .then(blob => blob.arrayBuffer())
+                        .then((x) => ({
+                            ok: {
+                                url: res.url,
+                                headers: headers,
+                                statusCode: res.status,
+                                statusText: res.statusText,
+                                body: new Uint8Array(x)
+                            }
+                        }))
                 case "whatever":
                     return {
                         ok: {
@@ -518,7 +539,7 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
                             headers: headers,
                             statusCode: res.status,
                             statusText: res.statusText,
-                            body: null,
+                            body: null
                         }
                     }
             }

@@ -16,7 +16,7 @@ see for example [mpizenberg/elm-file](https://dark.elm.dmy.fr/packages/mpizenber
 -}
 
 import Bytes exposing (Bytes)
-import Bytes.Decode
+import Bytes.LocalExtra
 import Rope
 import Web
 
@@ -33,27 +33,7 @@ bytes fileDownloadConfig =
     Web.FileDownloadUnsignedInt8s
         { name = fileDownloadConfig.name
         , mimeType = fileDownloadConfig.mimeType
-        , content =
-            -- `Bytes` can't be diffed as their representation is magic and only exists in js land, so we need to convert it.
-            fileDownloadConfig.content
-                |> Bytes.Decode.decode
-                    (byteListDecoder (fileDownloadConfig.content |> Bytes.width))
-                |> -- above decoder should never fail
-                   Maybe.withDefault []
+        , content = fileDownloadConfig.content |> Bytes.LocalExtra.toUnsignedInt8List
         }
         |> Web.InterfaceWithoutFuture
         |> Rope.singleton
-
-
-byteListDecoder : Int -> Bytes.Decode.Decoder (List Int)
-byteListDecoder length =
-    Bytes.Decode.loop ( length, [] )
-        (\( n, elements ) ->
-            if n <= 0 then
-                Bytes.Decode.succeed (Bytes.Decode.Done (elements |> List.reverse))
-
-            else
-                Bytes.Decode.map
-                    (\byte -> Bytes.Decode.Loop ( n - 1, byte :: elements ))
-                    Bytes.Decode.unsignedInt8
-        )

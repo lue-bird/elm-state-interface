@@ -1,31 +1,67 @@
 module Web.Http exposing
-    ( expectJson, expectString, expectWhatever
-    , bodyJson
+    ( expectString, expectJson, expectBytes, expectWhatever
+    , bodyJson, bodyBytes
     , get, post
     , request
     )
 
 {-| Helpers for [HTTP types](Web#HttpRequest) as part of an [`Interface`](Web#Interface)
 
-@docs expectJson, expectString, expectWhatever
-@docs bodyJson
+@docs expectString, expectJson, expectBytes, expectWhatever
+
+@docs bodyJson, bodyBytes
+
 @docs get, post
 
 @docs request
 
 -}
 
+import Bytes exposing (Bytes)
+import Bytes.LocalExtra
 import Json.Decode
 import Json.Encode
 import Rope
 import Web exposing (HttpBody, HttpError, HttpExpect, HttpRequest)
 
 
-{-| Put some JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
+{-| Put a given JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
 -}
 bodyJson : Json.Encode.Value -> HttpBody
-bodyJson value =
-    Web.HttpBodyString { mimeType = "application/json", content = Json.Encode.encode 0 value }
+bodyJson content =
+    Web.HttpBodyString { mimeType = "application/json", content = Json.Encode.encode 0 content }
+
+
+{-| Put given [`Bytes`](https://dark.elm.dmy.fr/packages/elm/bytes/latest/) in the body of your request.
+The string argument should be a [MIME type](https://en.wikipedia.org/wiki/Media_type) to be used in the `Content-Type` header
+
+    import Bytes exposing (Bytes)
+    import Time
+    import Web
+    import Zip
+    import Zip.Entry
+
+    exampleZipBody : Web.HttpBody
+    exampleZipBody =
+        Web.Http.bodyBytes "application/zip"
+            (Zip.fromEntries
+                [ Encode.string "Hello, World!"
+                    |> Encode.encode
+                    |> store
+                        { path = "hello.txt"
+                        , lastModified = ( Time.utc, Time.millisToPosix 0 )
+                        , comment = Nothing
+                        }
+                ]
+                |> Zip.toBytes
+            )
+
+`Zip` and `Zip.Entry` are from [`agu-z/elm-zip`](https://dark.elm.dmy.fr/packages/agu-z/elm-zip/latest/)
+
+-}
+bodyBytes : String -> (Bytes -> HttpBody)
+bodyBytes mimeType content =
+    Web.HttpBodyUnsignedInt8s { mimeType = mimeType, content = content |> Bytes.LocalExtra.toUnsignedInt8List }
 
 
 
@@ -37,7 +73,7 @@ The result will either be
 
   - `Err` with an [`HttpError`](Web#HttpError) if it didn't succeed
   - `Ok` if there was a result with either
-      - `Ok` with the decoded state
+      - `Ok` with the decoded value
       - `Err` with a [`Json.Decode.Error`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Error) the actual text response
 
 -}
@@ -57,6 +93,18 @@ expectJson stateDecoder =
                 Err httpError ->
                     Err httpError
         )
+
+
+{-| Expect the response body to be [`Bytes`](https://dark.elm.dmy.fr/packages/elm/bytes/latest/).
+The result will either be
+
+  - `Err` with an [`HttpError`](Web#HttpError) if it didn't succeed
+  - `Ok` with the `Bytes`
+
+-}
+expectBytes : HttpExpect (Result HttpError Bytes)
+expectBytes =
+    Web.HttpExpectBytes identity
 
 
 {-| Expect the response body to be a `String`.

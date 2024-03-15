@@ -82,6 +82,8 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 import AndOr exposing (AndOr)
 import AppUrl exposing (AppUrl)
 import Array exposing (Array)
+import Bytes exposing (Bytes)
+import Bytes.LocalExtra
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import Emptiable exposing (Emptiable)
@@ -275,6 +277,7 @@ type alias HttpRequest future =
 -}
 type HttpExpect future
     = HttpExpectString (Result HttpError String -> future)
+    | HttpExpectBytes (Result HttpError Bytes -> future)
     | HttpExpectWhatever (Result HttpError () -> future)
 
 
@@ -293,10 +296,14 @@ type HttpExpect future
 
     The first argument is a [MIME type](https://en.wikipedia.org/wiki/Media_type) of the body.
 
+  - `HttpBodyUnsignedInt8s` is pretty much the same as `HttpBodyString` but for [`Bytes`](https://dark.elm.dmy.fr/packages/elm/bytes/latest/),
+    see [`Web.Http.bodyBytes`](Web-Http#bodyBytes)
+
 -}
 type HttpBody
     = HttpBodyEmpty
     | HttpBodyString { mimeType : String, content : String }
+    | HttpBodyUnsignedInt8s { mimeType : String, content : List Int }
 
 
 {-| Safe to ignore. Identifier for an [`HttpRequest`](#HttpRequest)
@@ -316,6 +323,7 @@ type alias HttpRequestId =
 -}
 type HttpExpectId
     = IdHttpExpectString
+    | IdHttpExpectBytes
     | IdHttpExpectWhatever
 
 
@@ -616,6 +624,9 @@ httpRequestMap futureChange =
 
                 HttpExpectString expectString ->
                     (\string -> expectString string |> futureChange) |> HttpExpectString
+
+                HttpExpectBytes expectBytes ->
+                    (\bytes -> expectBytes bytes |> futureChange) |> HttpExpectBytes
         }
 
 
@@ -913,6 +924,9 @@ httpExpectToId =
             HttpExpectString _ ->
                 IdHttpExpectString
 
+            HttpExpectBytes _ ->
+                IdHttpExpectBytes
+
 
 interfaceSingleRequestToId : InterfaceSingleRequest future_ -> InterfaceSingleRequestId
 interfaceSingleRequestToId =
@@ -1104,6 +1118,21 @@ httpBodyToComparable =
                     , stringBody |> httpStringBodyToComparable
                     ]
 
+            HttpBodyUnsignedInt8s stringBody ->
+                ComparableList
+                    [ "HttpBodyBytes" |> ComparableString
+                    , stringBody |> httpBytesBodyToComparable
+                    ]
+
+
+httpBytesBodyToComparable : { mimeType : String, content : List Int } -> Comparable
+httpBytesBodyToComparable =
+    \httpStringBody ->
+        ComparableList
+            [ httpStringBody.mimeType |> ComparableString
+            , httpStringBody.content |> List.map intToComparable |> ComparableList
+            ]
+
 
 httpStringBodyToComparable : { mimeType : String, content : String } -> Comparable
 httpStringBodyToComparable =
@@ -1120,6 +1149,9 @@ httpExpectIdToComparable =
         case httpExpectId of
             IdHttpExpectString ->
                 "IdHttpExpectString" |> ComparableString
+
+            IdHttpExpectBytes ->
+                "IdHttpExpectBytes" |> ComparableString
 
             IdHttpExpectWhatever ->
                 "IdHttpExpectWhatever" |> ComparableString
@@ -1458,14 +1490,6 @@ listFirstJust tryMapToFound list =
                     listFirstJust tryMapToFound tail
 
 
-headerJsonCodec : JsonCodec { name : String, value : String }
-headerJsonCodec =
-    Json.Codec.record (\name value -> { name = name, value = value })
-        |> Json.Codec.field ( .name, "name" ) Json.Codec.string
-        |> Json.Codec.field ( .value, "value" ) Json.Codec.string
-        |> Json.Codec.recordFinish
-
-
 httpRequestIdJsonCodec : JsonCodec HttpRequestId
 httpRequestIdJsonCodec =
     { toJson =
@@ -1528,6 +1552,14 @@ httpRequestIdJsonCodec =
     }
 
 
+headerJsonCodec : JsonCodec { name : String, value : String }
+headerJsonCodec =
+    Json.Codec.record (\name value -> { name = name, value = value })
+        |> Json.Codec.field ( .name, "name" ) Json.Codec.string
+        |> Json.Codec.field ( .value, "value" ) Json.Codec.string
+        |> Json.Codec.recordFinish
+
+
 addContentTypeForBody : HttpBody -> (List { name : String, value : String } -> List { name : String, value : String })
 addContentTypeForBody body headers =
     case body of
@@ -1537,16 +1569,28 @@ addContentTypeForBody body headers =
         HttpBodyString stringBodyInfo ->
             { name = "Content-Type", value = stringBodyInfo.mimeType } :: headers
 
+        HttpBodyUnsignedInt8s bytesBodyInfo ->
+            { name = "Content-Type", value = bytesBodyInfo.mimeType } :: headers
+
 
 httpBodyToJson : HttpBody -> Json.Encode.Value
 httpBodyToJson =
     \body ->
         case body of
             HttpBodyString stringBodyInfo ->
-                stringBodyInfo.content |> Json.Encode.string
+                Json.Encode.object
+                    [ ( "tag", "string" |> Json.Encode.string )
+                    , ( "value", stringBodyInfo.content |> Json.Encode.string )
+                    ]
+
+            HttpBodyUnsignedInt8s bytesBodyInfo ->
+                Json.Encode.object
+                    [ ( "tag", "uint8Array" |> Json.Encode.string )
+                    , ( "value", bytesBodyInfo.content |> Json.Encode.list Json.Encode.int )
+                    ]
 
             HttpBodyEmpty ->
-                Json.Encode.null
+                Json.Encode.object [ ( "tag", "empty" |> Json.Encode.string ) ]
 
 
 httpTimeoutJsonCodec : JsonCodec (Maybe Int)
@@ -1556,11 +1600,14 @@ httpTimeoutJsonCodec =
 
 httpExpectIdJsonCodec : JsonCodec HttpExpectId
 httpExpectIdJsonCodec =
-    Json.Codec.enum [ IdHttpExpectString, IdHttpExpectWhatever ]
+    Json.Codec.enum [ IdHttpExpectString, IdHttpExpectBytes, IdHttpExpectWhatever ]
         (\httpExpectId ->
             case httpExpectId of
                 IdHttpExpectString ->
                     "string"
+
+                IdHttpExpectBytes ->
+                    "bytes"
 
                 IdHttpExpectWhatever ->
                     "whatever"
@@ -2277,6 +2324,9 @@ httpExpectOnError =
             HttpExpectString toState ->
                 \e -> e |> Err |> toState
 
+            HttpExpectBytes toState ->
+                \e -> e |> Err |> toState
+
             HttpExpectWhatever toState ->
                 \e -> e |> Err |> toState
 
@@ -2301,6 +2351,18 @@ httpExpectJsonDecoder expect =
                             Json.Decode.map toState
                                 (if isOk then
                                     Json.Decode.map Ok Json.Decode.string
+
+                                 else
+                                    badStatusJsonDecoder
+                                )
+
+                        HttpExpectBytes toState ->
+                            Json.Decode.map toState
+                                (if isOk then
+                                    Json.Decode.map Ok
+                                        (Json.Decode.map Bytes.LocalExtra.fromUnsignedInt8List
+                                            (Json.Decode.list Json.Decode.int)
+                                        )
 
                                  else
                                     badStatusJsonDecoder
