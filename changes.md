@@ -10,4 +10,5 @@
       - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
+  - add `module Web.LocalStorage`
   - TODO: allow http byte body https://github.com/andrewMacmurray/elm-concurrent-task/pull/26/files

@@ -11,7 +11,6 @@ module Web.Window exposing
 -}
 
 import Json.Decode
-import Json.Decode.Local
 import Rope
 import Time
 import Web
@@ -44,9 +43,9 @@ resizeListen =
         { eventName = "resize"
         , on =
             Json.Decode.field "target"
-                (Json.Decode.succeed (\width height -> { width = width, height = height })
-                    |> Json.Decode.Local.andMap (Json.Decode.field "innerWidth" Json.Decode.int)
-                    |> Json.Decode.Local.andMap (Json.Decode.field "innerHeight" Json.Decode.int)
+                (Json.Decode.map2 (\width height -> { width = width, height = height })
+                    (Json.Decode.field "innerWidth" Json.Decode.int)
+                    (Json.Decode.field "innerHeight" Json.Decode.int)
                 )
         }
         |> Web.InterfaceWithFuture

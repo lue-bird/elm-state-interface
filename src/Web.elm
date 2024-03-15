@@ -78,8 +78,8 @@ import Array exposing (Array)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import Emptiable exposing (Emptiable)
+import Json.Codec exposing (JsonCodec)
 import Json.Decode
-import Json.Decode.Local
 import Json.Encode
 import Keys exposing (Key, Keys)
 import KeysSet exposing (KeysSet)
@@ -167,7 +167,7 @@ type alias Interface future =
     Rope (InterfaceSingle future)
 
 
-{-| An "non-batched" [`Interface`](#Interface).
+{-| A "non-batched" [`Interface`](#Interface).
 To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
 -}
 type InterfaceSingle future
@@ -191,6 +191,7 @@ type InterfaceSingleWithoutFuture
     | AudioPlay Audio
     | SocketMessage { id : SocketId, data : String }
     | SocketDisconnect SocketId
+    | LocalStorageSet { key : String, value : Maybe String }
 
 
 {-| These are possible errors we can get when loading an audio source file.
@@ -226,6 +227,12 @@ type InterfaceSingleWithFuture future
     | SocketConnect { address : String, on : SocketId -> future }
     | SocketDisconnectListen { id : SocketId, on : { code : Int, reason : String } -> future }
     | SocketMessageListen { id : SocketId, on : String -> future }
+    | LocalStorageRequest { key : String, on : Maybe String -> future }
+    | LocalStorageRemoveOnADifferentTabListen { key : String, on : AppUrl -> future }
+    | LocalStorageSetOnADifferentTabListen
+        { key : String
+        , on : { appUrl : AppUrl, oldValue : Maybe String, newValue : String } -> future
+        }
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -359,6 +366,9 @@ type InterfaceSingleWithFutureId
     | IdSocketConnect { address : String }
     | IdSocketDisconnectListen SocketId
     | IdSocketMessageListen SocketId
+    | IdLocalStorageRequest { key : String }
+    | IdLocalStorageRemoveOnADifferentTabListen { key : String }
+    | IdLocalStorageSetOnADifferentTabListen { key : String }
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -571,6 +581,18 @@ interfaceWithFutureMap futureChange =
             SocketMessageListen messageListen ->
                 { id = messageListen.id, on = \event -> event |> messageListen.on |> futureChange }
                     |> SocketMessageListen
+
+            LocalStorageRequest request ->
+                { key = request.key, on = \event -> event |> request.on |> futureChange }
+                    |> LocalStorageRequest
+
+            LocalStorageRemoveOnADifferentTabListen listen ->
+                { key = listen.key, on = \event -> event |> listen.on |> futureChange }
+                    |> LocalStorageRemoveOnADifferentTabListen
+
+            LocalStorageSetOnADifferentTabListen listen ->
+                { key = listen.key, on = \event -> event |> listen.on |> futureChange }
+                    |> LocalStorageSetOnADifferentTabListen
 
 
 httpRequestMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
@@ -874,6 +896,15 @@ interfaceWithFutureToId =
             SocketMessageListen messageListen ->
                 IdSocketMessageListen messageListen.id
 
+            LocalStorageRequest request ->
+                IdLocalStorageRequest { key = request.key }
+
+            LocalStorageRemoveOnADifferentTabListen listen ->
+                IdLocalStorageRemoveOnADifferentTabListen { key = listen.key }
+
+            LocalStorageSetOnADifferentTabListen listen ->
+                IdLocalStorageSetOnADifferentTabListen { key = listen.key }
+
 
 interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
 interfaceIdOrder =
@@ -984,18 +1015,23 @@ idInterfaceWithoutFutureToComparable =
                     , id |> socketIdToComparable
                     ]
 
+            IdLocalStorageRequest request ->
+                ComparableList
+                    [ ComparableString "IdLocalStorageRequest"
+                    , request.key |> ComparableString
+                    ]
 
-httpRequestIdToComparable : HttpRequestId -> Comparable
-httpRequestIdToComparable =
-    \httpRequestId ->
-        ComparableList
-            [ httpRequestId.url |> ComparableString
-            , httpRequestId.method |> ComparableString
-            , httpRequestId.headers |> List.map httpHeaderToComparable |> ComparableList
-            , httpRequestId.body |> httpBodyToComparable
-            , httpRequestId.expect |> httpExpectIdToComparable
-            , httpRequestId.timeout |> maybeToComparable intToComparable
-            ]
+            IdLocalStorageRemoveOnADifferentTabListen listen ->
+                ComparableList
+                    [ ComparableString "IdLocalStorageRemoveOnADifferentTabListen"
+                    , listen.key |> ComparableString
+                    ]
+
+            IdLocalStorageSetOnADifferentTabListen listen ->
+                ComparableList
+                    [ ComparableString "IdLocalStorageSetOnADifferentTabListen"
+                    , listen.key |> ComparableString
+                    ]
 
 
 maybeToComparable : (value -> Comparable) -> (Maybe value -> Comparable)
@@ -1010,6 +1046,19 @@ maybeToComparable valueToComparable =
                     [ "Just" |> ComparableString
                     , value |> valueToComparable
                     ]
+
+
+httpRequestIdToComparable : HttpRequestId -> Comparable
+httpRequestIdToComparable =
+    \httpRequestId ->
+        ComparableList
+            [ httpRequestId.url |> ComparableString
+            , httpRequestId.method |> ComparableString
+            , httpRequestId.headers |> List.map httpHeaderToComparable |> ComparableList
+            , httpRequestId.body |> httpBodyToComparable
+            , httpRequestId.expect |> httpExpectIdToComparable
+            , httpRequestId.timeout |> maybeToComparable intToComparable
+            ]
 
 
 httpHeaderToComparable : HttpHeader -> Comparable
@@ -1136,8 +1185,15 @@ interfaceWithoutFutureToComparable =
 
             SocketDisconnect id ->
                 ComparableList
-                    [ ComparableString "SocketMessage"
+                    [ ComparableString "SocketDisconnect"
                     , id |> socketIdToComparable
+                    ]
+
+            LocalStorageSet set ->
+                ComparableList
+                    [ ComparableString "LocalStorageSet"
+                    , set.key |> ComparableString
+                    , set.value |> maybeToComparable ComparableString
                     ]
 
 
@@ -1250,6 +1306,15 @@ interfaceOldAndOrUpdatedDiffs =
 
                             SocketMessageListen messageListen ->
                                 RemoveSocketMessageListen messageListen.id |> List.singleton
+
+                            LocalStorageRequest _ ->
+                                []
+
+                            LocalStorageRemoveOnADifferentTabListen listen ->
+                                RemoveLocalStorageRemoveOnADifferentTabListen { key = listen.key } |> List.singleton
+
+                            LocalStorageSetOnADifferentTabListen listen ->
+                                RemoveLocalStorageSetOnADifferentTabListen { key = listen.key } |> List.singleton
                 )
                     |> List.map InterfaceWithoutFutureDiff
 
@@ -1315,6 +1380,15 @@ interfaceOldAndOrUpdatedDiffs =
 
                             SocketMessageListen messageListen ->
                                 AddSocketMessageListen messageListen.id
+
+                            LocalStorageRequest request ->
+                                AddLocalStorageRequest { key = request.key }
+
+                            LocalStorageRemoveOnADifferentTabListen listen ->
+                                AddLocalStorageRemoveOnADifferentTabListen { key = listen.key }
+
+                            LocalStorageSetOnADifferentTabListen listen ->
+                                AddLocalStorageSetOnADifferentTabListen { key = listen.key }
                         )
                             |> InterfaceWithFutureDiff
                 )
@@ -1357,72 +1431,94 @@ audioDiff =
             |> List.filterMap identity
 
 
-interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
-interfaceDiffToJson =
-    \interfaceDiff ->
-        case interfaceDiff of
-            InterfaceWithFutureDiff addOrReplaceDiff ->
-                addOrReplaceDiff |> interfaceWithFutureDiffToJson
-
-            InterfaceWithoutFutureDiff removeDiff ->
-                removeDiff |> interfaceWithoutFutureDiffToJson
+socketIdJsonCodec : JsonCodec SocketId
+socketIdJsonCodec =
+    Json.Codec.map SocketId (\(SocketId index) -> index) Json.Codec.int
 
 
-domNodeIdToJson : DomNodeId -> Json.Encode.Value
-domNodeIdToJson =
-    \domElementSubId ->
-        Json.Encode.object
-            [ case domElementSubId of
-                DomTextId text ->
-                    ( "text", text |> Json.Encode.string )
+listFirstJust : (node -> Maybe found) -> List node -> Maybe found
+listFirstJust tryMapToFound list =
+    case list of
+        [] ->
+            Nothing
 
-                DomElementId element ->
-                    ( "element"
-                    , element |> domElementIdToJson
-                    )
-            ]
+        head :: tail ->
+            case tryMapToFound head of
+                Just b ->
+                    Just b
 
-
-httpRequestIdToJson : HttpRequestId -> Json.Encode.Value
-httpRequestIdToJson =
-    \httpRequestId ->
-        Json.Encode.object
-            [ ( "url", httpRequestId.url |> Json.Encode.string )
-            , ( "method", httpRequestId.method |> Json.Encode.string )
-            , ( "headers", httpRequestId.headers |> headersToJson httpRequestId.body )
-            , ( "expect", httpRequestId.expect |> httpExpectIdToJson )
-            , ( "body", httpRequestId.body |> httpBodyToJson )
-            , ( "timeout", httpRequestId.timeout |> httpTimeoutToJson )
-            ]
+                Nothing ->
+                    listFirstJust tryMapToFound tail
 
 
-httpTimeoutToJson : Maybe Int -> Json.Encode.Value
-httpTimeoutToJson =
-    \maybeTimeout ->
-        case maybeTimeout of
-            Nothing ->
-                Json.Encode.null
-
-            Just timeout ->
-                timeout |> Json.Encode.int
+headerJsonCodec : JsonCodec HttpHeader
+headerJsonCodec =
+    Json.Codec.record (\name value -> ( name, value ))
+        |> Json.Codec.field ( Tuple.first, "name" ) Json.Codec.string
+        |> Json.Codec.field ( Tuple.second, "value" ) Json.Codec.string
+        |> Json.Codec.recordFinish
 
 
-httpExpectIdToJson : HttpExpectId -> Json.Encode.Value
-httpExpectIdToJson =
-    \httpExpectId ->
-        case httpExpectId of
-            IdHttpExpectString ->
-                Json.Encode.string "STRING"
+httpRequestIdJsonCodec : JsonCodec HttpRequestId
+httpRequestIdJsonCodec =
+    { toJson =
+        \httpRequestId ->
+            Json.Encode.object
+                [ ( "url", httpRequestId.url |> Json.Encode.string )
+                , ( "method", httpRequestId.method |> Json.Encode.string )
+                , ( "headers"
+                  , httpRequestId.headers
+                        |> addContentTypeForBody httpRequestId.body
+                        |> Json.Encode.list headerJsonCodec.toJson
+                  )
+                , ( "expect", httpRequestId.expect |> httpExpectIdJsonCodec.toJson )
+                , ( "body", httpRequestId.body |> httpBodyToJson )
+                , ( "timeout", httpRequestId.timeout |> httpTimeoutJsonCodec.toJson )
+                ]
+    , jsonDecoder =
+        headersJsonCodec.jsonDecoder
+            |> Json.Decode.andThen
+                (\headers ->
+                    Json.Decode.map5
+                        (\url method expect body timeout ->
+                            { url = url
+                            , method = method
+                            , headers = headers
+                            , expect = expect
+                            , body = body
+                            , timeout = timeout
+                            }
+                        )
+                        (Json.Decode.field "url" Json.Decode.string)
+                        (Json.Decode.field "method" Json.Decode.string)
+                        (Json.Decode.field "expect" httpExpectIdJsonCodec.jsonDecoder)
+                        (Json.Decode.field "body"
+                            (let
+                                maybeContentType : Maybe String
+                                maybeContentType =
+                                    headers
+                                        |> listFirstJust
+                                            (\( name, value ) ->
+                                                case name of
+                                                    "Content-Type" ->
+                                                        value |> Just
 
-            IdHttpExpectWhatever ->
-                Json.Encode.string "WHATEVER"
+                                                    _ ->
+                                                        Nothing
+                                            )
+                             in
+                             case maybeContentType of
+                                Just mimeType ->
+                                    Json.Decode.map (\content -> HttpBodyString { mimeType = mimeType, content = content })
+                                        Json.Decode.string
 
-
-headersToJson : HttpBody -> List HttpHeader -> Json.Encode.Value
-headersToJson body headers =
-    headers
-        |> addContentTypeForBody body
-        |> Json.Encode.list headerToJson
+                                Nothing ->
+                                    HttpBodyEmpty |> Json.Decode.null
+                            )
+                        )
+                        (Json.Decode.field "timeout" httpTimeoutJsonCodec.jsonDecoder)
+                )
+    }
 
 
 addContentTypeForBody : HttpBody -> List HttpHeader -> List HttpHeader
@@ -1433,14 +1529,6 @@ addContentTypeForBody body headers =
 
         HttpBodyString stringBodyInfo ->
             ( "Content-Type", stringBodyInfo.mimeType ) :: headers
-
-
-headerToJson : HttpHeader -> Json.Encode.Value
-headerToJson ( name, value ) =
-    Json.Encode.list identity
-        [ Json.Encode.string name
-        , Json.Encode.string value
-        ]
 
 
 httpBodyToJson : HttpBody -> Json.Encode.Value
@@ -1454,120 +1542,271 @@ httpBodyToJson =
                 Json.Encode.null
 
 
-domElementAttributesNamespacedToJson : Dict ( String, String ) String -> Json.Encode.Value
-domElementAttributesNamespacedToJson =
-    \attributesNamespaced ->
-        attributesNamespaced
-            |> Dict.toList
-            |> Json.Encode.list
-                (\( ( namespace, key ), value ) ->
-                    Json.Encode.object
-                        [ ( "namespace", namespace |> Json.Encode.string )
-                        , ( "key", key |> Json.Encode.string )
-                        , ( "value", value |> Json.Encode.string )
-                        ]
-                )
+httpTimeoutJsonCodec : JsonCodec (Maybe Int)
+httpTimeoutJsonCodec =
+    Json.Codec.nullable Json.Codec.int
 
 
-defaultActionHandlingToJson : DefaultActionHandling -> Json.Encode.Value
-defaultActionHandlingToJson =
-    \defaultActionHandling ->
-        case defaultActionHandling of
-            DefaultActionPrevent ->
-                "DefaultActionPrevent" |> Json.Encode.string
+httpExpectIdJsonCodec : JsonCodec HttpExpectId
+httpExpectIdJsonCodec =
+    Json.Codec.enum [ IdHttpExpectString, IdHttpExpectWhatever ]
+        (\httpExpectId ->
+            case httpExpectId of
+                IdHttpExpectString ->
+                    "string"
 
-            DefaultActionExecute ->
-                "DefaultActionExecute" |> Json.Encode.string
-
-
-socketIdToJson : SocketId -> Json.Encode.Value
-socketIdToJson =
-    \(SocketId index) -> index |> Json.Encode.int
+                IdHttpExpectWhatever ->
+                    "whatever"
+        )
 
 
-interfaceWithFutureDiffToJson : InterfaceWithFutureDiff -> Json.Encode.Value
-interfaceWithFutureDiffToJson =
-    \interfaceAddOrReplaceDiff ->
-        Json.Encode.object
-            [ case interfaceAddOrReplaceDiff of
+headersJsonCodec : JsonCodec (List HttpHeader)
+headersJsonCodec =
+    Json.Codec.list headerJsonCodec
+
+
+interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
+interfaceWithFutureDiffJsonCodec =
+    Json.Codec.choice
+        (\addTimePosixRequest addTimezoneOffsetRequest addTimezoneNameRequest addTimePeriodicallyListen addRandomUnsignedInt32sRequest addEditDom addHttpRequest addWindowSizeRequest addWindowEventListen addWindowAnimationFrameListen addNavigationUrlRequest addDocumentEventListen addClipboardRequest addAudioSourceLoad addSocketConnect addSocketDisconnectListen addSocketMessageListen addLocalStorageRequest addLocalStorageRemoveOnADifferentTabListen addLocalStorageSetOnADifferentTabListen interfaceWithFutureDiff ->
+            case interfaceWithFutureDiff of
                 AddTimePosixRequest ->
-                    ( "addTimePosixRequest", Json.Encode.null )
+                    addTimePosixRequest ()
 
                 AddTimezoneOffsetRequest ->
-                    ( "addTimezoneOffsetRequest", Json.Encode.null )
+                    addTimezoneOffsetRequest ()
 
                 AddTimezoneNameRequest ->
-                    ( "addTimezoneNameRequest", Json.Encode.null )
+                    addTimezoneNameRequest ()
 
                 AddTimePeriodicallyListen intervalDuration ->
-                    ( "addTimePeriodicallyListen"
-                    , Json.Encode.object [ ( "milliSeconds", intervalDuration.milliSeconds |> Json.Encode.int ) ]
-                    )
+                    addTimePeriodicallyListen intervalDuration
 
                 AddRandomUnsignedInt32sRequest count ->
-                    ( "addRandomUnsignedInt32sRequest", count |> Json.Encode.int )
+                    addRandomUnsignedInt32sRequest count
 
                 AddEditDom editDomDiff ->
-                    ( "addEditDom"
-                    , Json.Encode.object
-                        [ ( "path", editDomDiff.path |> Json.Encode.list Json.Encode.int )
-                        , ( "replacement"
-                          , Json.Encode.object
-                                [ case editDomDiff.replacement of
-                                    ReplacementDomNode domElementReplacement ->
-                                        ( "node"
-                                        , domElementReplacement |> domNodeIdToJson
-                                        )
-
-                                    ReplacementDomElementStyles styles ->
-                                        ( "styles", styles |> Json.Encode.dict identity Json.Encode.string )
-
-                                    ReplacementDomElementAttributes attributes ->
-                                        ( "attributes", attributes |> Json.Encode.dict identity Json.Encode.string )
-
-                                    ReplacementDomElementAttributesNamespaced attributesNamespaced ->
-                                        ( "attributesNamespaced", attributesNamespaced |> domElementAttributesNamespacedToJson )
-
-                                    ReplacementDomElementEventListens eventListens ->
-                                        ( "eventListens", eventListens |> Json.Encode.dict identity defaultActionHandlingToJson )
-                                ]
-                          )
-                        ]
-                    )
+                    addEditDom editDomDiff
 
                 AddHttpRequest httpRequestId ->
-                    ( "addHttpRequest", httpRequestId |> httpRequestIdToJson )
+                    addHttpRequest httpRequestId
 
                 AddWindowSizeRequest ->
-                    ( "addWindowSizeRequest", Json.Encode.null )
+                    addWindowSizeRequest ()
 
                 AddWindowEventListen eventName ->
-                    ( "addWindowEventListen", eventName |> Json.Encode.string )
+                    addWindowEventListen eventName
 
                 AddWindowAnimationFrameListen ->
-                    ( "addWindowAnimationFrameListen", Json.Encode.null )
+                    addWindowAnimationFrameListen ()
 
                 AddNavigationUrlRequest ->
-                    ( "addNavigationUrlRequest", Json.Encode.null )
+                    addNavigationUrlRequest ()
 
                 AddDocumentEventListen eventName ->
-                    ( "addDocumentEventListen", eventName |> Json.Encode.string )
+                    addDocumentEventListen eventName
 
                 AddClipboardRequest ->
-                    ( "addClipboardRequest", Json.Encode.null )
+                    addClipboardRequest ()
 
                 AddAudioSourceLoad audioSourceLoad ->
-                    ( "addAudioSourceLoad", audioSourceLoad |> Json.Encode.string )
+                    addAudioSourceLoad audioSourceLoad
 
                 AddSocketConnect connect ->
-                    ( "addSocketConnect", Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ] )
+                    addSocketConnect connect
 
                 AddSocketDisconnectListen id ->
-                    ( "addSocketDisconnectListen", id |> socketIdToJson )
+                    addSocketDisconnectListen id
 
                 AddSocketMessageListen id ->
-                    ( "addSocketMessageListen", id |> socketIdToJson )
-            ]
+                    addSocketMessageListen id
+
+                AddLocalStorageRequest request ->
+                    addLocalStorageRequest request
+
+                AddLocalStorageRemoveOnADifferentTabListen listen ->
+                    addLocalStorageRemoveOnADifferentTabListen listen
+
+                AddLocalStorageSetOnADifferentTabListen listen ->
+                    addLocalStorageSetOnADifferentTabListen listen
+        )
+        |> Json.Codec.variant ( \() -> AddTimePosixRequest, "addTimePosixRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( \() -> AddTimezoneOffsetRequest, "addTimezoneOffsetRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( \() -> AddTimezoneNameRequest, "addTimezoneNameRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( AddTimePeriodicallyListen, "addTimePeriodicallyListen" )
+            (Json.Codec.record (\ms -> { milliSeconds = ms })
+                |> Json.Codec.field ( .milliSeconds, "milliSeconds" ) Json.Codec.int
+                |> Json.Codec.recordFinish
+            )
+        |> Json.Codec.variant ( AddRandomUnsignedInt32sRequest, "addRandomUnsignedInt32sRequest" )
+            Json.Codec.int
+        |> Json.Codec.variant ( AddEditDom, "addEditDom" )
+            (Json.Codec.record (\path replacement -> { path = path, replacement = replacement })
+                |> Json.Codec.field ( .path, "path" ) (Json.Codec.list Json.Codec.int)
+                |> Json.Codec.field ( .replacement, "replacement" )
+                    replacementInEditDomDiffJsonCodec
+                |> Json.Codec.recordFinish
+            )
+        |> Json.Codec.variant ( AddHttpRequest, "addHttpRequest" )
+            httpRequestIdJsonCodec
+        |> Json.Codec.variant ( \() -> AddWindowSizeRequest, "addWindowSizeRequest" )
+            Json.Codec.unit
+        |> Json.Codec.variant ( AddWindowEventListen, "addWindowEventListen" )
+            Json.Codec.string
+        |> Json.Codec.variant ( \() -> AddWindowAnimationFrameListen, "addWindowAnimationFrameListen" )
+            Json.Codec.unit
+        |> Json.Codec.variant ( \() -> AddNavigationUrlRequest, "addNavigationUrlRequest" )
+            Json.Codec.unit
+        |> Json.Codec.variant ( AddDocumentEventListen, "addDocumentEventListen" )
+            Json.Codec.string
+        |> Json.Codec.variant ( \() -> AddClipboardRequest, "addClipboardRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( AddAudioSourceLoad, "addAudioSourceLoad" )
+            Json.Codec.string
+        |> Json.Codec.variant ( AddSocketConnect, "addSocketConnect" )
+            (Json.Codec.record (\address -> { address = address })
+                |> Json.Codec.field ( .address, "address" ) Json.Codec.string
+                |> Json.Codec.recordFinish
+            )
+        |> Json.Codec.variant ( AddSocketDisconnectListen, "addSocketDisconnectListen" )
+            socketIdJsonCodec
+        |> Json.Codec.variant ( AddSocketMessageListen, "addSocketMessageListen" ) socketIdJsonCodec
+        |> Json.Codec.variant ( AddLocalStorageRequest, "addLocalStorageRequest" )
+            (Json.Codec.record (\key -> { key = key })
+                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
+                |> Json.Codec.recordFinish
+            )
+        |> Json.Codec.variant ( AddLocalStorageRemoveOnADifferentTabListen, "addLocalStorageRemoveOnADifferentTabListen" )
+            (Json.Codec.record (\key -> { key = key })
+                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
+                |> Json.Codec.recordFinish
+            )
+        |> Json.Codec.variant ( AddLocalStorageSetOnADifferentTabListen, "addLocalStorageSetOnADifferentTabListen" )
+            (Json.Codec.record (\key -> { key = key })
+                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
+                |> Json.Codec.recordFinish
+            )
+
+
+domNodeIdJsonCodec : JsonCodec DomNodeId
+domNodeIdJsonCodec =
+    Json.Codec.choice
+        (\domTextId domElementId domNodeId ->
+            case domNodeId of
+                DomTextId text ->
+                    domTextId text
+
+                DomElementId element ->
+                    domElementId element
+        )
+        |> Json.Codec.variant ( DomTextId, "text" ) Json.Codec.string
+        |> Json.Codec.variant ( DomElementId, "element" )
+            (Json.Codec.lazy (\() -> domElementIdJsonCodec))
+
+
+domElementAttributesNamespacedJsonCodec : JsonCodec (Dict ( String, String ) String)
+domElementAttributesNamespacedJsonCodec =
+    Json.Codec.dict
+        (Json.Codec.map
+            (\r -> { key = ( r.namespace, r.key ), value = r.value })
+            (\entry ->
+                let
+                    ( namespace, key ) =
+                        entry.key
+                in
+                { namespace = namespace, key = key, value = entry.value }
+            )
+            (Json.Codec.record
+                (\namespace key value -> { namespace = namespace, key = key, value = value })
+                |> Json.Codec.field ( .namespace, "namespace" ) Json.Codec.string
+                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
+                |> Json.Codec.field ( .value, "value" ) Json.Codec.string
+                |> Json.Codec.recordFinish
+            )
+        )
+
+
+domElementAttributesJsonCodec : JsonCodec (Dict String String)
+domElementAttributesJsonCodec =
+    Json.Codec.dict
+        (Json.Codec.record
+            (\key value -> { key = key, value = value })
+            |> Json.Codec.field ( .key, "key" ) Json.Codec.string
+            |> Json.Codec.field ( .value, "value" ) Json.Codec.string
+            |> Json.Codec.recordFinish
+        )
+
+
+domElementStylesJsonCodec : JsonCodec (Dict String String)
+domElementStylesJsonCodec =
+    Json.Codec.dict
+        (Json.Codec.record
+            (\key value -> { key = key, value = value })
+            |> Json.Codec.field ( .key, "key" ) Json.Codec.string
+            |> Json.Codec.field ( .value, "value" ) Json.Codec.string
+            |> Json.Codec.recordFinish
+        )
+
+
+domElementEventListensJsonCodec : JsonCodec (Dict String DefaultActionHandling)
+domElementEventListensJsonCodec =
+    Json.Codec.dict
+        (Json.Codec.record
+            (\key value -> { key = key, value = value })
+            |> Json.Codec.field ( .key, "key" ) Json.Codec.string
+            |> Json.Codec.field ( .value, "value" ) defaultActionHandlingJsonCodec
+            |> Json.Codec.recordFinish
+        )
+
+
+defaultActionHandlingJsonCodec : JsonCodec DefaultActionHandling
+defaultActionHandlingJsonCodec =
+    Json.Codec.enum [ DefaultActionPrevent, DefaultActionExecute ]
+        (\defaultActionHandling ->
+            case defaultActionHandling of
+                DefaultActionPrevent ->
+                    "DefaultActionPrevent"
+
+                DefaultActionExecute ->
+                    "DefaultActionExecute"
+        )
+
+
+replacementInEditDomDiffJsonCodec : JsonCodec ReplacementInEditDomDiff
+replacementInEditDomDiffJsonCodec =
+    Json.Codec.choice
+        (\replacementDomNode replacementDomElementStyles replacementDomElementAttributes replacementDomElementAttributesNamespaced replacementDomElementEventListens replacementInEditDomDiff ->
+            case replacementInEditDomDiff of
+                ReplacementDomNode id ->
+                    replacementDomNode id
+
+                ReplacementDomElementStyles styles ->
+                    replacementDomElementStyles styles
+
+                ReplacementDomElementAttributes attributes ->
+                    replacementDomElementAttributes attributes
+
+                ReplacementDomElementAttributesNamespaced attributesNamespaced ->
+                    replacementDomElementAttributesNamespaced attributesNamespaced
+
+                ReplacementDomElementEventListens listens ->
+                    replacementDomElementEventListens listens
+        )
+        |> Json.Codec.variant ( ReplacementDomNode, "node" ) domNodeIdJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementStyles, "styles" ) domElementStylesJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementAttributes, "attributes" ) domElementAttributesJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementAttributesNamespaced, "attributesNamespaced" ) domElementAttributesNamespacedJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementEventListens, "eventListens" ) domElementEventListensJsonCodec
+
+
+interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
+interfaceDiffToJson =
+    \interfaceDiff ->
+        case interfaceDiff of
+            InterfaceWithFutureDiff withFutureDiff ->
+                withFutureDiff |> interfaceWithFutureDiffJsonCodec.toJson
+
+            InterfaceWithoutFutureDiff withoutFutureDiff ->
+                withoutFutureDiff |> interfaceWithoutFutureDiffToJson
 
 
 audioParameterTimelineToJson : AudioParameterTimeline -> Json.Encode.Value
@@ -1642,14 +1881,22 @@ interfaceWithoutFutureDiffToJson =
                         SocketMessage message ->
                             ( "addSocketMessage"
                             , Json.Encode.object
-                                [ ( "id", message.id |> socketIdToJson )
+                                [ ( "id", message.id |> socketIdJsonCodec.toJson )
                                 , ( "data", message.data |> Json.Encode.string )
                                 ]
                             )
 
                         SocketDisconnect id ->
                             ( "addSocketDisconnect"
-                            , id |> socketIdToJson
+                            , id |> socketIdJsonCodec.toJson
+                            )
+
+                        LocalStorageSet set ->
+                            ( "addLocalStorageSet"
+                            , Json.Encode.object
+                                [ ( "key", set.key |> Json.Encode.string )
+                                , ( "value", set.value |> (Json.Codec.nullable Json.Codec.string).toJson )
+                                ]
                             )
 
                 AddEditAudio audioEdit ->
@@ -1709,7 +1956,7 @@ interfaceWithoutFutureDiffToJson =
                     ( "removeDom", Json.Encode.null )
 
                 RemoveHttpRequest httpRequestId ->
-                    ( "removeHttpRequest", httpRequestId |> httpRequestIdToJson )
+                    ( "removeHttpRequest", httpRequestId |> httpRequestIdJsonCodec.toJson )
 
                 RemoveWindowEventListen eventName ->
                     ( "removeWindowEventListen", eventName |> Json.Encode.string )
@@ -1732,10 +1979,20 @@ interfaceWithoutFutureDiffToJson =
                     ( "removeSocketConnect", Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ] )
 
                 RemoveSocketDisconnectListen id ->
-                    ( "removeSocketDisconnectListen", id |> socketIdToJson )
+                    ( "removeSocketDisconnectListen", id |> socketIdJsonCodec.toJson )
 
                 RemoveSocketMessageListen id ->
-                    ( "removeSocketMessageListen", id |> socketIdToJson )
+                    ( "removeSocketMessageListen", id |> socketIdJsonCodec.toJson )
+
+                RemoveLocalStorageRemoveOnADifferentTabListen listen ->
+                    ( "removeLocalStorageRemoveOnADifferentTabListen"
+                    , Json.Encode.object [ ( "key", listen.key |> Json.Encode.string ) ]
+                    )
+
+                RemoveLocalStorageSetOnADifferentTabListen listen ->
+                    ( "removeLocalStorageSetOnADifferentTabListen"
+                    , Json.Encode.object [ ( "key", listen.key |> Json.Encode.string ) ]
+                    )
             ]
 
 
@@ -1795,21 +2052,6 @@ programInit appConfig =
     )
 
 
-listFirstJust : (node -> Maybe found) -> List node -> Maybe found
-listFirstJust tryMapToFound list =
-    case list of
-        [] ->
-            Nothing
-
-        head :: tail ->
-            case tryMapToFound head of
-                Just b ->
-                    Just b
-
-                Nothing ->
-                    listFirstJust tryMapToFound tail
-
-
 {-| The "subscriptions" part for an embedded program
 -}
 programSubscriptions : ProgramConfig state -> (ProgramState state -> Sub (ProgramEvent state))
@@ -1818,7 +2060,7 @@ programSubscriptions appConfig =
         -- re-associate event based on current interface
         appConfig.ports.fromJs
             (\interfaceJson ->
-                case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "diff" interfaceDiffWithFutureJsonDecoder) of
+                case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "diff" interfaceWithFutureDiffJsonCodec.jsonDecoder) of
                     Ok interfaceDiff ->
                         case
                             state.interface
@@ -1849,206 +2091,13 @@ programSubscriptions appConfig =
             )
 
 
-domNodeIdJsonDecoder : Json.Decode.Decoder DomNodeId
-domNodeIdJsonDecoder =
-    Json.Decode.oneOf
-        [ Json.Decode.map DomTextId (Json.Decode.field "text" Json.Decode.string)
-        , Json.Decode.map DomElementId
-            (Json.Decode.field "element"
-                (Json.Decode.lazy (\() -> domElementIdJsonDecoder))
-            )
-        ]
-
-
-domElementAttributesNamespacedJsonDecoder : Json.Decode.Decoder (Dict ( String, String ) String)
-domElementAttributesNamespacedJsonDecoder =
-    Json.Decode.map Dict.fromList
-        (Json.Decode.list
-            (Json.Decode.succeed (\namespace key value -> ( ( namespace, key ), value ))
-                |> Json.Decode.Local.andMap (Json.Decode.field "namespace" Json.Decode.string)
-                |> Json.Decode.Local.andMap (Json.Decode.field "key" Json.Decode.string)
-                |> Json.Decode.Local.andMap (Json.Decode.field "value" Json.Decode.string)
-            )
-        )
-
-
-defaultActionHandlingJsonDecoder : Json.Decode.Decoder DefaultActionHandling
-defaultActionHandlingJsonDecoder =
-    Json.Decode.andThen
-        (\string ->
-            case string of
-                "DefaultActionPrevent" ->
-                    DefaultActionPrevent |> Json.Decode.succeed
-
-                "DefaultActionExecute" ->
-                    DefaultActionExecute |> Json.Decode.succeed
-
-                _ ->
-                    "needs to be either DefaultActionPrevent or DefaultActionExecute" |> Json.Decode.fail
-        )
-        Json.Decode.string
-
-
-socketIdJsonDecoder : Json.Decode.Decoder SocketId
-socketIdJsonDecoder =
-    Json.Decode.map SocketId Json.Decode.int
-
-
-interfaceDiffWithFutureJsonDecoder : Json.Decode.Decoder InterfaceWithFutureDiff
-interfaceDiffWithFutureJsonDecoder =
-    -- TODO find a way to nicely integrate a reminder to add all variants (or switch to codec I guess)
-    Json.Decode.oneOf
-        [ Json.Decode.map (\() -> AddTimePosixRequest)
-            (Json.Decode.field "addTimePosixRequest" (Json.Decode.null ()))
-        , Json.Decode.map (\() -> AddTimezoneOffsetRequest)
-            (Json.Decode.field "addTimezoneOffsetRequest" (Json.Decode.null ()))
-        , Json.Decode.map (\() -> AddTimezoneNameRequest)
-            (Json.Decode.field "addTimezoneNameRequest" (Json.Decode.null ()))
-        , Json.Decode.map AddTimePeriodicallyListen
-            (Json.Decode.field "addTimePeriodicallyListen"
-                (Json.Decode.map (\ms -> { milliSeconds = ms })
-                    (Json.Decode.field "milliSeconds" Json.Decode.int)
-                )
-            )
-        , Json.Decode.map AddRandomUnsignedInt32sRequest
-            (Json.Decode.field "addRandomUnsignedInt32sRequest" Json.Decode.int)
-        , Json.Decode.map AddEditDom
-            (Json.Decode.field "addEditDom"
-                (Json.Decode.succeed (\path replacement -> { path = path, replacement = replacement })
-                    |> Json.Decode.Local.andMap (Json.Decode.field "path" (Json.Decode.list Json.Decode.int))
-                    |> Json.Decode.Local.andMap
-                        (Json.Decode.field "replacement"
-                            (Json.Decode.oneOf
-                                [ Json.Decode.map ReplacementDomNode
-                                    (Json.Decode.field "node" domNodeIdJsonDecoder)
-                                , Json.Decode.map ReplacementDomElementStyles
-                                    (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
-                                , Json.Decode.map ReplacementDomElementAttributes
-                                    (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
-                                , Json.Decode.map ReplacementDomElementAttributesNamespaced
-                                    (Json.Decode.field "attributesNamespaced" domElementAttributesNamespacedJsonDecoder)
-                                , Json.Decode.map ReplacementDomElementEventListens
-                                    (Json.Decode.field "eventListens" (Json.Decode.dict defaultActionHandlingJsonDecoder))
-                                ]
-                            )
-                        )
-                )
-            )
-        , Json.Decode.map AddHttpRequest
-            (Json.Decode.field "addHttpRequest" httpRequestIdJsonDecoder)
-        , Json.Decode.map (\() -> AddWindowSizeRequest)
-            (Json.Decode.field "addWindowSizeRequest" (Json.Decode.null ()))
-        , Json.Decode.map AddWindowEventListen
-            (Json.Decode.field "addWindowEventListen" Json.Decode.string)
-        , Json.Decode.map (\() -> AddWindowAnimationFrameListen)
-            (Json.Decode.field "addWindowAnimationFrameListen" (Json.Decode.null ()))
-        , Json.Decode.map (\() -> AddNavigationUrlRequest)
-            (Json.Decode.field "addNavigationUrlRequest" (Json.Decode.null ()))
-        , Json.Decode.map AddDocumentEventListen
-            (Json.Decode.field "addDocumentEventListen" Json.Decode.string)
-        , Json.Decode.map AddAudioSourceLoad
-            (Json.Decode.field "addAudioSourceLoad" Json.Decode.string)
-        , Json.Decode.map AddSocketConnect
-            (Json.Decode.field "addSocketConnect"
-                (Json.Decode.map (\address -> { address = address })
-                    (Json.Decode.field "address" Json.Decode.string)
-                )
-            )
-        , Json.Decode.map AddSocketDisconnectListen
-            (Json.Decode.field "addSocketDisconnectListen" socketIdJsonDecoder)
-        , Json.Decode.map AddSocketMessageListen
-            (Json.Decode.field "addSocketMessageListen" socketIdJsonDecoder)
-        ]
-
-
-httpRequestIdJsonDecoder : Json.Decode.Decoder HttpRequestId
-httpRequestIdJsonDecoder =
-    headersJsonDecoder
-        |> Json.Decode.andThen
-            (\headers ->
-                Json.Decode.succeed
-                    (\url method expect body timeout ->
-                        { url = url
-                        , method = method
-                        , headers = headers
-                        , expect = expect
-                        , body = body
-                        , timeout = timeout
-                        }
-                    )
-                    |> Json.Decode.Local.andMap (Json.Decode.field "url" Json.Decode.string)
-                    |> Json.Decode.Local.andMap (Json.Decode.field "method" Json.Decode.string)
-                    |> Json.Decode.Local.andMap (Json.Decode.field "expect" httpExpectIdJsonDecoder)
-                    |> Json.Decode.Local.andMap
-                        (Json.Decode.field "body"
-                            (headers
-                                |> listFirstJust
-                                    (\( name, value ) ->
-                                        case name of
-                                            "Content-Type" ->
-                                                value |> Just
-
-                                            _ ->
-                                                Nothing
-                                    )
-                                |> Maybe.map
-                                    (\mimeType ->
-                                        Json.Decode.succeed (\content -> HttpBodyString { mimeType = mimeType, content = content })
-                                            |> Json.Decode.Local.andMap Json.Decode.string
-                                    )
-                                |> Maybe.withDefault (HttpBodyEmpty |> Json.Decode.null)
-                            )
-                        )
-                    |> Json.Decode.Local.andMap (Json.Decode.field "timeout" httpTimeoutJsonDecoder)
-            )
-
-
-httpTimeoutJsonDecoder : Json.Decode.Decoder (Maybe Int)
-httpTimeoutJsonDecoder =
-    Json.Decode.nullable Json.Decode.int
-
-
-httpExpectIdJsonDecoder : Json.Decode.Decoder HttpExpectId
-httpExpectIdJsonDecoder =
-    Json.Decode.oneOf
-        [ Json.Decode.map (\() -> IdHttpExpectString) (jsonDecodeStringOnly "STRING")
-        , Json.Decode.map (\() -> IdHttpExpectWhatever) (jsonDecodeStringOnly "WHATEVER")
-        ]
-
-
-jsonDecodeStringOnly : String -> Json.Decode.Decoder ()
-jsonDecodeStringOnly constant =
-    Json.Decode.string
-        |> Json.Decode.andThen
-            (\string ->
-                if string == constant then
-                    () |> Json.Decode.succeed
-
-                else
-                    Json.Decode.fail ("not " ++ constant)
-            )
-
-
-headersJsonDecoder : Json.Decode.Decoder (List HttpHeader)
-headersJsonDecoder =
-    Json.Decode.list headerJsonDecoder
-
-
-headerJsonDecoder : Json.Decode.Decoder HttpHeader
-headerJsonDecoder =
-    Json.Decode.succeed (\name value -> ( name, value ))
-        |> Json.Decode.Local.andMap (Json.Decode.index 0 Json.Decode.string)
-        |> Json.Decode.Local.andMap (Json.Decode.index 1 Json.Decode.string)
-
-
 eventDataAndConstructStateJsonDecoder : InterfaceWithFutureDiff -> InterfaceSingleWithFuture state -> Maybe (Json.Decode.Decoder state)
 eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
     case interface of
         TimePosixRequest requestTimeNow ->
             case interfaceAddDiff of
                 AddTimePosixRequest ->
-                    Json.Decode.succeed requestTimeNow
-                        |> Json.Decode.Local.andMap (Json.Decode.map Time.millisToPosix Json.Decode.int)
+                    Json.Decode.map requestTimeNow timePosixJsonCodec.jsonDecoder
                         |> Just
 
                 _ ->
@@ -2057,8 +2106,7 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
         TimezoneOffsetRequest requestTimezoneOffset ->
             case interfaceAddDiff of
                 AddTimezoneOffsetRequest ->
-                    Json.Decode.succeed requestTimezoneOffset
-                        |> Json.Decode.Local.andMap Json.Decode.int
+                    Json.Decode.map requestTimezoneOffset Json.Decode.int
                         |> Just
 
                 _ ->
@@ -2067,13 +2115,12 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
         TimezoneNameRequest requestTimezoneName ->
             case interfaceAddDiff of
                 AddTimezoneNameRequest ->
-                    Json.Decode.succeed requestTimezoneName
-                        |> Json.Decode.Local.andMap
-                            (Json.Decode.oneOf
-                                [ Json.Decode.map Time.Offset Json.Decode.int
-                                , Json.Decode.map Time.Name Json.Decode.string
-                                ]
-                            )
+                    Json.Decode.map requestTimezoneName
+                        (Json.Decode.oneOf
+                            [ Json.Decode.map Time.Offset Json.Decode.int
+                            , Json.Decode.map Time.Name Json.Decode.string
+                            ]
+                        )
                         |> Just
 
                 _ ->
@@ -2086,9 +2133,8 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
                         timePeriodicallyListen.intervalDurationMilliSeconds
                             == diffIntervalDuration.milliSeconds
                     then
-                        Json.Decode.succeed timePeriodicallyListen.on
-                            |> Json.Decode.Local.andMap
-                                (Json.Decode.map Time.millisToPosix Json.Decode.int)
+                        Json.Decode.map timePeriodicallyListen.on
+                            timePosixJsonCodec.jsonDecoder
                             |> Just
 
                     else
@@ -2101,9 +2147,8 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
             case interfaceAddDiff of
                 AddRandomUnsignedInt32sRequest diffCount ->
                     if randomUnsignedInt32sRequest.count == diffCount then
-                        Json.Decode.succeed randomUnsignedInt32sRequest.on
-                            |> Json.Decode.Local.andMap
-                                (Json.Decode.list Json.Decode.int)
+                        Json.Decode.map randomUnsignedInt32sRequest.on
+                            (Json.Decode.list Json.Decode.int)
                             |> Just
 
                     else
@@ -2115,11 +2160,10 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
         DomNodeRender domElementToRender ->
             case interfaceAddDiff of
                 AddEditDom domEditDiff ->
-                    (Json.Decode.succeed (\innerPath name event -> { innerPath = innerPath, name = name, event = event })
-                        |> Json.Decode.Local.andMap (Json.Decode.field "innerPath" (Json.Decode.list Json.Decode.int))
-                        |> Json.Decode.Local.andMap (Json.Decode.field "name" Json.Decode.string)
-                        |> Json.Decode.Local.andMap
-                            (Json.Decode.field "event" Json.Decode.value)
+                    (Json.Decode.map3 (\innerPath name event -> { innerPath = innerPath, name = name, event = event })
+                        (Json.Decode.field "innerPath" (Json.Decode.list Json.Decode.int))
+                        (Json.Decode.field "name" Json.Decode.string)
+                        (Json.Decode.field "event" Json.Decode.value)
                         |> Json.Decode.andThen
                             (\specificEvent ->
                                 case domElementToRender |> domElementAtReversePath ((specificEvent.innerPath ++ domEditDiff.path) |> List.reverse) of
@@ -2163,9 +2207,9 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
         WindowSizeRequest toState ->
             case interfaceAddDiff of
                 AddWindowSizeRequest ->
-                    Json.Decode.succeed (\width height -> toState { width = width, height = height })
-                        |> Json.Decode.Local.andMap (Json.Decode.field "width" Json.Decode.int)
-                        |> Json.Decode.Local.andMap (Json.Decode.field "height" Json.Decode.int)
+                    Json.Decode.map2 (\width height -> toState { width = width, height = height })
+                        (Json.Decode.field "width" Json.Decode.int)
+                        (Json.Decode.field "height" Json.Decode.int)
                         |> Just
 
                 _ ->
@@ -2196,16 +2240,8 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
         NavigationUrlRequest toState ->
             case interfaceAddDiff of
                 AddNavigationUrlRequest ->
-                    Json.Decode.andThen
-                        (\urlString ->
-                            case urlString |> Url.fromString of
-                                Nothing ->
-                                    "invalid URL" |> Json.Decode.fail
-
-                                Just url ->
-                                    url |> AppUrl.fromUrl |> toState |> Json.Decode.succeed
-                        )
-                        Json.Decode.string
+                    urlJsonDecoder
+                        |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toState)
                         |> Just
 
                 _ ->
@@ -2273,7 +2309,7 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
             case interfaceAddDiff of
                 AddSocketConnect addConnect ->
                     if addConnect.address == connect.address then
-                        socketIdJsonDecoder
+                        socketIdJsonCodec.jsonDecoder
                             |> Json.Decode.map connect.on
                             |> Just
 
@@ -2312,6 +2348,75 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
 
                 _ ->
                     Nothing
+
+        LocalStorageRequest request ->
+            case interfaceAddDiff of
+                AddLocalStorageRequest addRequest ->
+                    if request.key == addRequest.key then
+                        Json.Decode.nullable Json.Decode.string
+                            |> Json.Decode.map request.on
+                            |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        LocalStorageRemoveOnADifferentTabListen listen ->
+            case interfaceAddDiff of
+                AddLocalStorageRemoveOnADifferentTabListen addListen ->
+                    if listen.key == addListen.key then
+                        urlJsonDecoder
+                            |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
+                            |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        LocalStorageSetOnADifferentTabListen listen ->
+            case interfaceAddDiff of
+                AddLocalStorageSetOnADifferentTabListen addListen ->
+                    if listen.key == addListen.key then
+                        Json.Decode.map3
+                            (\appUrl oldValue newValue ->
+                                { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
+                            )
+                            (Json.Decode.field "url"
+                                (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
+                            )
+                            (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
+                            (Json.Decode.field "newValue" Json.Decode.string)
+                            |> Json.Decode.map listen.on
+                            |> Just
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+
+timePosixJsonCodec : JsonCodec Time.Posix
+timePosixJsonCodec =
+    Json.Codec.map Time.millisToPosix Time.posixToMillis Json.Codec.int
+
+
+urlJsonDecoder : Json.Decode.Decoder Url
+urlJsonDecoder =
+    Json.Decode.andThen
+        (\urlString ->
+            case urlString |> Url.fromString of
+                Nothing ->
+                    "invalid URL" |> Json.Decode.fail
+
+                Just url ->
+                    url |> Json.Decode.succeed
+        )
+        Json.Decode.string
 
 
 domElementAtReversePath : List Int -> (DomNode future -> Maybe (DomNode future))
@@ -2384,7 +2489,7 @@ httpExpectJsonDecoder expect =
 
 httpMetadataJsonDecoder : Json.Decode.Decoder HttpMetadata
 httpMetadataJsonDecoder =
-    Json.Decode.succeed
+    Json.Decode.map4
         (\url statusCode statusText headers ->
             { url = url
             , statusCode = statusCode
@@ -2392,10 +2497,10 @@ httpMetadataJsonDecoder =
             , headers = headers
             }
         )
-        |> Json.Decode.Local.andMap (Json.Decode.field "url" Json.Decode.string)
-        |> Json.Decode.Local.andMap (Json.Decode.field "statusCode" Json.Decode.int)
-        |> Json.Decode.Local.andMap (Json.Decode.field "statusText" Json.Decode.string)
-        |> Json.Decode.Local.andMap (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
+        (Json.Decode.field "url" Json.Decode.string)
+        (Json.Decode.field "statusCode" Json.Decode.int)
+        (Json.Decode.field "statusText" Json.Decode.string)
+        (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
 
 
 httpErrorJsonDecoder : HttpRequest future_ -> Json.Decode.Decoder HttpError
@@ -2440,9 +2545,9 @@ httpNetworkErrorCodes =
     Set.fromList [ "EAGAIN", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "UND_ERR", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_OVERFLOW", "UND_ERR_BODY_TIMEOUT", "UND_ERR_RESPONSE_STATUS_CODE", "UND_ERR_INVALID_ARG", "UND_ERR_INVALID_RETURN_VALUE", "UND_ERR_ABORTED", "UND_ERR_DESTROYED", "UND_ERR_CLOSED", "UND_ERR_SOCKET", "UND_ERR_NOT_SUPPORTED", "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH", "UND_ERR_RES_CONTENT_LENGTH_MISMATCH", "UND_ERR_INFO", "UND_ERR_RES_EXCEEDED_MAX_SIZE" ]
 
 
-domElementIdJsonDecoder : Json.Decode.Decoder DomElementId
-domElementIdJsonDecoder =
-    Json.Decode.succeed
+domElementIdJsonCodec : JsonCodec DomElementId
+domElementIdJsonCodec =
+    Json.Codec.record
         (\namespace tag styles attributes attributesNamespaced eventListens subs ->
             { namespace = namespace
             , tag = tag
@@ -2453,18 +2558,15 @@ domElementIdJsonDecoder =
             , subs = subs
             }
         )
-        |> Json.Decode.Local.andMap (Json.Decode.field "namespace" (Json.Decode.nullable Json.Decode.string))
-        |> Json.Decode.Local.andMap (Json.Decode.field "tag" Json.Decode.string)
-        |> Json.Decode.Local.andMap (Json.Decode.field "styles" (Json.Decode.dict Json.Decode.string))
-        |> Json.Decode.Local.andMap (Json.Decode.field "attributes" (Json.Decode.dict Json.Decode.string))
-        |> Json.Decode.Local.andMap
-            (Json.Decode.field "attributesNamespaced" domElementAttributesNamespacedJsonDecoder)
-        |> Json.Decode.Local.andMap
-            (Json.Decode.field "eventListens"
-                (Json.Decode.dict defaultActionHandlingJsonDecoder)
-            )
-        |> Json.Decode.Local.andMap
-            (Json.Decode.field "subs" (Json.Decode.array domNodeIdJsonDecoder))
+        |> Json.Codec.field ( .namespace, "namespace" ) (Json.Codec.nullable Json.Codec.string)
+        |> Json.Codec.field ( .tag, "tag" ) Json.Codec.string
+        |> Json.Codec.field ( .styles, "styles" ) domElementStylesJsonCodec
+        |> Json.Codec.field ( .attributes, "attributes" ) domElementAttributesJsonCodec
+        |> Json.Codec.field ( .attributesNamespaced, "attributesNamespaced" ) domElementAttributesNamespacedJsonCodec
+        |> Json.Codec.field ( .eventListens, "eventListens" )
+            domElementEventListensJsonCodec
+        |> Json.Codec.field ( .subs, "subs" ) (Json.Codec.array domNodeIdJsonCodec)
+        |> Json.Codec.recordFinish
 
 
 {-| The "update" part for an embedded program
@@ -2522,29 +2624,6 @@ programUpdate appConfig =
                         |> Cmd.batch
                         |> Cmd.map never
                     )
-
-
-domElementIdToJson : DomElementId -> Json.Encode.Value
-domElementIdToJson =
-    \domElementId ->
-        Json.Encode.object
-            [ ( "namespace"
-              , case domElementId.namespace of
-                    Nothing ->
-                        Json.Encode.null
-
-                    Just namespace ->
-                        namespace |> Json.Encode.string
-              )
-            , ( "tag", domElementId.tag |> Json.Encode.string )
-            , ( "styles", domElementId.styles |> Json.Encode.dict identity Json.Encode.string )
-            , ( "attributes", domElementId.attributes |> Json.Encode.dict identity Json.Encode.string )
-            , ( "attributesNamespaced"
-              , domElementId.attributesNamespaced |> domElementAttributesNamespacedToJson
-              )
-            , ( "eventListens", domElementId.eventListens |> Json.Encode.dict identity defaultActionHandlingToJson )
-            , ( "subs", domElementId.subs |> Json.Encode.array domNodeIdToJson )
-            ]
 
 
 {-| A Request can fail in a couple ways:
@@ -2611,6 +2690,8 @@ type InterfaceWithoutFutureDiff
     | RemoveSocketConnect { address : String }
     | RemoveSocketDisconnectListen SocketId
     | RemoveSocketMessageListen SocketId
+    | RemoveLocalStorageRemoveOnADifferentTabListen { key : String }
+    | RemoveLocalStorageSetOnADifferentTabListen { key : String }
 
 
 {-| Actions that will notify elm some time in the future
@@ -2633,6 +2714,9 @@ type InterfaceWithFutureDiff
     | AddSocketConnect { address : String }
     | AddSocketDisconnectListen SocketId
     | AddSocketMessageListen SocketId
+    | AddLocalStorageRequest { key : String }
+    | AddLocalStorageRemoveOnADifferentTabListen { key : String }
+    | AddLocalStorageSetOnADifferentTabListen { key : String }
 
 
 {-| What parts of an [`Audio`](#Audio) are replaced

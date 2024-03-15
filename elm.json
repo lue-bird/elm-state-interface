@@ -18,7 +18,8 @@
         "Web.Clipboard",
         "Web.Audio",
         "Web.Audio.Parameter",
-        "Web.Socket"
+        "Web.Socket",
+        "Web.LocalStorage"
     ],
     "elm-version": "0.19.1 <= v < 20.0.0",
     "dependencies": {

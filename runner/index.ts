@@ -33,6 +33,17 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 console.warn("trying to send messages on closed socket")
             }
         },
+        "addLocalStorageSet": (config: { key: string, value: string | null }) => {
+            try {
+                if (config.value === null) {
+                    window.localStorage.removeItem(config.key)
+                } else {
+                    window.localStorage.setItem(config.key, config.value)
+                }
+            } catch (disallowedByUserOrQuotaExceeded) {
+                console.warn(disallowedByUserOrQuotaExceeded)
+            }
+        },
         "addEditAudio": editAudio,
         "removeTimePeriodicallyListen": removeTimePeriodicallyListen,
         "removeDom": (_config: null) => { appConfig.domElement.replaceChildren() },
@@ -65,6 +76,14 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             if (socketToListenToMessagesFrom) {
                 socketToListenToMessagesFrom.onmessage = null
             } else { } // already removed
+        },
+        "removeLocalStorageRemoveOnADifferentTabListen": (config: { key: string }) => {
+            localStorageRemoveOnADifferentTabListenAbortControllers[config.key]?.abort()
+            delete localStorageRemoveOnADifferentTabListenAbortControllers[config.key]
+        },
+        "removeLocalStorageSetOnADifferentTabListen": (config: { key: string }) => {
+            localStorageSetOnADifferentTabListenAbortControllers[config.key]?.abort()
+            delete localStorageSetOnADifferentTabListenAbortControllers[config.key]
         }
     }
     const interfaceWithSendToElmImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
@@ -132,6 +151,35 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             } else {
                 console.warn("trying to listen to messages on closed socket")
             }
+        },
+        "addLocalStorageRequest": (config: { key: string }, sendToElm) => {
+            sendToElm(window.localStorage.getItem(config.key))
+        },
+        "addLocalStorageRemoveOnADifferentTabListen": (config: { key: string }, sendToElm) => {
+            const abortController = new AbortController()
+            window.addEventListener(
+                "storage",
+                storageEvent => {
+                    if (storageEvent.key === config.key && storageEvent.newValue === null) {
+                        sendToElm(storageEvent.url)
+                    }
+                },
+                { signal: abortController.signal }
+            )
+            localStorageRemoveOnADifferentTabListenAbortControllers[config.key] = abortController
+        },
+        "addLocalStorageSetOnADifferentTabListen": (config: { key: string }, sendToElm) => {
+            const abortController = new AbortController()
+            window.addEventListener(
+                "storage",
+                storageEvent => {
+                    if (storageEvent.key === config.key && storageEvent.newValue !== null) {
+                        sendToElm({ url: storageEvent.url, oldValue: storageEvent.oldValue, newValue: storageEvent.newValue })
+                    }
+                },
+                { signal: abortController.signal }
+            )
+            localStorageSetOnADifferentTabListenAbortControllers[config.key] = abortController
         }
     }
 
@@ -195,7 +243,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
 
 let sockets: (WebSocket | undefined)[] = []
 
-let eventListenerAbortControllers: { domElement: Element, abortController: AbortController }[] = []
+let localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
+let localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
+let domListenAbortControllers: { domElement: Element, abortController: AbortController }[] = []
+
+
 function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replacement: any, path: number[], sendToElm: (v: any) => void) {
     if (replacement?.styles) {
         domNodeToEdit.removeAttribute("style")
@@ -215,7 +267,7 @@ function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replac
         }
         domElementAddAttributesNamespaced(domNodeToEdit, replacement.attributesNamespaced)
     } else if (replacement?.eventListens) {
-        eventListenerAbortControllers = eventListenerAbortControllers
+        domListenAbortControllers = domListenAbortControllers
             .filter(eventListener => {
                 if (eventListener.domElement === domNodeToEdit) {
                     eventListener.abortController.abort()
@@ -277,29 +329,29 @@ function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => vo
         return createdDomElement
     }
 }
-function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles: any) {
-    for (let [styleKey, styleValue] of Object.entries(styles)) {
-        domElement.style.setProperty(styleKey, styleValue as string)
-    }
+function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles: { key: string, value: string }[]) {
+    styles.forEach(styleSingle => {
+        domElement.style.setProperty(styleSingle.key, styleSingle.value)
+    })
 }
-function domElementAddAttributes(domElement: Element, attributes: { [key: string]: string }) {
-    for (let [attributeKey, attributeValue] of Object.entries(attributes)) {
-        if (RE_js_html.test(attributeValue)) {
+function domElementAddAttributes(domElement: Element, attributes: { key: string, value: string }[]) {
+    attributes.forEach(attribute => {
+        if (RE_js_html.test(attribute.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
-        } else if (attributeKey === "src" && RE_js_html.test(attributeValue)) {
+        } else if (attribute.key === "src" && RE_js_html.test(attribute.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
-        } else if (attributeKey === "action" || attributeKey === "href" && RE_js.test(attributeValue)) {
+        } else if (attribute.key === "action" || attribute.key === "href" && RE_js.test(attribute.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
         } else {
             domElement.setAttribute(
-                noOnOrFormAction(attributeKey),
-                attributeValue
+                noOnOrFormAction(attribute.key),
+                attribute.value
             )
         }
-    }
+    })
 }
-function domElementAddAttributesNamespaced(domElement: Element, attributesNamespaced: any) {
-    attributesNamespaced.forEach((attributeNamespaced: { namespace: string, key: string, value: string }) => {
+function domElementAddAttributesNamespaced(domElement: Element, attributesNamespaced: { namespace: string, key: string, value: string }[]) {
+    attributesNamespaced.forEach(attributeNamespaced => {
         domElement.setAttributeNS(attributeNamespaced.namespace, attributeNamespaced.key, attributeNamespaced.value)
     })
 }
@@ -316,7 +368,7 @@ function domElementAddEventListens(domElement: Element, eventListens: any, path:
             },
             { signal: abortController.signal }
         )
-        eventListenerAbortControllers.push({ domElement: domElement, abortController: abortController })
+        domListenAbortControllers.push({ domElement: domElement, abortController: abortController })
     }
 }
 
@@ -420,12 +472,12 @@ function fileDownloadBytes(config: { mimeType: string, name: string, content: nu
 interface HttpRequest {
     url: string
     method: string
-    headers: [name: string, value: string][]
+    headers: { name: string, value: string }[]
     expect: Expect
     timeout: number | null
     body: string | null
 }
-type Expect = "STRING" | "WHATEVER"
+type Expect = "string" | "whatever"
 
 type HttpResponse = { ok: ResponseSuccess } | { err: any }
 interface ResponseSuccess {
@@ -443,13 +495,13 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
     return fetch(request.url, {
         method: request.method,
         body: request.body || null,
-        headers: new Headers(request.headers),
+        headers: new Headers(request.headers.map(header => [header.name, header.value])),
         signal: abortController.signal,
     })
         .then((res: Response) => {
             const headers = Object.fromEntries(res.headers.entries())
             switch (request.expect) {
-                case "STRING": {
+                case "string":
                     return res.text().then((x) => ({
                         ok: {
                             url: res.url,
@@ -459,8 +511,7 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
                             body: x || null,
                         }
                     }))
-                }
-                case "WHATEVER": {
+                case "whatever":
                     return {
                         ok: {
                             url: res.url,
@@ -470,7 +521,6 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
                             body: null,
                         }
                     }
-                }
             }
         })
         .catch((e) => { return { err: e } })
