@@ -21,6 +21,7 @@ import Web
 eventListen : String -> Web.Interface Json.Decode.Value
 eventListen eventName =
     Web.WindowEventListen { eventName = eventName, on = Json.Decode.value }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 
@@ -48,6 +49,7 @@ resizeListen =
                     (Json.Decode.field "innerHeight" Json.Decode.int)
                 )
         }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 
@@ -69,5 +71,6 @@ Note: uses [`window.requestAnimationFrame`](https://developer.mozilla.org/en-US/
 animationFrameListen : Web.Interface Time.Posix
 animationFrameListen =
     Web.WindowAnimationFrameListen identity
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton

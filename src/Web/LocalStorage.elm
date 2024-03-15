@@ -91,6 +91,7 @@ when the local storage on a different tab with the same url origin is removed.
 removeOnADifferentTabListen : String -> Web.Interface AppUrl
 removeOnADifferentTabListen key =
     Web.LocalStorageRemoveOnADifferentTabListen { key = key, on = identity }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 
@@ -104,5 +105,6 @@ When the `oldValue` is `Nothing`, no entry with that key existed.
 setOnADifferentTabListen : String -> Web.Interface { appUrl : AppUrl, oldValue : Maybe String, newValue : String }
 setOnADifferentTabListen key =
     Web.LocalStorageSetOnADifferentTabListen { key = key, on = identity }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton

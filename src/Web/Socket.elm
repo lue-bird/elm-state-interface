@@ -62,6 +62,7 @@ Make sure to set your state's [`SocketId`](Web#SocketId) back to nothing
 disconnectListen : Web.SocketId -> Web.Interface { code : Int, reason : String }
 disconnectListen id =
     Web.SocketDisconnectListen { id = id, on = identity }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 
@@ -84,5 +85,6 @@ message id data =
 messageListen : Web.SocketId -> Web.Interface String
 messageListen id =
     Web.SocketMessageListen { id = id, on = identity }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton

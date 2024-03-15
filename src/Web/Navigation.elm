@@ -158,5 +158,6 @@ movementListen =
                     ]
                 )
         }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton

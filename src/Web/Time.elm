@@ -68,5 +68,6 @@ periodicallyListen intervalDuration =
         { intervalDurationMilliSeconds = intervalDuration |> Duration.inMilliseconds |> Basics.round
         , on = identity
         }
+        |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton
