@@ -2066,7 +2066,7 @@ programSubscriptions appConfig =
                                                 Nothing
 
                                             InterfaceWithFuture withFuture ->
-                                                eventDataAndConstructStateJsonDecoder interfaceDiff withFuture
+                                                interfaceFutureJsonDecoder interfaceDiff withFuture
                                     )
                         of
                             Just eventDataDecoderToConstructedEvent ->
@@ -2104,8 +2104,8 @@ urlJsonDecoder =
         Json.Decode.string
 
 
-eventDataAndConstructStateJsonDecoder : InterfaceWithFutureDiff -> InterfaceSingleWithFuture state -> Maybe (Json.Decode.Decoder state)
-eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
+interfaceFutureJsonDecoder : InterfaceWithFutureDiff -> InterfaceSingleWithFuture state -> Maybe (Json.Decode.Decoder state)
+interfaceFutureJsonDecoder interfaceAddDiff interface =
     case interface of
         TimePosixRequest requestTimeNow ->
             case interfaceAddDiff of
@@ -2297,132 +2297,59 @@ eventDataAndConstructStateJsonDecoder interfaceAddDiff interface =
 
         Listen listen ->
             case interfaceAddDiff of
-                AddListen addListen ->
-                    listen |> listenEventDataAndConstructStateJsonDecoder addListen
+                AddListen addListenId ->
+                    if (listen |> interfaceSingleListenToId) == addListenId then
+                        listen |> listenFutureJsonDecoder |> Just
+
+                    else
+                        Nothing
 
                 _ ->
                     Nothing
 
 
-listenEventDataAndConstructStateJsonDecoder : InterfaceSingleListenId -> InterfaceSingleListen future -> Maybe (Json.Decode.Decoder future)
-listenEventDataAndConstructStateJsonDecoder interfaceAddDiff interfaceSingleListen =
+listenFutureJsonDecoder : InterfaceSingleListen future -> Json.Decode.Decoder future
+listenFutureJsonDecoder interfaceSingleListen =
     case interfaceSingleListen of
         WindowEventListen listen ->
-            case interfaceAddDiff of
-                IdWindowEventListen addedEventName ->
-                    if addedEventName == listen.eventName then
-                        listen.on |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            listen.on
 
         WindowAnimationFrameListen toState ->
-            case interfaceAddDiff of
-                IdWindowAnimationFrameListen ->
-                    Json.Decode.map Time.millisToPosix Json.Decode.int
-                        |> Json.Decode.map toState
-                        |> Just
-
-                _ ->
-                    Nothing
+            timePosixJsonCodec.jsonDecoder
+                |> Json.Decode.map toState
 
         DocumentEventListen listen ->
-            case interfaceAddDiff of
-                IdDocumentEventListen addedEventName ->
-                    if addedEventName == listen.eventName then
-                        listen.on |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            listen.on
 
         TimePeriodicallyListen timePeriodicallyListen ->
-            case interfaceAddDiff of
-                IdTimePeriodicallyListen diffIntervalDuration ->
-                    if
-                        timePeriodicallyListen.intervalDurationMilliSeconds
-                            == diffIntervalDuration.milliSeconds
-                    then
-                        Json.Decode.map timePeriodicallyListen.on
-                            timePosixJsonCodec.jsonDecoder
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            Json.Decode.map timePeriodicallyListen.on
+                timePosixJsonCodec.jsonDecoder
 
         LocalStorageSetOnADifferentTabListen listen ->
-            case interfaceAddDiff of
-                IdLocalStorageSetOnADifferentTabListen addListen ->
-                    if listen.key == addListen.key then
-                        Json.Decode.map3
-                            (\appUrl oldValue newValue ->
-                                { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
-                            )
-                            (Json.Decode.field "url"
-                                (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
-                            )
-                            (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
-                            (Json.Decode.field "newValue" Json.Decode.string)
-                            |> Json.Decode.map listen.on
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            Json.Decode.map3
+                (\appUrl oldValue newValue ->
+                    { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
+                )
+                (Json.Decode.field "url"
+                    (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
+                )
+                (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
+                (Json.Decode.field "newValue" Json.Decode.string)
+                |> Json.Decode.map listen.on
 
         LocalStorageRemoveOnADifferentTabListen listen ->
-            case interfaceAddDiff of
-                IdLocalStorageRemoveOnADifferentTabListen addListen ->
-                    if listen.key == addListen.key then
-                        urlJsonDecoder
-                            |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            urlJsonDecoder
+                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
 
         SocketDisconnectListen disconnectListen ->
-            case interfaceAddDiff of
-                IdSocketDisconnectListen addId ->
-                    if addId == disconnectListen.id then
-                        Json.Decode.map2 (\code reason -> { code = code, reason = reason })
-                            (Json.Decode.field "code" Json.Decode.int)
-                            (Json.Decode.field "reason" Json.Decode.string)
-                            |> Json.Decode.map disconnectListen.on
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            Json.Decode.map2 (\code reason -> { code = code, reason = reason })
+                (Json.Decode.field "code" Json.Decode.int)
+                (Json.Decode.field "reason" Json.Decode.string)
+                |> Json.Decode.map disconnectListen.on
 
         SocketMessageListen messageListen ->
-            case interfaceAddDiff of
-                IdSocketMessageListen addId ->
-                    if addId == messageListen.id then
-                        Json.Decode.string
-                            |> Json.Decode.map messageListen.on
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            Json.Decode.string
+                |> Json.Decode.map messageListen.on
 
 
 domElementAtReversePath : List Int -> (DomNode future -> Maybe (DomNode future))
