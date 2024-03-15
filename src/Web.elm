@@ -8,10 +8,10 @@ module Web exposing
     , SocketId(..)
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
-    , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..)
+    , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..)
     , InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
     , InterfaceSingleKeys, InterfaceSingleIdOrderTag
-    , InterfaceSingleId(..), InterfaceSingleWithFutureId(..), InterfaceSingleListenId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
+    , InterfaceSingleId(..), InterfaceSingleWithFutureId(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program running in the browser
@@ -65,10 +65,10 @@ If you just want to replace a part of your elm app with this architecture. Make 
 ## internals, safe to ignore for users
 
 @docs ProgramState, ProgramEvent
-@docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleListen, InterfaceSingleWithoutFuture
+@docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture
 @docs InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff
 @docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
-@docs InterfaceSingleId, InterfaceSingleWithFutureId, InterfaceSingleListenId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
+@docs InterfaceSingleId, InterfaceSingleWithFutureId, InterfaceSingleRequestId, InterfaceSingleListenId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
 -}
 
@@ -210,19 +210,25 @@ type AudioSourceLoadError
 {-| An [`InterfaceSingle`](#InterfaceSingle) that will notify elm some time in the future.
 -}
 type InterfaceSingleWithFuture future
+    = DomNodeRender (DomNode future)
+    | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
+    | SocketConnect { address : String, on : SocketId -> future }
+    | Request (InterfaceSingleRequest future)
+    | Listen (InterfaceSingleListen future)
+
+
+{-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will elm only once in the future.
+-}
+type InterfaceSingleRequest future
     = TimePosixRequest (Time.Posix -> future)
     | TimezoneOffsetRequest (Int -> future)
     | TimezoneNameRequest (Time.ZoneName -> future)
     | RandomUnsignedInt32sRequest { count : Int, on : List Int -> future }
-    | DomNodeRender (DomNode future)
-    | HttpRequest (HttpRequest future)
     | WindowSizeRequest ({ width : Int, height : Int } -> future)
     | NavigationUrlRequest (AppUrl -> future)
+    | HttpRequest (HttpRequest future)
     | ClipboardRequest (String -> future)
-    | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
-    | SocketConnect { address : String, on : SocketId -> future }
     | LocalStorageRequest { key : String, on : Maybe String -> future }
-    | Listen (InterfaceSingleListen future)
 
 
 {-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will possibly notify elm multiple times in the future.
@@ -355,19 +361,26 @@ type InterfaceSingleId
 {-| Safe to ignore. Identifier for an [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture)
 -}
 type InterfaceSingleWithFutureId
+    = IdDomNodeRender
+    | IdAudioSourceLoad String
+    | IdSocketConnect { address : String }
+    | IdRequest InterfaceSingleRequestId
+    | IdListen InterfaceSingleListenId
+
+
+{-| Safe to ignore. Possible identifier for an interface single that can send back values to elm
+only once in the future
+-}
+type InterfaceSingleRequestId
     = IdTimePosixRequest
     | IdTimezoneOffsetRequest
     | IdTimezoneNameRequest
     | IdRandomUnsignedInt32sRequest Int
-    | IdDomNodeRender
-    | IdHttpRequest HttpRequestId
     | IdWindowSizeRequest
     | IdNavigationUrlRequest
+    | IdHttpRequest HttpRequestId
     | IdClipboardRequest
-    | IdAudioSourceLoad String
-    | IdSocketConnect { address : String }
     | IdLocalStorageRequest { key : String }
-    | IdListen InterfaceSingleListenId
 
 
 {-| Safe to ignore. Possible identifier for an interface single that can send back values to elm
@@ -526,6 +539,47 @@ interfaceWithFutureMap : (future -> mappedFuture) -> (InterfaceSingleWithFuture 
 interfaceWithFutureMap futureChange =
     \interface ->
         case interface of
+            DomNodeRender domElementToRender ->
+                domElementToRender |> domNodeFutureMap futureChange |> DomNodeRender
+
+            AudioSourceLoad load ->
+                { url = load.url, on = \event -> load.on event |> futureChange }
+                    |> AudioSourceLoad
+
+            SocketConnect connect ->
+                { address = connect.address, on = \event -> event |> connect.on |> futureChange }
+                    |> SocketConnect
+
+            Request request ->
+                request |> interfaceRequestFutureMap futureChange |> Request
+
+            Listen listen ->
+                listen |> interfaceListenFutureMap futureChange |> Listen
+
+
+interfaceRequestFutureMap : (future -> mappedFuture) -> (InterfaceSingleRequest future -> InterfaceSingleRequest mappedFuture)
+interfaceRequestFutureMap futureChange =
+    \interfaceSingleRequest ->
+        case interfaceSingleRequest of
+            LocalStorageRequest request ->
+                { key = request.key, on = \event -> event |> request.on |> futureChange }
+                    |> LocalStorageRequest
+
+            HttpRequest httpRequest ->
+                httpRequest
+                    |> httpRequestMap futureChange
+                    |> HttpRequest
+
+            WindowSizeRequest toState ->
+                (\event -> toState event |> futureChange)
+                    |> WindowSizeRequest
+
+            NavigationUrlRequest toState ->
+                (\event -> toState event |> futureChange) |> NavigationUrlRequest
+
+            ClipboardRequest toState ->
+                (\event -> toState event |> futureChange) |> ClipboardRequest
+
             TimePosixRequest requestTimeNow ->
                 (\event -> requestTimeNow event |> futureChange)
                     |> TimePosixRequest
@@ -544,41 +598,26 @@ interfaceWithFutureMap futureChange =
                 }
                     |> RandomUnsignedInt32sRequest
 
-            DomNodeRender domElementToRender ->
-                domElementToRender |> domNodeFutureMap futureChange |> DomNodeRender
 
-            HttpRequest httpRequest ->
-                httpRequest
-                    |> httpRequestMap futureChange
-                    |> HttpRequest
+httpRequestMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
+httpRequestMap futureChange =
+    \httpRequest ->
+        { url = httpRequest.url
+        , method = httpRequest.method
+        , headers = httpRequest.headers
+        , body = httpRequest.body
+        , timeout = httpRequest.timeout
+        , expect =
+            case httpRequest.expect of
+                HttpExpectWhatever expectWhatever ->
+                    (\unit -> expectWhatever unit |> futureChange) |> HttpExpectWhatever
 
-            WindowSizeRequest toState ->
-                (\event -> toState event |> futureChange)
-                    |> WindowSizeRequest
-
-            NavigationUrlRequest toState ->
-                (\event -> toState event |> futureChange) |> NavigationUrlRequest
-
-            ClipboardRequest toState ->
-                (\event -> toState event |> futureChange) |> ClipboardRequest
-
-            AudioSourceLoad load ->
-                { url = load.url, on = \event -> load.on event |> futureChange }
-                    |> AudioSourceLoad
-
-            SocketConnect connect ->
-                { address = connect.address, on = \event -> event |> connect.on |> futureChange }
-                    |> SocketConnect
-
-            LocalStorageRequest request ->
-                { key = request.key, on = \event -> event |> request.on |> futureChange }
-                    |> LocalStorageRequest
-
-            Listen listen ->
-                listen |> interfaceListenFutureMap futureChange |> Listen
+                HttpExpectString expectString ->
+                    (\string -> expectString string |> futureChange) |> HttpExpectString
+        }
 
 
-interfaceListenFutureMap : (future -> mappedFuture) -> InterfaceSingleListen future -> InterfaceSingleListen mappedFuture
+interfaceListenFutureMap : (future -> mappedFuture) -> (InterfaceSingleListen future -> InterfaceSingleListen mappedFuture)
 interfaceListenFutureMap futureChange =
     \interfaceSingleListen ->
         case interfaceSingleListen of
@@ -614,24 +653,6 @@ interfaceListenFutureMap futureChange =
             LocalStorageSetOnADifferentTabListen listen ->
                 { key = listen.key, on = \event -> event |> listen.on |> futureChange }
                     |> LocalStorageSetOnADifferentTabListen
-
-
-httpRequestMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
-httpRequestMap futureChange =
-    \httpRequest ->
-        { url = httpRequest.url
-        , method = httpRequest.method
-        , headers = httpRequest.headers
-        , body = httpRequest.body
-        , timeout = httpRequest.timeout
-        , expect =
-            case httpRequest.expect of
-                HttpExpectWhatever expectWhatever ->
-                    (\unit -> expectWhatever unit |> futureChange) |> HttpExpectWhatever
-
-                HttpExpectString expectString ->
-                    (\string -> expectString string |> futureChange) |> HttpExpectString
-        }
 
 
 domElementMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
@@ -835,30 +856,7 @@ interfaceSingleToId =
                 interfaceWithoutFuture |> IdInterfaceWithoutFuture
 
             InterfaceWithFuture interfaceWithFuture ->
-                interfaceWithFuture |> interfaceWithFutureToId |> IdInterfaceWithFuture
-
-
-httpRequestToId : HttpRequest future_ -> HttpRequestId
-httpRequestToId =
-    \httpRequest ->
-        { url = httpRequest.url
-        , method = httpRequest.method |> String.toUpper
-        , headers = httpRequest.headers
-        , body = httpRequest.body
-        , expect = httpRequest.expect |> httpExpectToId
-        , timeout = httpRequest.timeout
-        }
-
-
-httpExpectToId : HttpExpect future_ -> HttpExpectId
-httpExpectToId =
-    \httpExpect ->
-        case httpExpect of
-            HttpExpectWhatever _ ->
-                IdHttpExpectWhatever
-
-            HttpExpectString _ ->
-                IdHttpExpectString
+                interfaceWithFuture |> interfaceSingleWithFutureToId |> IdInterfaceWithFuture
 
 
 interfaceSingleListenToId : InterfaceSingleListen future_ -> InterfaceSingleListenId
@@ -891,10 +889,33 @@ interfaceSingleListenToId =
                 IdDocumentEventListen listen.eventName
 
 
-interfaceWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
-interfaceWithFutureToId =
-    \interfaceWithFuture ->
-        case interfaceWithFuture of
+httpRequestToId : HttpRequest future_ -> HttpRequestId
+httpRequestToId =
+    \httpRequest ->
+        { url = httpRequest.url
+        , method = httpRequest.method |> String.toUpper
+        , headers = httpRequest.headers
+        , body = httpRequest.body
+        , expect = httpRequest.expect |> httpExpectToId
+        , timeout = httpRequest.timeout
+        }
+
+
+httpExpectToId : HttpExpect future_ -> HttpExpectId
+httpExpectToId =
+    \httpExpect ->
+        case httpExpect of
+            HttpExpectWhatever _ ->
+                IdHttpExpectWhatever
+
+            HttpExpectString _ ->
+                IdHttpExpectString
+
+
+interfaceSingleRequestToId : InterfaceSingleRequest future_ -> InterfaceSingleRequestId
+interfaceSingleRequestToId =
+    \interfaceSingleRequest ->
+        case interfaceSingleRequest of
             TimePosixRequest _ ->
                 IdTimePosixRequest
 
@@ -906,9 +927,6 @@ interfaceWithFutureToId =
 
             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
                 IdRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count
-
-            DomNodeRender _ ->
-                IdDomNodeRender
 
             HttpRequest httpRequest ->
                 httpRequest |> httpRequestToId |> IdHttpRequest
@@ -922,14 +940,25 @@ interfaceWithFutureToId =
             ClipboardRequest _ ->
                 IdClipboardRequest
 
+            LocalStorageRequest request ->
+                IdLocalStorageRequest { key = request.key }
+
+
+interfaceSingleWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
+interfaceSingleWithFutureToId =
+    \interfaceWithFuture ->
+        case interfaceWithFuture of
+            DomNodeRender _ ->
+                IdDomNodeRender
+
             AudioSourceLoad load ->
                 IdAudioSourceLoad load.url
 
             SocketConnect connect ->
                 IdSocketConnect { address = connect.address }
 
-            LocalStorageRequest request ->
-                IdLocalStorageRequest { key = request.key }
+            Request request ->
+                request |> interfaceSingleRequestToId |> IdRequest
 
             Listen listen ->
                 listen |> interfaceSingleListenToId |> IdListen
@@ -946,10 +975,36 @@ interfaceSingleIdToComparable =
     \interfaceId ->
         case interfaceId of
             IdInterfaceWithoutFuture interfaceWithoutFuture ->
-                interfaceWithoutFuture |> interfaceWithoutFutureToComparable
+                interfaceWithoutFuture |> interfaceSingleWithoutFutureToComparable
 
             IdInterfaceWithFuture idInterfaceWithoutFuture ->
-                idInterfaceWithoutFuture |> idInterfaceWithoutFutureToComparable
+                idInterfaceWithoutFuture |> idInterfaceSingleWithFutureToComparable
+
+
+idInterfaceSingleWithFutureToComparable : InterfaceSingleWithFutureId -> Comparable
+idInterfaceSingleWithFutureToComparable =
+    \idInterfaceWithoutFuture ->
+        case idInterfaceWithoutFuture of
+            IdDomNodeRender ->
+                ComparableString "IdDomNodeRender"
+
+            IdAudioSourceLoad url ->
+                ComparableList
+                    [ ComparableString "IdAudioSourceLoad"
+                    , ComparableString url
+                    ]
+
+            IdSocketConnect connect ->
+                ComparableList
+                    [ ComparableString "IdSocketConnect"
+                    , ComparableString connect.address
+                    ]
+
+            IdRequest request ->
+                request |> interfaceSingleRequestIdToComparable
+
+            IdListen listenId ->
+                listenId |> listenIdToComparable
 
 
 intToComparable : Int -> Comparable
@@ -957,10 +1012,10 @@ intToComparable =
     \int -> int |> String.fromInt |> ComparableString
 
 
-idInterfaceWithoutFutureToComparable : InterfaceSingleWithFutureId -> Comparable
-idInterfaceWithoutFutureToComparable =
-    \idInterfaceWithoutFuture ->
-        case idInterfaceWithoutFuture of
+interfaceSingleRequestIdToComparable : InterfaceSingleRequestId -> Comparable
+interfaceSingleRequestIdToComparable =
+    \interfaceSingleRequestId ->
+        case interfaceSingleRequestId of
             IdTimePosixRequest ->
                 ComparableString "IdTimePosixRequest"
 
@@ -970,17 +1025,17 @@ idInterfaceWithoutFutureToComparable =
             IdTimezoneNameRequest ->
                 ComparableString "IdTimezoneNameRequest"
 
-            IdListen listenId ->
-                listenId |> listenIdToComparable
-
             IdRandomUnsignedInt32sRequest count ->
                 ComparableList
                     [ ComparableString "IdRandomUnsignedInt32sRequest"
                     , count |> intToComparable
                     ]
 
-            IdDomNodeRender ->
-                ComparableString "IdDomNodeRender"
+            IdLocalStorageRequest request ->
+                ComparableList
+                    [ ComparableString "IdLocalStorageRequest"
+                    , request.key |> ComparableString
+                    ]
 
             IdHttpRequest request ->
                 ComparableList
@@ -996,79 +1051,6 @@ idInterfaceWithoutFutureToComparable =
 
             IdClipboardRequest ->
                 ComparableString "IdClipboardRequest"
-
-            IdAudioSourceLoad url ->
-                ComparableList
-                    [ ComparableString "IdAudioSourceLoad"
-                    , ComparableString url
-                    ]
-
-            IdSocketConnect connect ->
-                ComparableList
-                    [ ComparableString "IdSocketConnect"
-                    , ComparableString connect.address
-                    ]
-
-            IdLocalStorageRequest request ->
-                ComparableList
-                    [ ComparableString "IdLocalStorageRequest"
-                    , request.key |> ComparableString
-                    ]
-
-
-socketIdToComparable : SocketId -> Comparable
-socketIdToComparable =
-    \(SocketId raw) -> raw |> intToComparable
-
-
-listenIdToComparable : InterfaceSingleListenId -> Comparable
-listenIdToComparable =
-    \listenId ->
-        case listenId of
-            IdWindowEventListen eventName ->
-                ComparableList
-                    [ ComparableString "IdWindowEventListen"
-                    , ComparableString eventName
-                    ]
-
-            IdWindowAnimationFrameListen ->
-                ComparableString "IdWindowAnimationFrameListen"
-
-            IdDocumentEventListen eventName ->
-                ComparableList
-                    [ ComparableString "IdDocumentEventListen"
-                    , ComparableString eventName
-                    ]
-
-            IdTimePeriodicallyListen intervalDuration ->
-                ComparableList
-                    [ ComparableString "IdTimePeriodicallyListen"
-                    , intervalDuration.milliSeconds |> intToComparable
-                    ]
-
-            IdSocketDisconnectListen id ->
-                ComparableList
-                    [ ComparableString "IdSocketConnect"
-                    , id |> socketIdToComparable
-                    ]
-
-            IdSocketMessageListen id ->
-                ComparableList
-                    [ ComparableString "IdSocketConnect"
-                    , id |> socketIdToComparable
-                    ]
-
-            IdLocalStorageRemoveOnADifferentTabListen listen ->
-                ComparableList
-                    [ ComparableString "IdLocalStorageRemoveOnADifferentTabListen"
-                    , listen.key |> ComparableString
-                    ]
-
-            IdLocalStorageSetOnADifferentTabListen listen ->
-                ComparableList
-                    [ ComparableString "IdLocalStorageSetOnADifferentTabListen"
-                    , listen.key |> ComparableString
-                    ]
 
 
 maybeToComparable : (value -> Comparable) -> (Maybe value -> Comparable)
@@ -1141,8 +1123,63 @@ httpExpectIdToComparable =
                 "IdHttpExpectWhatever" |> ComparableString
 
 
-interfaceWithoutFutureToComparable : InterfaceSingleWithoutFuture -> Comparable
-interfaceWithoutFutureToComparable =
+socketIdToComparable : SocketId -> Comparable
+socketIdToComparable =
+    \(SocketId raw) -> raw |> intToComparable
+
+
+listenIdToComparable : InterfaceSingleListenId -> Comparable
+listenIdToComparable =
+    \listenId ->
+        case listenId of
+            IdWindowEventListen eventName ->
+                ComparableList
+                    [ ComparableString "IdWindowEventListen"
+                    , ComparableString eventName
+                    ]
+
+            IdWindowAnimationFrameListen ->
+                ComparableString "IdWindowAnimationFrameListen"
+
+            IdDocumentEventListen eventName ->
+                ComparableList
+                    [ ComparableString "IdDocumentEventListen"
+                    , ComparableString eventName
+                    ]
+
+            IdTimePeriodicallyListen intervalDuration ->
+                ComparableList
+                    [ ComparableString "IdTimePeriodicallyListen"
+                    , intervalDuration.milliSeconds |> intToComparable
+                    ]
+
+            IdSocketDisconnectListen id ->
+                ComparableList
+                    [ ComparableString "IdSocketConnect"
+                    , id |> socketIdToComparable
+                    ]
+
+            IdSocketMessageListen id ->
+                ComparableList
+                    [ ComparableString "IdSocketConnect"
+                    , id |> socketIdToComparable
+                    ]
+
+            IdLocalStorageRemoveOnADifferentTabListen listen ->
+                ComparableList
+                    [ ComparableString "IdLocalStorageRemoveOnADifferentTabListen"
+                    , listen.key |> ComparableString
+                    ]
+
+            IdLocalStorageSetOnADifferentTabListen listen ->
+                ComparableList
+                    [ ComparableString "IdLocalStorageSetOnADifferentTabListen"
+                    , listen.key |> ComparableString
+                    ]
+
+
+interfaceSingleWithoutFutureToComparable : InterfaceSingleWithoutFuture -> Comparable
+interfaceSingleWithoutFutureToComparable =
     \interfaceWithoutFuture ->
         case interfaceWithoutFuture of
             ConsoleLog string ->
@@ -1291,31 +1328,31 @@ interfaceOldAndOrUpdatedDiffs =
 
                     InterfaceWithFuture interfaceWithFuture ->
                         case interfaceWithFuture of
-                            TimePosixRequest _ ->
+                            Request (TimePosixRequest _) ->
                                 []
 
-                            TimezoneOffsetRequest _ ->
+                            Request (TimezoneOffsetRequest _) ->
                                 []
 
-                            TimezoneNameRequest _ ->
+                            Request (TimezoneNameRequest _) ->
                                 []
 
-                            RandomUnsignedInt32sRequest _ ->
+                            Request (RandomUnsignedInt32sRequest _) ->
                                 []
 
-                            HttpRequest request ->
+                            Request (HttpRequest request) ->
                                 RemoveHttpRequest (request |> httpRequestToId) |> List.singleton
 
                             DomNodeRender _ ->
                                 RemoveDom |> List.singleton
 
-                            WindowSizeRequest _ ->
+                            Request (WindowSizeRequest _) ->
                                 []
 
-                            NavigationUrlRequest _ ->
+                            Request (NavigationUrlRequest _) ->
                                 []
 
-                            ClipboardRequest _ ->
+                            Request (ClipboardRequest _) ->
                                 []
 
                             AudioSourceLoad _ ->
@@ -1324,7 +1361,7 @@ interfaceOldAndOrUpdatedDiffs =
                             SocketConnect connect ->
                                 RemoveSocketConnect { address = connect.address } |> List.singleton
 
-                            LocalStorageRequest _ ->
+                            Request (LocalStorageRequest _) ->
                                 []
 
                             Listen listen ->
@@ -1340,35 +1377,11 @@ interfaceOldAndOrUpdatedDiffs =
 
                     InterfaceWithFuture interfaceWithFuture ->
                         (case interfaceWithFuture of
-                            TimePosixRequest _ ->
-                                AddTimePosixRequest
-
-                            TimezoneOffsetRequest _ ->
-                                AddTimezoneOffsetRequest
-
-                            TimezoneNameRequest _ ->
-                                AddTimezoneNameRequest
-
-                            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
-                                AddRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count
-
                             DomNodeRender domElementToRender ->
                                 { path = []
                                 , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
                                 }
                                     |> AddEditDom
-
-                            HttpRequest httpRequest ->
-                                AddHttpRequest (httpRequest |> httpRequestToId)
-
-                            WindowSizeRequest _ ->
-                                AddWindowSizeRequest
-
-                            NavigationUrlRequest _ ->
-                                AddNavigationUrlRequest
-
-                            ClipboardRequest _ ->
-                                AddClipboardRequest
 
                             AudioSourceLoad load ->
                                 AddAudioSourceLoad load.url
@@ -1376,8 +1389,8 @@ interfaceOldAndOrUpdatedDiffs =
                             SocketConnect connect ->
                                 AddSocketConnect { address = connect.address }
 
-                            LocalStorageRequest request ->
-                                AddLocalStorageRequest { key = request.key }
+                            Request request ->
+                                request |> interfaceSingleRequestToId |> AddRequest
 
                             Listen listen ->
                                 listen |> interfaceSingleListenToId |> AddListen
@@ -1562,28 +1575,28 @@ interfaceWithFutureDiffJsonCodec =
     Json.Codec.choice
         (\addTimePosixRequest addTimezoneOffsetRequest addTimezoneNameRequest addTimePeriodicallyListen addRandomUnsignedInt32sRequest addEditDom addHttpRequest addWindowSizeRequest addWindowEventListen addWindowAnimationFrameListen addNavigationUrlRequest addDocumentEventListen addClipboardRequest addAudioSourceLoad addSocketConnect addSocketDisconnectListen addSocketMessageListen addLocalStorageRequest addLocalStorageRemoveOnADifferentTabListen addLocalStorageSetOnADifferentTabListen interfaceWithFutureDiff ->
             case interfaceWithFutureDiff of
-                AddTimePosixRequest ->
+                AddRequest IdTimePosixRequest ->
                     addTimePosixRequest ()
 
-                AddTimezoneOffsetRequest ->
+                AddRequest IdTimezoneOffsetRequest ->
                     addTimezoneOffsetRequest ()
 
-                AddTimezoneNameRequest ->
+                AddRequest IdTimezoneNameRequest ->
                     addTimezoneNameRequest ()
 
                 AddListen (IdTimePeriodicallyListen intervalDuration) ->
                     addTimePeriodicallyListen intervalDuration
 
-                AddRandomUnsignedInt32sRequest count ->
+                AddRequest (IdRandomUnsignedInt32sRequest count) ->
                     addRandomUnsignedInt32sRequest count
 
                 AddEditDom editDomDiff ->
                     addEditDom editDomDiff
 
-                AddHttpRequest httpRequestId ->
+                AddRequest (IdHttpRequest httpRequestId) ->
                     addHttpRequest httpRequestId
 
-                AddWindowSizeRequest ->
+                AddRequest IdWindowSizeRequest ->
                     addWindowSizeRequest ()
 
                 AddListen (IdWindowEventListen eventName) ->
@@ -1592,13 +1605,13 @@ interfaceWithFutureDiffJsonCodec =
                 AddListen IdWindowAnimationFrameListen ->
                     addWindowAnimationFrameListen ()
 
-                AddNavigationUrlRequest ->
+                AddRequest IdNavigationUrlRequest ->
                     addNavigationUrlRequest ()
 
                 AddListen (IdDocumentEventListen eventName) ->
                     addDocumentEventListen eventName
 
-                AddClipboardRequest ->
+                AddRequest IdClipboardRequest ->
                     addClipboardRequest ()
 
                 AddAudioSourceLoad audioSourceLoad ->
@@ -1613,7 +1626,7 @@ interfaceWithFutureDiffJsonCodec =
                 AddListen (IdSocketMessageListen id) ->
                     addSocketMessageListen id
 
-                AddLocalStorageRequest request ->
+                AddRequest (IdLocalStorageRequest request) ->
                     addLocalStorageRequest request
 
                 AddListen (IdLocalStorageRemoveOnADifferentTabListen listen) ->
@@ -1622,15 +1635,15 @@ interfaceWithFutureDiffJsonCodec =
                 AddListen (IdLocalStorageSetOnADifferentTabListen listen) ->
                     addLocalStorageSetOnADifferentTabListen listen
         )
-        |> Json.Codec.variant ( \() -> AddTimePosixRequest, "addTimePosixRequest" ) Json.Codec.unit
-        |> Json.Codec.variant ( \() -> AddTimezoneOffsetRequest, "addTimezoneOffsetRequest" ) Json.Codec.unit
-        |> Json.Codec.variant ( \() -> AddTimezoneNameRequest, "addTimezoneNameRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdTimePosixRequest |> AddRequest, "addTimePosixRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdTimezoneOffsetRequest |> AddRequest, "addTimezoneOffsetRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdTimezoneNameRequest |> AddRequest, "addTimezoneNameRequest" ) Json.Codec.unit
         |> Json.Codec.variant ( \a -> a |> IdTimePeriodicallyListen |> AddListen, "addTimePeriodicallyListen" )
             (Json.Codec.record (\ms -> { milliSeconds = ms })
                 |> Json.Codec.field ( .milliSeconds, "milliSeconds" ) Json.Codec.int
                 |> Json.Codec.recordFinish
             )
-        |> Json.Codec.variant ( AddRandomUnsignedInt32sRequest, "addRandomUnsignedInt32sRequest" )
+        |> Json.Codec.variant ( \a -> a |> IdRandomUnsignedInt32sRequest |> AddRequest, "addRandomUnsignedInt32sRequest" )
             Json.Codec.int
         |> Json.Codec.variant ( AddEditDom, "addEditDom" )
             (Json.Codec.record (\path replacement -> { path = path, replacement = replacement })
@@ -1639,19 +1652,19 @@ interfaceWithFutureDiffJsonCodec =
                     replacementInEditDomDiffJsonCodec
                 |> Json.Codec.recordFinish
             )
-        |> Json.Codec.variant ( AddHttpRequest, "addHttpRequest" )
+        |> Json.Codec.variant ( \a -> a |> IdHttpRequest |> AddRequest, "addHttpRequest" )
             httpRequestIdJsonCodec
-        |> Json.Codec.variant ( \() -> AddWindowSizeRequest, "addWindowSizeRequest" )
+        |> Json.Codec.variant ( \() -> IdWindowSizeRequest |> AddRequest, "addWindowSizeRequest" )
             Json.Codec.unit
         |> Json.Codec.variant ( \a -> a |> IdWindowEventListen |> AddListen, "addWindowEventListen" )
             Json.Codec.string
         |> Json.Codec.variant ( \() -> IdWindowAnimationFrameListen |> AddListen, "addWindowAnimationFrameListen" )
             Json.Codec.unit
-        |> Json.Codec.variant ( \() -> AddNavigationUrlRequest, "addNavigationUrlRequest" )
+        |> Json.Codec.variant ( \() -> IdNavigationUrlRequest |> AddRequest, "addNavigationUrlRequest" )
             Json.Codec.unit
         |> Json.Codec.variant ( \a -> a |> IdDocumentEventListen |> AddListen, "addDocumentEventListen" )
             Json.Codec.string
-        |> Json.Codec.variant ( \() -> AddClipboardRequest, "addClipboardRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdClipboardRequest |> AddRequest, "addClipboardRequest" ) Json.Codec.unit
         |> Json.Codec.variant ( AddAudioSourceLoad, "addAudioSourceLoad" )
             Json.Codec.string
         |> Json.Codec.variant ( AddSocketConnect, "addSocketConnect" )
@@ -1662,7 +1675,7 @@ interfaceWithFutureDiffJsonCodec =
         |> Json.Codec.variant ( \a -> a |> IdSocketDisconnectListen |> AddListen, "addSocketDisconnectListen" )
             socketIdJsonCodec
         |> Json.Codec.variant ( \a -> a |> IdSocketMessageListen |> AddListen, "addSocketMessageListen" ) socketIdJsonCodec
-        |> Json.Codec.variant ( AddLocalStorageRequest, "addLocalStorageRequest" )
+        |> Json.Codec.variant ( \a -> a |> IdLocalStorageRequest |> AddRequest, "addLocalStorageRequest" )
             (Json.Codec.record (\key -> { key = key })
                 |> Json.Codec.field ( .key, "key" ) Json.Codec.string
                 |> Json.Codec.recordFinish
@@ -2085,74 +2098,9 @@ programSubscriptions appConfig =
             )
 
 
-timePosixJsonCodec : JsonCodec Time.Posix
-timePosixJsonCodec =
-    Json.Codec.map Time.millisToPosix Time.posixToMillis Json.Codec.int
-
-
-urlJsonDecoder : Json.Decode.Decoder Url
-urlJsonDecoder =
-    Json.Decode.andThen
-        (\urlString ->
-            case urlString |> Url.fromString of
-                Nothing ->
-                    "invalid URL" |> Json.Decode.fail
-
-                Just url ->
-                    url |> Json.Decode.succeed
-        )
-        Json.Decode.string
-
-
 interfaceFutureJsonDecoder : InterfaceWithFutureDiff -> InterfaceSingleWithFuture state -> Maybe (Json.Decode.Decoder state)
 interfaceFutureJsonDecoder interfaceAddDiff interface =
     case interface of
-        TimePosixRequest requestTimeNow ->
-            case interfaceAddDiff of
-                AddTimePosixRequest ->
-                    Json.Decode.map requestTimeNow timePosixJsonCodec.jsonDecoder
-                        |> Just
-
-                _ ->
-                    Nothing
-
-        TimezoneOffsetRequest requestTimezoneOffset ->
-            case interfaceAddDiff of
-                AddTimezoneOffsetRequest ->
-                    Json.Decode.map requestTimezoneOffset Json.Decode.int
-                        |> Just
-
-                _ ->
-                    Nothing
-
-        TimezoneNameRequest requestTimezoneName ->
-            case interfaceAddDiff of
-                AddTimezoneNameRequest ->
-                    Json.Decode.map requestTimezoneName
-                        (Json.Decode.oneOf
-                            [ Json.Decode.map Time.Offset Json.Decode.int
-                            , Json.Decode.map Time.Name Json.Decode.string
-                            ]
-                        )
-                        |> Just
-
-                _ ->
-                    Nothing
-
-        RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
-            case interfaceAddDiff of
-                AddRandomUnsignedInt32sRequest diffCount ->
-                    if randomUnsignedInt32sRequest.count == diffCount then
-                        Json.Decode.map randomUnsignedInt32sRequest.on
-                            (Json.Decode.list Json.Decode.int)
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
-
         DomNodeRender domElementToRender ->
             case interfaceAddDiff of
                 AddEditDom domEditDiff ->
@@ -2179,52 +2127,6 @@ interfaceFutureJsonDecoder interfaceAddDiff interface =
                             )
                     )
                         |> Just
-
-                _ ->
-                    Nothing
-
-        HttpRequest httpRequest ->
-            case interfaceAddDiff of
-                AddHttpRequest addedHttpRequestId ->
-                    if (httpRequest |> httpRequestToId) == addedHttpRequestId then
-                        Json.Decode.oneOf
-                            [ Json.Decode.field "ok" (httpExpectJsonDecoder httpRequest.expect)
-                            , Json.Decode.field "err" (httpErrorJsonDecoder httpRequest)
-                                |> Json.Decode.map (httpExpectOnError httpRequest.expect)
-                            ]
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
-
-        WindowSizeRequest toState ->
-            case interfaceAddDiff of
-                AddWindowSizeRequest ->
-                    Json.Decode.map2 (\width height -> toState { width = width, height = height })
-                        (Json.Decode.field "width" Json.Decode.int)
-                        (Json.Decode.field "height" Json.Decode.int)
-                        |> Just
-
-                _ ->
-                    Nothing
-
-        NavigationUrlRequest toState ->
-            case interfaceAddDiff of
-                AddNavigationUrlRequest ->
-                    urlJsonDecoder
-                        |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toState)
-                        |> Just
-
-                _ ->
-                    Nothing
-
-        ClipboardRequest toState ->
-            case interfaceAddDiff of
-                AddClipboardRequest ->
-                    Json.Decode.map toState Json.Decode.string |> Just
 
                 _ ->
                     Nothing
@@ -2281,13 +2183,11 @@ interfaceFutureJsonDecoder interfaceAddDiff interface =
                 _ ->
                     Nothing
 
-        LocalStorageRequest request ->
+        Request request ->
             case interfaceAddDiff of
-                AddLocalStorageRequest addRequest ->
-                    if request.key == addRequest.key then
-                        Json.Decode.nullable Json.Decode.string
-                            |> Json.Decode.map request.on
-                            |> Just
+                AddRequest addRequestId ->
+                    if (request |> interfaceSingleRequestToId) == addRequestId then
+                        request |> requestFutureJsonDecoder |> Just
 
                     else
                         Nothing
@@ -2308,68 +2208,69 @@ interfaceFutureJsonDecoder interfaceAddDiff interface =
                     Nothing
 
 
-listenFutureJsonDecoder : InterfaceSingleListen future -> Json.Decode.Decoder future
-listenFutureJsonDecoder interfaceSingleListen =
-    case interfaceSingleListen of
-        WindowEventListen listen ->
-            listen.on
-
-        WindowAnimationFrameListen toState ->
-            timePosixJsonCodec.jsonDecoder
-                |> Json.Decode.map toState
-
-        DocumentEventListen listen ->
-            listen.on
-
-        TimePeriodicallyListen timePeriodicallyListen ->
-            Json.Decode.map timePeriodicallyListen.on
-                timePosixJsonCodec.jsonDecoder
-
-        LocalStorageSetOnADifferentTabListen listen ->
-            Json.Decode.map3
-                (\appUrl oldValue newValue ->
-                    { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
-                )
-                (Json.Decode.field "url"
-                    (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
-                )
-                (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
-                (Json.Decode.field "newValue" Json.Decode.string)
-                |> Json.Decode.map listen.on
-
-        LocalStorageRemoveOnADifferentTabListen listen ->
-            urlJsonDecoder
-                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
-
-        SocketDisconnectListen disconnectListen ->
-            Json.Decode.map2 (\code reason -> { code = code, reason = reason })
-                (Json.Decode.field "code" Json.Decode.int)
-                (Json.Decode.field "reason" Json.Decode.string)
-                |> Json.Decode.map disconnectListen.on
-
-        SocketMessageListen messageListen ->
-            Json.Decode.string
-                |> Json.Decode.map messageListen.on
+timePosixJsonCodec : JsonCodec Time.Posix
+timePosixJsonCodec =
+    Json.Codec.map Time.millisToPosix Time.posixToMillis Json.Codec.int
 
 
-domElementAtReversePath : List Int -> (DomNode future -> Maybe (DomNode future))
-domElementAtReversePath path domNode =
-    case path of
-        [] ->
-            Just domNode
+urlJsonDecoder : Json.Decode.Decoder Url
+urlJsonDecoder =
+    Json.Decode.andThen
+        (\urlString ->
+            case urlString |> Url.fromString of
+                Nothing ->
+                    "invalid URL" |> Json.Decode.fail
 
-        subIndex :: parentsOfSub ->
-            case domNode of
-                DomText _ ->
-                    Nothing
+                Just url ->
+                    url |> Json.Decode.succeed
+        )
+        Json.Decode.string
 
-                DomElement domElement ->
-                    case Array.get subIndex domElement.subs of
-                        Nothing ->
-                            Nothing
 
-                        Just subNodeAtIndex ->
-                            domElementAtReversePath parentsOfSub subNodeAtIndex
+requestFutureJsonDecoder : InterfaceSingleRequest future -> Json.Decode.Decoder future
+requestFutureJsonDecoder =
+    \interfaceSingleRequest ->
+        case interfaceSingleRequest of
+            LocalStorageRequest request ->
+                Json.Decode.nullable Json.Decode.string
+                    |> Json.Decode.map request.on
+
+            HttpRequest httpRequest ->
+                Json.Decode.oneOf
+                    [ Json.Decode.field "ok" (httpExpectJsonDecoder httpRequest.expect)
+                    , Json.Decode.field "err" (httpErrorJsonDecoder httpRequest)
+                        |> Json.Decode.map (httpExpectOnError httpRequest.expect)
+                    ]
+
+            WindowSizeRequest toState ->
+                Json.Decode.map2 (\width height -> toState { width = width, height = height })
+                    (Json.Decode.field "width" Json.Decode.int)
+                    (Json.Decode.field "height" Json.Decode.int)
+
+            NavigationUrlRequest toState ->
+                urlJsonDecoder
+                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toState)
+
+            ClipboardRequest toState ->
+                Json.Decode.map toState Json.Decode.string
+
+            TimePosixRequest requestTimeNow ->
+                Json.Decode.map requestTimeNow timePosixJsonCodec.jsonDecoder
+
+            TimezoneOffsetRequest requestTimezoneOffset ->
+                Json.Decode.map requestTimezoneOffset Json.Decode.int
+
+            TimezoneNameRequest requestTimezoneName ->
+                Json.Decode.map requestTimezoneName
+                    (Json.Decode.oneOf
+                        [ Json.Decode.map Time.Offset Json.Decode.int
+                        , Json.Decode.map Time.Name Json.Decode.string
+                        ]
+                    )
+
+            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
+                Json.Decode.map randomUnsignedInt32sRequest.on
+                    (Json.Decode.list Json.Decode.int)
 
 
 httpExpectOnError : HttpExpect future -> (HttpError -> future)
@@ -2476,6 +2377,70 @@ httpErrorJsonDecoder httpRequest =
 httpNetworkErrorCodes : Set String
 httpNetworkErrorCodes =
     Set.fromList [ "EAGAIN", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "UND_ERR", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_OVERFLOW", "UND_ERR_BODY_TIMEOUT", "UND_ERR_RESPONSE_STATUS_CODE", "UND_ERR_INVALID_ARG", "UND_ERR_INVALID_RETURN_VALUE", "UND_ERR_ABORTED", "UND_ERR_DESTROYED", "UND_ERR_CLOSED", "UND_ERR_SOCKET", "UND_ERR_NOT_SUPPORTED", "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH", "UND_ERR_RES_CONTENT_LENGTH_MISMATCH", "UND_ERR_INFO", "UND_ERR_RES_EXCEEDED_MAX_SIZE" ]
+
+
+listenFutureJsonDecoder : InterfaceSingleListen future -> Json.Decode.Decoder future
+listenFutureJsonDecoder interfaceSingleListen =
+    case interfaceSingleListen of
+        WindowEventListen listen ->
+            listen.on
+
+        WindowAnimationFrameListen toState ->
+            timePosixJsonCodec.jsonDecoder
+                |> Json.Decode.map toState
+
+        DocumentEventListen listen ->
+            listen.on
+
+        TimePeriodicallyListen timePeriodicallyListen ->
+            Json.Decode.map timePeriodicallyListen.on
+                timePosixJsonCodec.jsonDecoder
+
+        LocalStorageSetOnADifferentTabListen listen ->
+            Json.Decode.map3
+                (\appUrl oldValue newValue ->
+                    { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
+                )
+                (Json.Decode.field "url"
+                    (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
+                )
+                (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
+                (Json.Decode.field "newValue" Json.Decode.string)
+                |> Json.Decode.map listen.on
+
+        LocalStorageRemoveOnADifferentTabListen listen ->
+            urlJsonDecoder
+                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
+
+        SocketDisconnectListen disconnectListen ->
+            Json.Decode.map2 (\code reason -> { code = code, reason = reason })
+                (Json.Decode.field "code" Json.Decode.int)
+                (Json.Decode.field "reason" Json.Decode.string)
+                |> Json.Decode.map disconnectListen.on
+
+        SocketMessageListen messageListen ->
+            Json.Decode.string
+                |> Json.Decode.map messageListen.on
+
+
+domElementAtReversePath : List Int -> (DomNode future -> Maybe (DomNode future))
+domElementAtReversePath path domNode =
+    case path of
+        [] ->
+            Just domNode
+
+        subIndex :: parentsOfSub ->
+            case domNode of
+                DomText _ ->
+                    Nothing
+
+                DomElement domElement ->
+                    case Array.get subIndex domElement.subs of
+                        Nothing ->
+                            Nothing
+
+                        Just subNodeAtIndex ->
+                            domElementAtReversePath parentsOfSub subNodeAtIndex
 
 
 domElementIdJsonCodec : JsonCodec DomElementId
@@ -2623,18 +2588,10 @@ type InterfaceWithoutFutureDiff
 {-| Actions that will notify elm some time in the future
 -}
 type InterfaceWithFutureDiff
-    = AddTimePosixRequest
-    | AddTimezoneOffsetRequest
-    | AddTimezoneNameRequest
-    | AddRandomUnsignedInt32sRequest Int
-    | AddEditDom EditDomDiff
-    | AddHttpRequest HttpRequestId
-    | AddWindowSizeRequest
-    | AddNavigationUrlRequest
-    | AddClipboardRequest
-    | AddAudioSourceLoad String
+    = AddEditDom EditDomDiff
     | AddSocketConnect { address : String }
-    | AddLocalStorageRequest { key : String }
+    | AddAudioSourceLoad String
+    | AddRequest InterfaceSingleRequestId
     | AddListen InterfaceSingleListenId
 
 

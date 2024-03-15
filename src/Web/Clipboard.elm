@@ -21,6 +21,7 @@ Note: uses [`navigator.clipboard.readText()`](https://developer.mozilla.org/en-U
 request : Web.Interface String
 request =
     Web.ClipboardRequest identity
+        |> Web.Request
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 

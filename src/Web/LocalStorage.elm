@@ -45,6 +45,7 @@ Comes back with `Nothing` if that key doesn't exist.
 request : String -> Web.Interface (Maybe String)
 request key =
     Web.LocalStorageRequest { key = key, on = identity }
+        |> Web.Request
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 

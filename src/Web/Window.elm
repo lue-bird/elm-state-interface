@@ -32,6 +32,7 @@ not including toolbars/scrollbars.
 sizeRequest : Web.Interface { width : Int, height : Int }
 sizeRequest =
     Web.WindowSizeRequest identity
+        |> Web.Request
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 

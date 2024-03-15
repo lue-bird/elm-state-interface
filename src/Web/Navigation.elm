@@ -33,6 +33,7 @@ Note: Uses [`window.location.href`](https://developer.mozilla.org/en-US/docs/Web
 urlRequest : Web.Interface AppUrl
 urlRequest =
     Web.NavigationUrlRequest identity
+        |> Web.Request
         |> Web.InterfaceWithFuture
         |> Rope.singleton
 
