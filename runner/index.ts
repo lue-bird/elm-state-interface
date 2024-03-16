@@ -825,25 +825,31 @@ function removeAudio(config: { url: string, startTime: number }) {
         return true
     })
 }
-function editAudio(config: { url: string, startTime: number, replacement: any }) {
+function editAudio(config: { url: string, startTime: number, replacement: { tag: string, value: any } }) {
     audioPlaying.forEach(value => {
         if (value.url === config.url && value.startTime === config.startTime) {
-            if (config.replacement?.volume) {
-                audioParameterTimelineApplyTo(value.gainNode.gain, config.replacement.volume)
-            } else if (config.replacement?.speed) {
-                audioParameterTimelineApplyTo(value.sourceNode.playbackRate, config.replacement.speed)
-            } else if (config.replacement?.stereoPan) {
-                audioParameterTimelineApplyTo(value.stereoPanNode.pan, config.replacement.stereoPan)
-            } else if (config.replacement?.processing) {
-                value.stereoPanNode.disconnect()
-                value.processingNodes.forEach(node => { node.disconnect() })
+            switch (config.replacement.tag) {
+                case "Volume": {
+                    audioParameterTimelineApplyTo(value.gainNode.gain, config.replacement.value)
+                    break
+                } case "Speed": {
+                    audioParameterTimelineApplyTo(value.sourceNode.playbackRate, config.replacement.value)
+                    break
+                } case "StereoPan": {
+                    audioParameterTimelineApplyTo(value.stereoPanNode.pan, config.replacement.value)
+                    break
+                } case "Processing": {
+                    value.stereoPanNode.disconnect()
+                    value.processingNodes.forEach(node => { node.disconnect() })
 
-                value.processingNodes = createProcessingNodes(config.replacement.processing)
+                    value.processingNodes = createProcessingNodes(config.replacement.value)
 
-                forEachConsecutive(
-                    [value.stereoPanNode, ...value.processingNodes, audioContext.destination],
-                    pair => { pair.current.connect(pair.next) }
-                )
+                    forEachConsecutive(
+                        [value.stereoPanNode, ...value.processingNodes, audioContext.destination],
+                        pair => { pair.current.connect(pair.next) }
+                    )
+                    break
+                }
             }
         }
     })

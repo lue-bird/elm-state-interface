@@ -1930,19 +1930,19 @@ interfaceWithoutFutureDiffToJson =
                         [ ( "url", audioEdit.url |> Json.Encode.string )
                         , ( "startTime", audioEdit.startTime |> Time.posixToMillis |> Json.Encode.int )
                         , ( "replacement"
-                          , Json.Encode.object
-                                [ case audioEdit.replacement of
+                          , tagValueToJson
+                                (case audioEdit.replacement of
                                     ReplacementAudioSpeed new ->
-                                        ( "speed", new |> audioParameterTimelineToJson )
+                                        ( "Speed", new |> audioParameterTimelineToJson )
 
                                     ReplacementAudioVolume new ->
-                                        ( "volume", new |> audioParameterTimelineToJson )
+                                        ( "Volume", new |> audioParameterTimelineToJson )
 
                                     ReplacementAudioStereoPan new ->
-                                        ( "stereoPan", new |> audioParameterTimelineToJson )
+                                        ( "StereoPan", new |> audioParameterTimelineToJson )
 
                                     ReplacementAudioProcessing new ->
-                                        ( "processing"
+                                        ( "Processing"
                                         , Json.Encode.object
                                             [ ( "linearConvolutions"
                                               , new.linearConvolutions
@@ -1967,7 +1967,7 @@ interfaceWithoutFutureDiffToJson =
                                               )
                                             ]
                                         )
-                                ]
+                                )
                           )
                         ]
                     )
