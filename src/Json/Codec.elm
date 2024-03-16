@@ -6,8 +6,8 @@ module Json.Codec exposing
     , nullable, list, array, dict
     )
 
-{-| Simple decoder-encoder pair for json.
-We don't use [miniBill/elm-codec](https://dark.elm.dmy.fr/packages/miniBill/elm-codec/latest/) because we store variants as single-field records
+{-| Simple decoder-encoder pair for json
+similar to [miniBill/elm-codec](https://dark.elm.dmy.fr/packages/miniBill/elm-codec/latest/)
 
 @docs JsonCodec, map, lazy
 
@@ -193,25 +193,47 @@ variant ( variantToChoice, variantName ) variantValueJsonCodec =
     let
         fieldName : String
         fieldName =
-            variantName |> stringFirstCharToLowerCase
+            variantName |> stringFirstCharToUpperCase
     in
     \soFar ->
-        { toJson = soFar.toJson variantValueJsonCodec.toJson
+        { toJson =
+            soFar.toJson
+                (\fieldValue ->
+                    Json.Encode.object
+                        [ ( "tag", fieldName |> Json.Encode.string )
+                        , ( "value", fieldValue |> variantValueJsonCodec.toJson )
+                        ]
+                )
         , jsonDecoder =
             Json.Decode.oneOf
                 [ soFar.jsonDecoder
-                , Json.Decode.map variantToChoice
-                    (Json.Decode.field fieldName variantValueJsonCodec.jsonDecoder)
+                , Json.Decode.map2 (\() variantValue -> variantValue |> variantToChoice)
+                    (Json.Decode.field "tag" (onlyStringJsonDecoder fieldName))
+                    (Json.Decode.field "value" variantValueJsonCodec.jsonDecoder)
                 ]
         }
 
 
-stringFirstCharToLowerCase : String -> String
-stringFirstCharToLowerCase =
+onlyStringJsonDecoder : String -> Json.Decode.Decoder ()
+onlyStringJsonDecoder specificAllowedString =
+    Json.Decode.string
+        |> Json.Decode.andThen
+            (\str ->
+                if str == specificAllowedString then
+                    () |> Json.Decode.succeed
+
+                else
+                    ([ "expected only \"", specificAllowedString, "\"" ] |> String.concat)
+                        |> Json.Decode.fail
+            )
+
+
+stringFirstCharToUpperCase : String -> String
+stringFirstCharToUpperCase =
     \string_ ->
         case string_ |> String.uncons of
             Nothing ->
                 ""
 
             Just ( firstChar, afterFirstChar ) ->
-                String.cons (firstChar |> Char.toLower) afterFirstChar
+                String.cons (firstChar |> Char.toUpper) afterFirstChar

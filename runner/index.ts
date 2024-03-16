@@ -6,207 +6,258 @@ export interface ElmPorts {
 }
 
 export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
-    const interfaceWithoutSendToElmImplementations: { [key: string]: (config: any) => void } = {
-        "addConsoleLog": (config) => { console.log(config) },
-        "addConsoleWarn": (config) => { console.warn(config) },
-        "addConsoleError": (config) => { console.error(config) },
-        "addNavigationPushUrl": (config) => { pushUrl(config) },
-        "addNavigationReplaceUrl": (config) => { replaceUrl(config) },
-        "addNavigationGo": (config) => { go(config) },
-        "addNavigationLoad": (config) => { load(config) },
-        "addNavigationReload": (_config: null) => { reload() },
-        "addFileDownloadUnsignedInt8s": (config) => { fileDownloadBytes(config) },
-        "addClipboardReplaceBy": (config: string) => { navigator.clipboard.writeText(config) },
-        "addAudio": addAudio,
-        "addSocketDisconnect": (index: number) => {
-            const socketToDisconnect = sockets.at(index)
-            if (socketToDisconnect) {
-                socketToDisconnect.close()
-                sockets[index] = undefined
-            } else { } // socket is already closed
-        },
-        "addSocketMessage": (config: { id: number, data: string }) => {
-            const socketToDisconnect = sockets.at(config.id)
-            if (socketToDisconnect) {
-                socketToDisconnect.send(config.data)
-            } else {
-                console.warn("trying to send messages on closed socket")
+    const addInterfaceWithoutSendToElmImplementation: (tag: string) => ((config: any) => any) = tag => {
+        switch (tag) {
+            case "ConsoleLog": return (config: string) => { console.log(config) }
+            case "ConsoleWarn": return (config: string) => { console.warn(config) }
+            case "ConsoleError": return (config: string) => { console.error(config) }
+            case "NavigationPushUrl": return (config: string) => { pushUrl(config) }
+            case "NavigationReplaceUrl": return (config: string) => { replaceUrl(config) }
+            case "NavigationGo": return (config: number) => { go(config) }
+            case "NavigationLoad": return (config: string) => { load(config) }
+            case "NavigationReload": return (_config: null) => { reload() }
+            case "FileDownloadUnsignedInt8s": return (config: {
+                mimeType: string;
+                name: string;
+                content: number[];
+            }) => {
+                fileDownloadBytes(config)
             }
-        },
-        "addLocalStorageSet": (config: { key: string, value: string | null }) => {
-            try {
-                if (config.value === null) {
-                    window.localStorage.removeItem(config.key)
+            case "ClipboardReplaceBy": return (config: string) => { navigator.clipboard.writeText(config) }
+            case "Audio": return addAudio
+            case "SocketDisconnect": return (index: number) => {
+                const socketToDisconnect = sockets.at(index)
+                if (socketToDisconnect) {
+                    socketToDisconnect.close()
+                    sockets[index] = undefined
+                } else { } // socket is already closed
+            }
+            case "SocketMessage": return (config: { id: number, data: string }) => {
+                const socketToDisconnect = sockets.at(config.id)
+                if (socketToDisconnect) {
+                    socketToDisconnect.send(config.data)
                 } else {
-                    window.localStorage.setItem(config.key, config.value)
+                    console.warn("trying to send messages on closed socket")
                 }
-            } catch (disallowedByUserOrQuotaExceeded) {
-                console.warn(disallowedByUserOrQuotaExceeded)
             }
-        },
-        "addEditAudio": editAudio,
-        "removeTimePeriodicallyListen": removeTimePeriodicallyListen,
-        "removeDom": (_config: null) => { appConfig.domElement.replaceChildren() },
-        "removeHttpRequest": (config: string) => {
-            const maybeAbortController = httpRequestAbortControllers[config]
-            if (maybeAbortController) {
-                maybeAbortController.abort()
+            case "LocalStorageSet": return (config: { key: string, value: string | null }) => {
+                try {
+                    if (config.value === null) {
+                        window.localStorage.removeItem(config.key)
+                    } else {
+                        window.localStorage.setItem(config.key, config.value)
+                    }
+                } catch (disallowedByUserOrQuotaExceeded) {
+                    console.warn(disallowedByUserOrQuotaExceeded)
+                }
             }
-        },
-        "removeWindowEventListen": windowEventListenRemove,
-        "removeAnimationFrameListen": (_config: null) => { removeAnimationFrameListen() },
-        "removeDocumentEventListen": documentEventListenRemove,
-        "removeAudio": removeAudio,
-        "removeSocketConnect": (config: { address: string }) => {
-            sockets
-                .flatMap(socket => socket ? [socket] : [])
-                .filter(socket => socket.url == config.address)
-                .forEach(socketToStopFromConnecting => {
-                    socketToStopFromConnecting.onopen = null
-                })
-        },
-        "removeSocketDisconnectListen": (index: number) => {
-            const socket = sockets.at(index)
-            if (socket) {
-                socket.onclose = null
-            } else { } // already removed
-        },
-        "removeSocketMessageListen": (index: number) => {
-            const socketToListenToMessagesFrom = sockets.at(index)
-            if (socketToListenToMessagesFrom) {
-                socketToListenToMessagesFrom.onmessage = null
-            } else { } // already removed
-        },
-        "removeLocalStorageRemoveOnADifferentTabListen": (config: { key: string }) => {
-            localStorageRemoveOnADifferentTabListenAbortControllers[config.key]?.abort()
-            delete localStorageRemoveOnADifferentTabListenAbortControllers[config.key]
-        },
-        "removeLocalStorageSetOnADifferentTabListen": (config: { key: string }) => {
-            localStorageSetOnADifferentTabListenAbortControllers[config.key]?.abort()
-            delete localStorageSetOnADifferentTabListenAbortControllers[config.key]
+            default: return (_config: any) => {
+                notifyOfBug("Unknown message kind InterfaceWithoutFuture.Add." + tag + " from elm. The associated js function might be missing.")
+            }
         }
     }
-    const interfaceWithSendToElmImplementations: { [key: string]: (config: any, sendToElm: (v: any) => void) => void } = {
-        "addTimePosixRequest": (_config: null, sendToElm) => {
-            sendToElm(Date.now())
-        },
-        "addTimezoneOffsetRequest": (_config: null, sendToElm) => {
-            // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
-            sendToElm(new Date().getTimezoneOffset())
-        },
-        "addTimezoneNameRequest": (_config: null, sendToElm) => {
-            sendToElm(getTimezoneName())
-        },
-        "addTimePeriodicallyListen": (config, sendToElm) => {
-            addTimePeriodicallyListen(config, sendToElm)
-        },
-        "addRandomUnsignedInt32sRequest": (config, sendToElm) => {
-            sendToElm(crypto.getRandomValues(new Uint32Array(config)))
-        },
-        "addEditDom": (config, sendToElm) => {
-            editDom(config.path, config.replacement, sendToElm)
-        },
-        "addHttpRequest": (config, sendToElm) => {
-            const abortController = new AbortController()
-            httpRequestAbortControllers[config] = abortController
-            httpFetch(config, abortController).then(response => { sendToElm(response) })
-        },
-        "addWindowSizeRequest": (_config: null, sendToElm) => {
-            sendToElm({ width: window.innerWidth, height: window.innerHeight })
-        },
-        "addWindowEventListen": windowEventListenAdd,
-        "addWindowAnimationFrameListen": (_config: null, sendToElm) => {
-            addAnimationFrameListen(sendToElm)
-        },
-        "addNavigationUrlRequest": (_config: null, sendToElm) => {
-            sendToElm(window.location.href)
-        },
-        "addDocumentEventListen": documentEventListenAdd,
-        "addClipboardRequest": (_config: null, sendToElm) => {
-            navigator.clipboard.readText().then(sendToElm)
-        },
-        "addAudioSourceLoad": audioSourceLoad,
-        "addSocketConnect": (config: { address: string }, sendToElm) => {
-            const createdSocket = new WebSocket(config.address)
-            sockets.push(createdSocket)
-            createdSocket.onopen = _event => {
-                sendToElm(sockets.length)
-                createdSocket.onopen = null
-            }
-        },
-        "addSocketDisconnectListen": (index: number, sendToElm) => {
-            const socketToDisconnect = sockets.at(index)
-            if (socketToDisconnect) {
-                socketToDisconnect.onclose = (event) => {
-                    sendToElm({ code: event.code, reason: event.reason })
+    const interfaceWithoutSendToElmImplementation: (tag: string) => ((config: any) => void) = tag => {
+        switch (tag) {
+            case "EditAudio": return editAudio
+            case "RemoveDom": return (_config: null) => { appConfig.domElement.replaceChildren() }
+            case "RemoveHttpRequest": return (config: string) => {
+                const maybeAbortController = httpRequestAbortControllers[config]
+                if (maybeAbortController) {
+                    maybeAbortController.abort()
                 }
-            } else { } // socket is already closed
-        },
-        "addSocketMessageListen": (index: number, sendToElm) => {
-            const socketToListenToMessagesFrom = sockets.at(index)
-            if (socketToListenToMessagesFrom) {
-                socketToListenToMessagesFrom.onmessage = (event) => {
-                    sendToElm(event.data)
-                }
-            } else {
-                console.warn("trying to listen to messages on closed socket")
             }
-        },
-        "addLocalStorageRequest": (config: { key: string }, sendToElm) => {
-            sendToElm(window.localStorage.getItem(config.key))
-        },
-        "addLocalStorageRemoveOnADifferentTabListen": (config: { key: string }, sendToElm) => {
-            const abortController = new AbortController()
-            window.addEventListener(
-                "storage",
-                storageEvent => {
-                    if (storageEvent.key === config.key && storageEvent.newValue === null) {
-                        sendToElm(storageEvent.url)
+            case "RemoveAudio": return removeAudio
+            case "RemoveSocketConnect": return (config: { address: string }) => {
+                sockets
+                    .flatMap(socket => socket ? [socket] : [])
+                    .filter(socket => socket.url == config.address)
+                    .forEach(socketToStopFromConnecting => {
+                        socketToStopFromConnecting.onopen = null
+                    })
+            }
+            case "RemoveListen": return (config: { tag: string, value: any }) => {
+                interfaceListenRemoveImplementation(config.tag)(config.value)
+            }
+            case "Add": return (config: { tag: string, value: any }) => {
+                addInterfaceWithoutSendToElmImplementation(config.tag)(config.value)
+            }
+            default: return (_config: any) => {
+                notifyOfBug("Unknown message kind InterfaceWithoutFuture." + tag + " from elm. The associated js function might be missing.")
+            }
+        }
+    }
+    const interfaceListenAddImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
+        switch (tag) {
+            case "TimePeriodicallyListen": return (config, sendToElm) => {
+                addTimePeriodicallyListen(config, sendToElm)
+            }
+            case "WindowEventListen": return windowEventListenAdd
+            case "WindowAnimationFrameListen": return (_config: null, sendToElm) => {
+                addAnimationFrameListen(sendToElm)
+            }
+            case "DocumentEventListen": return documentEventListenAdd
+            case "SocketDisconnectListen": return (index: number, sendToElm) => {
+                const socketToDisconnect = sockets.at(index)
+                if (socketToDisconnect) {
+                    socketToDisconnect.onclose = (event) => {
+                        sendToElm({ code: event.code, reason: event.reason })
                     }
-                },
-                { signal: abortController.signal }
-            )
-            localStorageRemoveOnADifferentTabListenAbortControllers[config.key] = abortController
-        },
-        "addLocalStorageSetOnADifferentTabListen": (config: { key: string }, sendToElm) => {
-            const abortController = new AbortController()
-            window.addEventListener(
-                "storage",
-                storageEvent => {
-                    if (storageEvent.key === config.key && storageEvent.newValue !== null) {
-                        sendToElm({ url: storageEvent.url, oldValue: storageEvent.oldValue, newValue: storageEvent.newValue })
+                } else { } // socket is already closed
+            }
+            case "SocketMessageListen": return (index: number, sendToElm) => {
+                const socketToListenToMessagesFrom = sockets.at(index)
+                if (socketToListenToMessagesFrom) {
+                    socketToListenToMessagesFrom.onmessage = (event) => {
+                        sendToElm(event.data)
                     }
-                },
-                { signal: abortController.signal }
-            )
-            localStorageSetOnADifferentTabListenAbortControllers[config.key] = abortController
+                } else {
+                    console.warn("trying to listen to messages on closed socket")
+                }
+            }
+            case "LocalStorageRemoveOnADifferentTabListen": return (config: { key: string }, sendToElm) => {
+                const abortController = new AbortController()
+                window.addEventListener(
+                    "storage",
+                    storageEvent => {
+                        if (storageEvent.key === config.key && storageEvent.newValue === null) {
+                            sendToElm(storageEvent.url)
+                        }
+                    },
+                    { signal: abortController.signal }
+                )
+                localStorageRemoveOnADifferentTabListenAbortControllers[config.key] = abortController
+            }
+            case "LocalStorageSetOnADifferentTabListen": return (config: { key: string }, sendToElm) => {
+                const abortController = new AbortController()
+                window.addEventListener(
+                    "storage",
+                    storageEvent => {
+                        if (storageEvent.key === config.key && storageEvent.newValue !== null) {
+                            sendToElm({ url: storageEvent.url, oldValue: storageEvent.oldValue, newValue: storageEvent.newValue })
+                        }
+                    },
+                    { signal: abortController.signal }
+                )
+                localStorageSetOnADifferentTabListenAbortControllers[config.key] = abortController
+            }
+            default: return (_config: any, _sendToElm) => {
+                notifyOfBug("Unknown message kind InterfaceWithFuture.AddListen." + tag + " from elm. The associated js function might be missing.")
+            }
+        }
+    }
+    const interfaceListenRemoveImplementation: (tag: string) => ((config: any) => void) = tag => {
+        switch (tag) {
+            case "TimePeriodicallyListen": return removeTimePeriodicallyListen
+            case "WindowEventListen": return windowEventListenRemove
+            case "AnimationFrameListen": return (_config: null) => { removeAnimationFrameListen() }
+            case "DocumentEventListen": return documentEventListenRemove
+            case "SocketDisconnectListen": return (index: number) => {
+                const socket = sockets.at(index)
+                if (socket) {
+                    socket.onclose = null
+                } else { } // already removed
+            }
+            case "SocketMessageListen": return (index: number) => {
+                const socketToListenToMessagesFrom = sockets.at(index)
+                if (socketToListenToMessagesFrom) {
+                    socketToListenToMessagesFrom.onmessage = null
+                } else { } // already removed
+            }
+            case "LocalStorageRemoveOnADifferentTabListen": return (config: { key: string }) => {
+                localStorageRemoveOnADifferentTabListenAbortControllers[config.key]?.abort()
+                delete localStorageRemoveOnADifferentTabListenAbortControllers[config.key]
+            }
+            case "LocalStorageSetOnADifferentTabListen": return (config: { key: string }) => {
+                localStorageSetOnADifferentTabListenAbortControllers[config.key]?.abort()
+                delete localStorageSetOnADifferentTabListenAbortControllers[config.key]
+            }
+            default: return (_config: any) => {
+                notifyOfBug("Unknown message kind InterfaceWithFuture.RemoveListen." + tag + " from elm. The associated js function might be missing.")
+            }
+        }
+    }
+    const interfaceWithSendToElmImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
+        switch (tag) {
+            case "EditDom": return (config, sendToElm) => {
+                editDom(config.path, config.replacement, sendToElm)
+            }
+            case "AddAudioSourceLoad": return audioSourceLoad
+            case "AddSocketConnect": return (config: { address: string }, sendToElm) => {
+                const createdSocket = new WebSocket(config.address)
+                sockets.push(createdSocket)
+                createdSocket.onopen = _event => {
+                    sendToElm(sockets.length)
+                    createdSocket.onopen = null
+                }
+            }
+            case "AddListen": return (config: { tag: string, value: any }, sendToElm) => {
+                interfaceListenAddImplementation(config.tag)(config.value, sendToElm)
+            }
+            case "AddRequest": return (config: { tag: string, value: any }, sendToElm) => {
+                interfaceRequestImplementation(config.tag)(config.value)
+                    .then(sendToElm)
+                    .catch((_error: null) => {
+                        notifyOfBug("Unknown message kind InterfaceWithFuture.AddRequest." + config.tag + " from elm. The associated js function might be missing.")
+                    })
+            }
+            default: return (_config: any, _sendToElm) => {
+                notifyOfBug("Unknown message kind InterfaceWithFuture." + tag + " from elm. The associated js function might be missing.")
+            }
+        }
+    }
+    const interfaceRequestImplementation: (tag: string) => ((config: any) => Promise<any>) = tag => {
+        switch (tag) {
+            case "LocalStorageRequest": return (config: { key: string }) => {
+                return Promise.resolve(window.localStorage.getItem(config.key))
+            }
+            case "TimePosixRequest": return (_config: null) => {
+                return Promise.resolve(Date.now())
+            }
+            case "TimezoneOffsetRequest": return (_config: null) => {
+                // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
+                return Promise.resolve(new Date().getTimezoneOffset())
+            }
+            case "TimezoneNameRequest": return (_config: null) => {
+                return Promise.resolve(getTimezoneName())
+            }
+            case "RandomUnsignedInt32sRequest": return (config: number) => {
+                return Promise.resolve(crypto.getRandomValues(new Uint32Array(config)))
+            }
+            case "HttpRequest": return (config: HttpRequest) => {
+                const abortController = new AbortController()
+                httpRequestAbortControllers[config.url] = abortController
+                return httpFetch(config, abortController)
+            }
+            case "WindowSizeRequest": return (_config: null) => {
+                return Promise.resolve({ width: window.innerWidth, height: window.innerHeight })
+            }
+            case "NavigationUrlRequest": return (_config: null) => {
+                return Promise.resolve(window.location.href)
+            }
+            case "ClipboardRequest": return (_config: null) => {
+                return navigator.clipboard.readText()
+                    .catch(_notAllowed => {
+                        console.warn("clipboard cannot be read")
+                    })
+            }
+            default: return (_config: any) => Promise.reject(null)
         }
     }
 
-
-    appConfig.ports.toJs.subscribe(function (fromElm) {
+    appConfig.ports.toJs.subscribe(function (fromElm: { tag: "InterfaceWithFuture" | "InterfaceWithoutFuture", value: { tag: string, value: any } }) {
         // console.log("elm → js: ", fromElm)
         function sendToElm(eventData: void) {
             const toElm = { diff: fromElm, eventData: eventData }
             appConfig.ports.fromJs.send(toElm)
             // console.log("js → elm: ", toElm)
         }
-        const diff: [string, unknown] | undefined = Object.entries(fromElm)[0]
-        if (diff) {
-            const [diffKind, diffConfig] = diff
-            const maybeAssociatedAddOrReplaceFunction = interfaceWithSendToElmImplementations[diffKind]
-            if (maybeAssociatedAddOrReplaceFunction) {
-                maybeAssociatedAddOrReplaceFunction(diffConfig, sendToElm)
-            } else {
-                const associatedRemoveFunction = interfaceWithoutSendToElmImplementations[diffKind]
-                if (associatedRemoveFunction) {
-                    associatedRemoveFunction(diffConfig)
-                } else {
-                    console.error("Unknown message kind " + diffKind + " from elm. Maybe you have a typo? Otherwise the associated js function might be missing.")
-                }
+        switch (fromElm.tag) {
+            case "InterfaceWithFuture": {
+                interfaceWithSendToElmImplementation(fromElm.value.tag)(fromElm.value.value, sendToElm)
             }
-        } else {
-            console.error("I got the message {} from elm but I need a specific command as { actionToPerform : config }")
+            case "InterfaceWithoutFuture": {
+                interfaceWithoutSendToElmImplementation(fromElm.value.tag)(fromElm.value.value)
+            }
         }
     })
 
@@ -277,7 +328,7 @@ function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replac
             })
         domElementAddEventListens(domNodeToEdit, replacement.eventListens, path, sendToElm)
     } else {
-        console.error("unknown replacement kind", replacement)
+        console.error("unknown dom modifier replacement kind", replacement)
     }
 }
 
@@ -740,6 +791,10 @@ function editAudio(config: { url: string, startTime: number, replacement: any })
 }
 
 // helpers
+
+function notifyOfBug(bugDescription: string) {
+    console.error("lue-bird/elm-state-interface bug: " + bugDescription + ". Please open an issue on github.")
+}
 
 function posixToContextTime(posix: number, currentTimePosix: number) {
     return (posix - currentTimePosix) / 1000 + audioContext.currentTime
