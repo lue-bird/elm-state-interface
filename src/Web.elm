@@ -1769,8 +1769,8 @@ domNodeIdJsonCodec =
                 DomElementId element ->
                     domElementId element
         )
-        |> Json.Codec.variant ( DomTextId, "text" ) Json.Codec.string
-        |> Json.Codec.variant ( DomElementId, "element" )
+        |> Json.Codec.variant ( DomTextId, "Text" ) Json.Codec.string
+        |> Json.Codec.variant ( DomElementId, "Element" )
             (Json.Codec.lazy (\() -> domElementIdJsonCodec))
 
 
@@ -1821,11 +1821,15 @@ domElementStylesJsonCodec =
 domElementEventListensJsonCodec : JsonCodec (Dict String DefaultActionHandling)
 domElementEventListensJsonCodec =
     Json.Codec.dict
-        (Json.Codec.record
-            (\key value -> { key = key, value = value })
-            |> Json.Codec.field ( .key, "key" ) Json.Codec.string
-            |> Json.Codec.field ( .value, "value" ) defaultActionHandlingJsonCodec
-            |> Json.Codec.recordFinish
+        (Json.Codec.map
+            (\eventListen -> { key = eventListen.name, value = eventListen.defaultActionHandling })
+            (\entry -> { name = entry.key, defaultActionHandling = entry.value })
+            (Json.Codec.record
+                (\name defaultActionHandling -> { name = name, defaultActionHandling = defaultActionHandling })
+                |> Json.Codec.field ( .name, "name" ) Json.Codec.string
+                |> Json.Codec.field ( .defaultActionHandling, "defaultActionHandling" ) defaultActionHandlingJsonCodec
+                |> Json.Codec.recordFinish
+            )
         )
 
 
@@ -1862,22 +1866,11 @@ replacementInEditDomDiffJsonCodec =
                 ReplacementDomElementEventListens listens ->
                     replacementDomElementEventListens listens
         )
-        |> Json.Codec.variant ( ReplacementDomNode, "node" ) domNodeIdJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementStyles, "styles" ) domElementStylesJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementAttributes, "attributes" ) domElementAttributesJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementAttributesNamespaced, "attributesNamespaced" ) domElementAttributesNamespacedJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementEventListens, "eventListens" ) domElementEventListensJsonCodec
-
-
-interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
-interfaceDiffToJson =
-    \interfaceDiff ->
-        case interfaceDiff of
-            InterfaceWithFutureDiff withFutureDiff ->
-                withFutureDiff |> interfaceWithFutureDiffJsonCodec.toJson
-
-            InterfaceWithoutFutureDiff withoutFutureDiff ->
-                withoutFutureDiff |> interfaceWithoutFutureDiffToJson
+        |> Json.Codec.variant ( ReplacementDomNode, "Node" ) domNodeIdJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementStyles, "Styles" ) domElementStylesJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementAttributes, "Attributes" ) domElementAttributesJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementAttributesNamespaced, "AttributesNamespaced" ) domElementAttributesNamespacedJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementEventListens, "EventListens" ) domElementEventListensJsonCodec
 
 
 tagValueToJson : ( String, Json.Encode.Value ) -> Json.Encode.Value
@@ -1887,6 +1880,19 @@ tagValueToJson =
             [ ( "tag", tag |> Json.Encode.string )
             , ( "value", value )
             ]
+
+
+interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
+interfaceDiffToJson =
+    \interfaceDiff ->
+        tagValueToJson
+            (case interfaceDiff of
+                InterfaceWithFutureDiff withFutureDiff ->
+                    ( "InterfaceWithFuture", withFutureDiff |> interfaceWithFutureDiffJsonCodec.toJson )
+
+                InterfaceWithoutFutureDiff withoutFutureDiff ->
+                    ( "InterfaceWithoutFuture", withoutFutureDiff |> interfaceWithoutFutureDiffToJson )
+            )
 
 
 audioParameterTimelineToJson : AudioParameterTimeline -> Json.Encode.Value

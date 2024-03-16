@@ -7,7 +7,6 @@ import Color
 import Dict exposing (Dict)
 import Duration
 import Json.Decode
-import Json.Decode.Local
 import Json.Encode
 import Json.Encode.Extra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
@@ -166,9 +165,9 @@ startingRoomInterface =
                     (\mouseEvent ->
                         mouseEvent
                             |> Json.Decode.decodeValue
-                                (Json.Decode.succeed (\x y -> { x = x, y = y })
-                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientX" Json.Decode.int)
-                                    |> Json.Decode.Local.andMap (Json.Decode.field "clientY" Json.Decode.int)
+                                (Json.Decode.map2 (\x y -> { x = x, y = y })
+                                    (Json.Decode.field "clientX" Json.Decode.int)
+                                    (Json.Decode.field "clientY" Json.Decode.int)
                                 )
                             |> MouseMovedTo
                     )

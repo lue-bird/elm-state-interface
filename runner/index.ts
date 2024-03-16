@@ -52,7 +52,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 }
             }
             default: return (_config: any) => {
-                notifyOfBug("Unknown message kind InterfaceWithoutFuture.Add." + tag + " from elm. The associated js function might be missing.")
+                notifyOfBug("Unknown message kind InterfaceWithoutFuture.Add." + tag + " from elm. The associated js implementation is missing")
             }
         }
     }
@@ -82,7 +82,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 addInterfaceWithoutSendToElmImplementation(config.tag)(config.value)
             }
             default: return (_config: any) => {
-                notifyOfBug("Unknown message kind InterfaceWithoutFuture." + tag + " from elm. The associated js function might be missing.")
+                notifyOfBug("Unknown message kind InterfaceWithoutFuture." + tag + " from elm. The associated js implementation is missing")
             }
         }
     }
@@ -141,7 +141,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 localStorageSetOnADifferentTabListenAbortControllers[config.key] = abortController
             }
             default: return (_config: any, _sendToElm) => {
-                notifyOfBug("Unknown message kind InterfaceWithFuture.AddListen." + tag + " from elm. The associated js function might be missing.")
+                notifyOfBug("Unknown message kind InterfaceWithFuture.AddListen." + tag + " from elm. The associated js implementation is missing")
             }
         }
     }
@@ -172,7 +172,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 delete localStorageSetOnADifferentTabListenAbortControllers[config.key]
             }
             default: return (_config: any) => {
-                notifyOfBug("Unknown message kind InterfaceWithFuture.RemoveListen." + tag + " from elm. The associated js function might be missing.")
+                notifyOfBug("Unknown message kind InterfaceWithoutFuture.RemoveListen." + tag + " from elm. The associated js implementation is missing")
             }
         }
     }
@@ -197,11 +197,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 interfaceRequestImplementation(config.tag)(config.value)
                     .then(sendToElm)
                     .catch((_error: null) => {
-                        notifyOfBug("Unknown message kind InterfaceWithFuture.AddRequest." + config.tag + " from elm. The associated js function might be missing.")
+                        notifyOfBug("Unknown message kind InterfaceWithFuture.AddRequest." + config.tag + " from elm. The associated js implementation is missing")
                     })
             }
             default: return (_config: any, _sendToElm) => {
-                notifyOfBug("Unknown message kind InterfaceWithFuture." + tag + " from elm. The associated js function might be missing.")
+                notifyOfBug("Unknown message kind InterfaceWithFuture." + tag + " from elm. The associated js implementation is missing")
             }
         }
     }
@@ -247,31 +247,50 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     appConfig.ports.toJs.subscribe(function (fromElm: { tag: "InterfaceWithFuture" | "InterfaceWithoutFuture", value: { tag: string, value: any } }) {
         // console.log("elm → js: ", fromElm)
         function sendToElm(eventData: void) {
-            const toElm = { diff: fromElm, eventData: eventData }
+            const toElm = {
+                diff: fromElm.value, // since only InterfaceWithFuture will send something back
+                eventData: eventData
+            }
             appConfig.ports.fromJs.send(toElm)
             // console.log("js → elm: ", toElm)
         }
         switch (fromElm.tag) {
             case "InterfaceWithFuture": {
                 interfaceWithSendToElmImplementation(fromElm.value.tag)(fromElm.value.value, sendToElm)
+                break
             }
             case "InterfaceWithoutFuture": {
                 interfaceWithoutSendToElmImplementation(fromElm.value.tag)(fromElm.value.value)
+                break
             }
         }
     })
 
-    function editDom(path: number[], replacement: any, sendToElm: (v: any) => void) {
+    function editDom(
+        path: number[],
+        replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "EventListens", value: any },
+        sendToElm: (v: any) => void
+    ) {
         if (path.length === 0) {
             const parentDomNode = appConfig.domElement
-            if (replacement?.node) {
-                parentDomNode.replaceChildren() // remove all subs
-                parentDomNode.appendChild(createDomNode([], replacement.node, sendToElm))
-            } else {
-                editDomModifiers(parentDomNode.firstChild as (Element & ElementCSSInlineStyle), replacement, path, sendToElm)
+            switch (replacement.tag) {
+                case "Node": {
+                    parentDomNode.replaceChildren() // remove all subs
+                    parentDomNode.appendChild(createDomNode([], replacement.value, sendToElm))
+                    break
+                }
+                case "Styles": case "Attributes": case "AttributesNamespaced": case "EventListens": {
+                    editDomModifiers(
+                        parentDomNode.firstChild as (Element & ElementCSSInlineStyle),
+                        { tag: replacement.tag, value: replacement.value },
+                        path,
+                        sendToElm
+                    )
+                    break
+                }
             }
         } else {
-            let parentDomNode: ChildNode | null = appConfig.domElement.firstChild
+            let parentDomNode = appConfig.domElement.firstChild
             if (parentDomNode) {
                 path.slice(1, path.length).reverse().forEach(subIndex => {
                     const subNode = parentDomNode?.childNodes[subIndex]
@@ -281,10 +300,20 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 })
                 const oldDomNode: ChildNode | undefined = parentDomNode.childNodes[path[0] ?? 0]
                 if (oldDomNode) {
-                    if (replacement?.node) {
-                        parentDomNode.replaceChild(createDomNode([], replacement.node, sendToElm), oldDomNode)
-                    } else {
-                        editDomModifiers(oldDomNode as (Element & ElementCSSInlineStyle), replacement, path, sendToElm)
+                    switch (replacement.tag) {
+                        case "Node": {
+                            parentDomNode.replaceChild(createDomNode([], replacement.value, sendToElm), oldDomNode)
+                            break
+                        }
+                        case "Styles": case "Attributes": case "AttributesNamespaced": case "EventListens": {
+                            editDomModifiers(
+                                oldDomNode as (Element & ElementCSSInlineStyle),
+                                { tag: replacement.tag, value: replacement.value },
+                                path,
+                                sendToElm
+                            )
+                            break
+                        }
                     }
                 }
             }
@@ -299,36 +328,51 @@ let localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortCo
 let domListenAbortControllers: { domElement: Element, abortController: AbortController }[] = []
 
 
-function editDomModifiers(domNodeToEdit: Element & ElementCSSInlineStyle, replacement: any, path: number[], sendToElm: (v: any) => void) {
-    if (replacement?.styles) {
-        domNodeToEdit.removeAttribute("style")
-        domElementAddStyles(domNodeToEdit, replacement.styles)
-    } else if (replacement?.attributes) {
-        for (const attribute of domNodeToEdit.attributes) {
-            if (attribute.name !== "style" && attribute.namespaceURI === null) {
-                domNodeToEdit.removeAttribute(attribute.name)
-            }
+function editDomModifiers(
+    domNodeToEdit: Element & ElementCSSInlineStyle,
+    replacement: {
+        tag: "Styles" | "Attributes" | "AttributesNamespaced" | "EventListens",
+        value: any
+    },
+    path: number[],
+    sendToElm: (v: any) => void
+) {
+    switch (replacement.tag) {
+        case "Styles": {
+            domNodeToEdit.removeAttribute("style")
+            domElementAddStyles(domNodeToEdit, replacement.value)
+            break
         }
-        domElementAddAttributes(domNodeToEdit, replacement.attributes)
-    } else if (replacement?.attributesNamespaced) {
-        for (const attribute of domNodeToEdit.attributes) {
-            if (attribute.name !== "style" && attribute.namespaceURI) {
-                domNodeToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
-            }
-        }
-        domElementAddAttributesNamespaced(domNodeToEdit, replacement.attributesNamespaced)
-    } else if (replacement?.eventListens) {
-        domListenAbortControllers = domListenAbortControllers
-            .filter(eventListener => {
-                if (eventListener.domElement === domNodeToEdit) {
-                    eventListener.abortController.abort()
-                    return false
+        case "Attributes": {
+            for (const attribute of domNodeToEdit.attributes) {
+                if (attribute.name !== "style" && attribute.namespaceURI === null) {
+                    domNodeToEdit.removeAttribute(attribute.name)
                 }
-                return true
-            })
-        domElementAddEventListens(domNodeToEdit, replacement.eventListens, path, sendToElm)
-    } else {
-        console.error("unknown dom modifier replacement kind", replacement)
+            }
+            domElementAddAttributes(domNodeToEdit, replacement.value)
+            break
+        }
+        case "AttributesNamespaced": {
+            for (const attribute of domNodeToEdit.attributes) {
+                if (attribute.name !== "style" && attribute.namespaceURI) {
+                    domNodeToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
+                }
+            }
+            domElementAddAttributesNamespaced(domNodeToEdit, replacement.value)
+            break
+        }
+        case "EventListens": {
+            domListenAbortControllers = domListenAbortControllers
+                .filter(eventListener => {
+                    if (eventListener.domElement === domNodeToEdit) {
+                        eventListener.abortController.abort()
+                        return false
+                    }
+                    return true
+                })
+            domElementAddEventListens(domNodeToEdit, replacement.value, path, sendToElm)
+            break
+        }
     }
 }
 
@@ -358,26 +402,29 @@ function getTimezoneName(): string | number {
     }
 }
 
-function createDomNode(innerPath: number[], node: any, sendToElm: (v: any) => void): Element | Text {
-    if (node?.text) {
-        return document.createTextNode(node.text)
-    } else { // if (node?.element)
-        const createdDomElement: (Element & ElementCSSInlineStyle) =
-            node.element?.namespace ?
-                document.createElementNS(node.element.namespace, noScript(node.element.tag))
-                :
-                document.createElement(noScript(node.element.tag))
+function createDomNode(innerPath: number[], node: { tag: "Text" | "Element", value: any }, sendToElm: (v: any) => void): Element | Text {
+    switch (node.tag) {
+        case "Text": {
+            return document.createTextNode(node.value)
+        }
+        case "Element": {
+            const createdDomElement: (Element & ElementCSSInlineStyle) =
+                node.value.namespace ?
+                    document.createElementNS(node.value.namespace, noScript(node.value.tag))
+                    :
+                    document.createElement(noScript(node.value.tag))
 
-        domElementAddAttributes(createdDomElement, node.element.attributes)
-        domElementAddAttributesNamespaced(createdDomElement, node.element.attributesNamespaced)
-        domElementAddStyles(createdDomElement, node.element.styles)
-        domElementAddEventListens(createdDomElement, node.element.eventListens, innerPath, sendToElm)
-        node.element.subs.forEach((sub: any, subIndex: number) => {
-            createdDomElement.appendChild(
-                createDomNode([subIndex].concat(innerPath), sub, sendToElm)
-            )
-        })
-        return createdDomElement
+            domElementAddAttributes(createdDomElement, node.value.attributes)
+            domElementAddAttributesNamespaced(createdDomElement, node.value.attributesNamespaced)
+            domElementAddStyles(createdDomElement, node.value.styles)
+            domElementAddEventListens(createdDomElement, node.value.eventListens, innerPath, sendToElm)
+            node.value.subs.forEach((sub: any, subIndex: number) => {
+                createdDomElement.appendChild(
+                    createDomNode([subIndex].concat(innerPath), sub, sendToElm)
+                )
+            })
+            return createdDomElement
+        }
     }
 }
 function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles: { key: string, value: string }[]) {
@@ -406,21 +453,29 @@ function domElementAddAttributesNamespaced(domElement: Element, attributesNamesp
         domElement.setAttributeNS(attributeNamespaced.namespace, attributeNamespaced.key, attributeNamespaced.value)
     })
 }
-function domElementAddEventListens(domElement: Element, eventListens: any, path: number[], sendToElm: (v: any) => void) {
-    for (let [eventListenName, defaultActionHandling] of Object.entries(eventListens)) {
+function domElementAddEventListens(
+    domElement: Element,
+    eventListens: { name: string, defaultActionHandling: "DefaultActionPrevent" | "DefaultActionExecute" }[],
+    path: number[], sendToElm: (v: any) => void
+) {
+    eventListens.forEach(eventListen => {
         const abortController: AbortController = new AbortController()
         domElement.addEventListener(
-            eventListenName,
+            eventListen.name,
             (triggeredEvent) => {
-                sendToElm({ innerPath: path, name: eventListenName, event: triggeredEvent })
-                if (defaultActionHandling === "DefaultActionPrevent") {
-                    triggeredEvent.preventDefault()
+                sendToElm({ innerPath: path, name: eventListen.name, event: triggeredEvent })
+                switch (eventListen.defaultActionHandling) {
+                    case "DefaultActionPrevent": {
+                        triggeredEvent.preventDefault()
+                        break
+                    }
+                    case "DefaultActionExecute": { break }
                 }
             },
             { signal: abortController.signal }
         )
         domListenAbortControllers.push({ domElement: domElement, abortController: abortController })
-    }
+    })
 }
 
 // copied and edited from https://github.com/elm/virtual-dom/blob/master/src/Elm/Kernel/VirtualDom.js
@@ -555,7 +610,11 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
     return fetch(request.url, {
         method: request.method,
         body: httpRequestBodyForFetch(request.body),
-        headers: new Headers(request.headers.map(header => [header.name, header.value])),
+        headers: new Headers(request.headers.map(header => {
+            // removing the type makes ts think that  tuple: string[]
+            const tuple: [string, string] = [header.name, header.value]
+            return tuple
+        })),
         signal: abortController.signal
     })
         .then((res: Response) => {
