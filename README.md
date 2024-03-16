@@ -26,11 +26,11 @@ app =
     }
 ```
 
-> To play around with the examples, set up a [playground](https://github.com/lue-bird/elm-state-interface-hello) with
+> To play around with the examples, set up a [playground](https://github.com/lue-bird/elm-state-interface-hello):
 > ```bash
 > git clone https://github.com/lue-bird/elm-state-interface-hello.git && cd elm-state-interface-hello && npm install && npx vite
 > ```
-> http://localhost:5173/ now shows your app. `src/App.elm` can be opened in your editor to paste in example code and to fiddle around. The website updates automatically.
+> http://localhost:5173/ now shows your app. Open `src/App.elm` in your editor to paste in examples. The website updates automatically.
 
 The "state" is everything your app knows internally. Here it's the counter number, starting at 0.
 
