@@ -26,6 +26,12 @@ app =
     }
 ```
 
+> To play around with the examples, set up a [playground](https://github.com/lue-bird/elm-state-interface-hello) with
+> ```bash
+> git clone https://github.com/lue-bird/elm-state-interface-hello.git && cd elm-state-interface-hello && npm install && npx vite
+> ```
+> http://localhost:5173/ now shows your app. `src/App.elm` can be opened in your editor to paste in example code and to fiddle around. The website updates automatically.
+
 The "state" is everything your app knows internally. Here it's the counter number, starting at 0.
 
 We build the interface to the outside world (html, audio, console logs, server communication, ...) based on our current state.
@@ -411,10 +417,7 @@ port module Main exposing (main)
 import Web
 import Json.Encode -- elm/json
 
-type State
-    = ..your state type..
-
-main : Web.Program State
+main : Web.Program ..your state type..
 main =
     Web.program
         { initialState = ..your initial state..
@@ -443,7 +446,8 @@ Web.programStart({
 });
 ```
 
-A complete example and more in [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
+For a minimal working setup, see the [playground](https://github.com/lue-bird/elm-state-interface-hello).
+For a "showcase example" with a minigame etc, see [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
 
 If you're not familiar with The Elm Architecture, skip to ["future"](#future)
 
