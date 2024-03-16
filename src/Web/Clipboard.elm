@@ -5,7 +5,7 @@ module Web.Clipboard exposing (request, replaceBy)
 @docs request, replaceBy
 
 Note: To listen for [copy, cut and paste events](https://developer.mozilla.org/en-US/docs/Web/API/ClipboardEvent),
-use [`Web.Dom.listenTo`](Web-Dom#listenTo), see
+use [`Web.Dom.listenTo`](Web-Dom#listenTo)
 
 -}
 
@@ -15,7 +15,7 @@ import Web
 
 {-| An [`Interface`](Web#Interface) for reading the textual contents of the system clipboard.
 
-Note: uses [`navigator.clipboard.readText()`](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/readText)
+Note: uses [`navigator.clipboard.readText`](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/readText)
 
 -}
 request : Web.Interface String
