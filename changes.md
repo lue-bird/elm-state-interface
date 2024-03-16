@@ -11,4 +11,4 @@
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
-  - TODO get example/ up to speed with a setup that's as easy as possible to reproduce, preferably even without a bundler
+  - TODO example audio speed does not seem to work. Make sure it does!
