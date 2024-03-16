@@ -37,7 +37,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 if (socketToDisconnect) {
                     socketToDisconnect.send(config.data)
                 } else {
-                    console.warn("trying to send messages on closed socket")
+                    console.warn("lue-bird/elm-state-interface: trying to send messages on closed socket")
                 }
             }
             case "LocalStorageSet": return (config: { key: string, value: string | null }) => {
@@ -48,7 +48,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         window.localStorage.setItem(config.key, config.value)
                     }
                 } catch (disallowedByUserOrQuotaExceeded) {
-                    console.warn(disallowedByUserOrQuotaExceeded)
+                    console.warn("lue-bird/elm-state-interface: local storage cannot be written to", disallowedByUserOrQuotaExceeded)
                 }
             }
             default: return (_config: any) => {
@@ -111,7 +111,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         sendToElm(event.data)
                     }
                 } else {
-                    console.warn("trying to listen to messages on closed socket")
+                    console.warn("lue-bird/elm-state-interface: trying to listen to messages on closed socket")
                 }
             }
             case "LocalStorageRemoveOnADifferentTabListen": return (config: { key: string }, sendToElm) => {
@@ -237,7 +237,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "ClipboardRequest": return (_config: null) => {
                 return navigator.clipboard.readText()
                     .catch(_notAllowed => {
-                        console.warn("clipboard cannot be read")
+                        console.warn("lue-bird/elm-state-interface: clipboard cannot be read")
                     })
             }
             default: return (_config: any) => Promise.reject(null)
