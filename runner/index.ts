@@ -739,6 +739,7 @@ function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
 function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioParameterTimeline) {
     const currentTime = audioContext.currentTime
     audioParam.cancelScheduledValues(currentTime)
+    audioParam.setValueAtTime(timeline.startValue, 0)
     const fullTimeline = [
         { time: currentTime, value: timeline.startValue },
         ...timeline.keyFrames.map(keyframe => { return { value: keyframe.value, time: posixToContextTime(keyframe.time, currentTime) } })
