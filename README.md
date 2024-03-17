@@ -1,5 +1,3 @@
-> 🧪 not production-tested
-
 ### define an app in a simple, safe and declarative way
 
 > 🌱 New to elm? Check out the [core language](https://guide.elm-lang.org/core_language), [install elm](https://guide.elm-lang.org/install/elm), set up an editor like [vs code](https://github.com/elm-tooling/elm-language-client-vscode?tab=readme-ov-file#install) and read about [types](https://guide.elm-lang.org/types/), [error handling](https://guide.elm-lang.org/error_handling/) and [webapp structure](https://guide.elm-lang.org/webapps/structure)
