@@ -1357,8 +1357,49 @@ interfaceOldAndOrUpdatedDiffs =
 
             AndOr.Only (Or.First onlyOld) ->
                 (case onlyOld of
-                    InterfaceWithoutFuture _ ->
-                        []
+                    InterfaceWithoutFuture removedInterfaceWithoutFuture ->
+                        case removedInterfaceWithoutFuture of
+                            AudioPlay audio ->
+                                RemoveAudio { url = audio.url, startTime = audio.startTime } |> List.singleton
+
+                            ConsoleLog _ ->
+                                []
+
+                            ConsoleWarn _ ->
+                                []
+
+                            ConsoleError _ ->
+                                []
+
+                            NavigationReplaceUrl _ ->
+                                []
+
+                            NavigationPushUrl _ ->
+                                []
+
+                            NavigationGo _ ->
+                                []
+
+                            NavigationLoad _ ->
+                                []
+
+                            NavigationReload ->
+                                []
+
+                            FileDownloadUnsignedInt8s _ ->
+                                []
+
+                            ClipboardReplaceBy _ ->
+                                []
+
+                            SocketMessage _ ->
+                                []
+
+                            SocketDisconnect _ ->
+                                []
+
+                            LocalStorageSet _ ->
+                                []
 
                     InterfaceWithFuture interfaceWithFuture ->
                         case interfaceWithFuture of
