@@ -29,7 +29,6 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 const socketToDisconnect = sockets.at(index)
                 if (socketToDisconnect) {
                     socketToDisconnect.close()
-                    sockets[index] = undefined
                 } else { } // socket is already closed
             }
             case "SocketMessage": return (config: { id: number, data: string }) => {
@@ -73,6 +72,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     .filter(socket => socket.url == config.address)
                     .forEach(socketToStopFromConnecting => {
                         socketToStopFromConnecting.onopen = null
+                        socketToStopFromConnecting.onclose = null
                     })
             }
             case "RemoveListen": return (config: { tag: string, value: any }) => {
@@ -101,14 +101,6 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 addAnimationFrameListen(sendToElm)
             }
             case "DocumentEventListen": return documentEventListenAdd
-            case "SocketDisconnectListen": return (index: number, sendToElm) => {
-                const socketToDisconnect = sockets.at(index)
-                if (socketToDisconnect) {
-                    socketToDisconnect.onclose = (event) => {
-                        sendToElm({ code: event.code, reason: event.reason })
-                    }
-                } else { } // socket is already closed
-            }
             case "SocketMessageListen": return (index: number, sendToElm) => {
                 const socketToListenToMessagesFrom = sockets.at(index)
                 if (socketToListenToMessagesFrom) {
@@ -168,12 +160,6 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             }
             case "AnimationFrameListen": return (_config: null) => { removeAnimationFrameListen() }
             case "DocumentEventListen": return documentEventListenRemove
-            case "SocketDisconnectListen": return (index: number) => {
-                const socket = sockets.at(index)
-                if (socket) {
-                    socket.onclose = null
-                } else { } // already removed
-            }
             case "SocketMessageListen": return (index: number) => {
                 const socketToListenToMessagesFrom = sockets.at(index)
                 if (socketToListenToMessagesFrom) {
@@ -191,7 +177,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "GeoLocationListen": return (_config: null) => {
                 if (geoLocationListenId) {
                     navigator.geolocation.clearWatch(geoLocationListenId)
-                    geoLocationListenId = undefined
+                    geoLocationListenId = null
                 }
             }
             default: return (_config: any) => {
@@ -208,9 +194,14 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "AddSocketConnect": return (config: { address: string }, sendToElm) => {
                 const createdSocket = new WebSocket(config.address)
                 sockets.push(createdSocket)
+                const socketId = sockets.length
                 createdSocket.onopen = _event => {
-                    sendToElm(sockets.length)
+                    sendToElm({ tag: "SocketConnected", value: socketId })
                     createdSocket.onopen = null
+                }
+                createdSocket.onclose = (event) => {
+                    sendToElm({ tag: "SocketDisconnected", value: { code: event.code, reason: event.reason } })
+                    sockets[socketId] = null
                 }
             }
             case "AddListen": return (config: { tag: string, value: any }, sendToElm) => {
@@ -355,9 +346,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     }
 }
 
-let sockets: (WebSocket | undefined)[] = []
+let sockets: (WebSocket | null)[] = []
 
-let geoLocationListenId: number | undefined = undefined
+let geoLocationListenId: number | null = null
 let localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
 let localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
 let domListenAbortControllers: { domElement: Element, abortController: AbortController }[] = []

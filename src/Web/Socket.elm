@@ -1,5 +1,5 @@
 module Web.Socket exposing
-    ( connectTo, disconnect, disconnectListen
+    ( connectTo, disconnect
     , message, messageListen
     )
 
@@ -8,7 +8,7 @@ module Web.Socket exposing
 
 ## connection
 
-@docs connectTo, disconnect, disconnectListen
+@docs connectTo, disconnect
 
 
 ## communicate
@@ -21,21 +21,31 @@ import Rope
 import Web
 
 
-{-| An [`Interface`](Web#Interface) for opening a connection on a given address.
+{-| An [`Interface`](Web#Interface) for opening a connection on a given address,
+notifying you when it's [connected or disconnected](Web#SocketConnectionEvent)
 
 Once this detects it's available, make sure to set your state's [`SocketId`](Web#SocketId) so you can actually [send](#message)
-and [receive](#messageListen) messages
+and [receive](#messageListen) messages.
+And once it's disconnected, set your state's [`SocketId`](Web#SocketId) back to nothing:
 
     case state.socketId of
         Nothing ->
             Web.Socket.connectTo "ws://127.0.0.1:9000"
-                |> Web.interfaceMap (\socketId -> { state | socketId = socketId |> Just })
+                |> Web.interfaceMap
+                    (\connectionChanged ->
+                        case connectionChanged of
+                            Web.SocketConnected socketId ->
+                                { state | socketId = socketId |> Just }
+
+                            Web.SocketDisconnected ->
+                                { state | socketId = Nothing }
+                    )
 
         Just socketId ->
             Web.Socket.message socketId "Meow"
 
 -}
-connectTo : String -> Web.Interface Web.SocketId
+connectTo : String -> Web.Interface Web.SocketConnectionEvent
 connectTo address =
     Web.SocketConnect { address = address, on = identity }
         |> Web.InterfaceWithFuture
@@ -48,22 +58,6 @@ disconnect : Web.SocketId -> Web.Interface future_
 disconnect id =
     Web.SocketDisconnect id
         |> Web.InterfaceWithoutFuture
-        |> Rope.singleton
-
-
-{-| An [`Interface`](Web#Interface) for detecting when a connection has been closed with
-
-  - the close `code` sent by the server
-  - The `reason` indicating why the server closed the connection, specific to the particular server and sub-protocol
-
-Make sure to set your state's [`SocketId`](Web#SocketId) back to nothing
-
--}
-disconnectListen : Web.SocketId -> Web.Interface { code : Int, reason : String }
-disconnectListen id =
-    Web.SocketDisconnectListen { id = id, on = identity }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 

@@ -4,7 +4,7 @@ module Web exposing
     , DomNode(..), DomElement, DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
-    , SocketId(..)
+    , SocketConnectionEvent(..), SocketId(..)
     , GeoLocation
     , WindowVisibility(..)
     , programInit, programUpdate, programSubscriptions
@@ -52,7 +52,7 @@ Types used by [`Web.Http`](Web-Http)
 
 Types used by [`Web.Socket`](Web-Socket)
 
-@docs SocketId
+@docs SocketConnectionEvent, SocketId
 
 
 ## geo location
@@ -240,9 +240,23 @@ type AudioSourceLoadError
 type InterfaceSingleWithFuture future
     = DomNodeRender (DomNode future)
     | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
-    | SocketConnect { address : String, on : SocketId -> future }
+    | SocketConnect { address : String, on : SocketConnectionEvent -> future }
     | Request (InterfaceSingleRequest future)
     | Listen (InterfaceSingleListen future)
+
+
+{-| An indication that connection has changed
+after having initiated [`Web.Socket.connectTo`](Web-Socket#connectTo).
+
+  - `SocketConnected`: connection has been opened. Gives access to a [`Web.SocketId`](#SocketId)
+  - `SocketDisconnected`: connection has been closed with
+      - the close `code` sent by the server
+      - The `reason` indicating why the server closed the connection, specific to the particular server and sub-protocol
+
+-}
+type SocketConnectionEvent
+    = SocketConnected SocketId
+    | SocketDisconnected { code : Int, reason : String }
 
 
 {-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will elm only once in the future.
@@ -291,7 +305,6 @@ type InterfaceSingleListen future
     | WindowAnimationFrameListen (Time.Posix -> future)
     | DocumentEventListen { eventName : String, on : Json.Decode.Decoder future }
     | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
-    | SocketDisconnectListen { id : SocketId, on : { code : Int, reason : String } -> future }
     | SocketMessageListen { id : SocketId, on : String -> future }
     | LocalStorageRemoveOnADifferentTabListen { key : String, on : AppUrl -> future }
     | LocalStorageSetOnADifferentTabListen
@@ -458,7 +471,6 @@ type InterfaceSingleListenId
     | IdWindowAnimationFrameListen
     | IdDocumentEventListen String
     | IdTimePeriodicallyListen { milliSeconds : Int }
-    | IdSocketDisconnectListen SocketId
     | IdSocketMessageListen SocketId
     | IdLocalStorageRemoveOnADifferentTabListen { key : String }
     | IdLocalStorageSetOnADifferentTabListen { key : String }
@@ -716,10 +728,6 @@ interfaceListenFutureMap futureChange =
                 { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
                     |> DocumentEventListen
 
-            SocketDisconnectListen disconnectListen ->
-                { id = disconnectListen.id, on = \event -> event |> disconnectListen.on |> futureChange }
-                    |> SocketDisconnectListen
-
             SocketMessageListen messageListen ->
                 { id = messageListen.id, on = \event -> event |> messageListen.on |> futureChange }
                     |> SocketMessageListen
@@ -947,9 +955,6 @@ interfaceSingleListenToId =
             TimePeriodicallyListen timePeriodicallyListen ->
                 IdTimePeriodicallyListen
                     { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-
-            SocketDisconnectListen disconnectListen ->
-                IdSocketDisconnectListen disconnectListen.id
 
             SocketMessageListen messageListen ->
                 IdSocketMessageListen messageListen.id
@@ -1268,12 +1273,6 @@ listenIdToComparable =
                 ComparableList
                     [ ComparableString "IdTimePeriodicallyListen"
                     , intervalDuration.milliSeconds |> intToComparable
-                    ]
-
-            IdSocketDisconnectListen id ->
-                ComparableList
-                    [ ComparableString "IdSocketConnect"
-                    , id |> socketIdToComparable
                     ]
 
             IdSocketMessageListen id ->
@@ -1608,7 +1607,7 @@ socketIdJsonCodec =
 interfaceSingleListenIdJsonCodec : JsonCodec InterfaceSingleListenId
 interfaceSingleListenIdJsonCodec =
     Json.Codec.choice
-        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idDocumentEventListen idSocketDisconnectListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen interfaceSingleListenId ->
+        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen interfaceSingleListenId ->
             case interfaceSingleListenId of
                 IdTimePeriodicallyListen intervalDuration ->
                     idTimePeriodicallyListen intervalDuration
@@ -1624,9 +1623,6 @@ interfaceSingleListenIdJsonCodec =
 
                 IdDocumentEventListen eventName ->
                     idDocumentEventListen eventName
-
-                IdSocketDisconnectListen id ->
-                    idSocketDisconnectListen id
 
                 IdSocketMessageListen id ->
                     idSocketMessageListen id
@@ -1653,8 +1649,6 @@ interfaceSingleListenIdJsonCodec =
             Json.Codec.unit
         |> Json.Codec.variant ( IdDocumentEventListen, "DocumentEventListen" )
             Json.Codec.string
-        |> Json.Codec.variant ( IdSocketDisconnectListen, "SocketDisconnectListen" )
-            socketIdJsonCodec
         |> Json.Codec.variant ( IdSocketMessageListen, "SocketMessageListen" ) socketIdJsonCodec
         |> Json.Codec.variant ( IdLocalStorageRemoveOnADifferentTabListen, "LocalStorageRemoveOnADifferentTabListen" )
             (Json.Codec.record (\key -> { key = key })
@@ -2379,7 +2373,7 @@ interfaceFutureJsonDecoder interfaceAddDiff interface =
             case interfaceAddDiff of
                 AddSocketConnect addConnect ->
                     if addConnect.address == connect.address then
-                        socketIdJsonCodec.jsonDecoder
+                        socketConnectionEventJsonCodec.jsonDecoder
                             |> Json.Decode.map connect.on
                             |> Just
 
@@ -2412,6 +2406,26 @@ interfaceFutureJsonDecoder interfaceAddDiff interface =
 
                 _ ->
                     Nothing
+
+
+socketConnectionEventJsonCodec : JsonCodec SocketConnectionEvent
+socketConnectionEventJsonCodec =
+    Json.Codec.choice
+        (\socketConnected socketDisconnected socketConnectionEvent ->
+            case socketConnectionEvent of
+                SocketConnected id ->
+                    socketConnected id
+
+                SocketDisconnected disconnected ->
+                    socketDisconnected disconnected
+        )
+        |> Json.Codec.variant ( SocketConnected, "SocketConnected" ) socketIdJsonCodec
+        |> Json.Codec.variant ( SocketDisconnected, "SocketDisconnected" )
+            (Json.Codec.record (\code reason -> { code = code, reason = reason })
+                |> Json.Codec.field ( .code, "code" ) Json.Codec.int
+                |> Json.Codec.field ( .reason, "reason" ) Json.Codec.string
+                |> Json.Codec.recordFinish
+            )
 
 
 timePosixJsonCodec : JsonCodec Time.Posix
@@ -2675,12 +2689,6 @@ listenFutureJsonDecoder interfaceSingleListen =
         LocalStorageRemoveOnADifferentTabListen listen ->
             urlJsonDecoder
                 |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
-
-        SocketDisconnectListen disconnectListen ->
-            Json.Decode.map2 (\code reason -> { code = code, reason = reason })
-                (Json.Decode.field "code" Json.Decode.int)
-                (Json.Decode.field "reason" Json.Decode.string)
-                |> Json.Decode.map disconnectListen.on
 
         SocketMessageListen messageListen ->
             Json.Decode.string
