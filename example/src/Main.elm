@@ -1,14 +1,12 @@
 port module Main exposing (main)
 
 import AppUrl exposing (AppUrl)
-import Array
 import Codec exposing (Codec)
 import Color
 import Dict exposing (Dict)
 import Duration
 import Json.Decode
 import Json.Encode
-import Json.Encode.Extra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Set
 import Time
