@@ -27,11 +27,11 @@
         },
         "indirect": {
             "bburdette/toop": "1.2.0",
+            "elm-community/array-extra": "2.6.0",
+            "elm-explorations/test": "2.2.0",
             "elm/html": "1.0.0",
             "elm/random": "1.0.0",
             "elm/virtual-dom": "1.0.3",
-            "elm-community/array-extra": "2.6.0",
-            "elm-explorations/test": "2.2.0",
             "lue-bird/elm-linear-direction": "11.2.0",
             "lue-bird/elm-partial-or-complete": "1.0.2",
             "lue-bird/elm-typesafe-array": "34.0.1"
