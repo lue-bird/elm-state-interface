@@ -62,7 +62,7 @@ To balance this out in your animation, the [current time](https://dark.elm.dmy.f
 To get a delta, you could use [`Web.Time.posixRequest`](Web-Time#posixRequest)
 to get a start time and check with e.g. [`Duration.from`](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/Duration#from) how far you've progressed in the timeline.
 
-Note: To improve performance and battery life, most browsers pause these notifications when the app is running in a background tab or a hidden <iframe>.
+Note: To improve performance and battery life, most browsers pause these notifications when the app is running in a background tab or a hidden `<iframe>`.
 
 Replacement for [`Browser.Events.onAnimationFrame`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Events#onAnimationFrame)
 
