@@ -59,7 +59,7 @@ import Web.Audio.Parameter
 import Web.Audio.Parameter.Internal
 
 
-{-| Change the stereo panning with a given a signed percentage.
+{-| Change the stereo panning with a given a signed percentage [parameter](Web#AudioParameterTimeline).
 
 For example `Web.Audio.pan -0.9` means that the sound is almost fully balanced towards the left speaker
 
@@ -161,14 +161,14 @@ addHighpassFromFrequency cutoffFrequency =
         }
 
 
-{-| Play audio from an audio source at a given time.
+{-| Create [`Audio`](Web#Audio) from an given loaded [source](Web#AudioSource)
+which will play at a given [time](https://dark.elm.dmy.fr/packages/elm/time/latest/)
 
-    -- play a song at half speed and wait 15 seconds after the usual song start time before starting
+    -- play a song at half speed and wait 2 seconds after the usual song start time before starting
     Web.Audio.fromSource
         myCoolSong
-        songStartTime
+        (Duration.addTo usualSongStartTime (Duration.seconds 2))
         |> Web.Audio.speedScaleBy (Web.Audio.Parameter.at 0.5)
-        |> Web.Audio.delayBy (Duration.seconds 15)
 
 Note that in some browsers audio will be muted until the user interacts with the webpage.
 
