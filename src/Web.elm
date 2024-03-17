@@ -639,15 +639,15 @@ interfaceRequestFutureMap futureChange =
                     |> httpRequestMap futureChange
                     |> HttpRequest
 
-            WindowSizeRequest toState ->
-                (\event -> toState event |> futureChange)
+            WindowSizeRequest toFuture ->
+                (\event -> toFuture event |> futureChange)
                     |> WindowSizeRequest
 
-            NavigationUrlRequest toState ->
-                (\event -> toState event |> futureChange) |> NavigationUrlRequest
+            NavigationUrlRequest toFuture ->
+                (\event -> toFuture event |> futureChange) |> NavigationUrlRequest
 
-            ClipboardRequest toState ->
-                (\event -> toState event |> futureChange) |> ClipboardRequest
+            ClipboardRequest toFuture ->
+                (\event -> toFuture event |> futureChange) |> ClipboardRequest
 
             TimePosixRequest requestTimeNow ->
                 (\event -> requestTimeNow event |> futureChange)
@@ -700,11 +700,11 @@ interfaceListenFutureMap futureChange =
                 { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
                     |> WindowEventListen
 
-            WindowVisibilityChangeListen toState ->
-                (\event -> toState event |> futureChange) |> WindowVisibilityChangeListen
+            WindowVisibilityChangeListen toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowVisibilityChangeListen
 
-            WindowAnimationFrameListen toState ->
-                (\event -> toState event |> futureChange) |> WindowAnimationFrameListen
+            WindowAnimationFrameListen toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowAnimationFrameListen
 
             TimePeriodicallyListen timePeriodicallyListen ->
                 { intervalDurationMilliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds
@@ -2484,17 +2484,17 @@ requestFutureJsonDecoder =
                         |> Json.Decode.map (httpExpectOnError httpRequest.expect)
                     ]
 
-            WindowSizeRequest toState ->
-                Json.Decode.map2 (\width height -> toState { width = width, height = height })
+            WindowSizeRequest toFuture ->
+                Json.Decode.map2 (\width height -> toFuture { width = width, height = height })
                     (Json.Decode.field "width" Json.Decode.int)
                     (Json.Decode.field "height" Json.Decode.int)
 
-            NavigationUrlRequest toState ->
+            NavigationUrlRequest toFuture ->
                 urlJsonDecoder
-                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toState)
+                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toFuture)
 
-            ClipboardRequest toState ->
-                Json.Decode.map toState Json.Decode.string
+            ClipboardRequest toFuture ->
+                Json.Decode.map toFuture Json.Decode.string
 
             TimePosixRequest requestTimeNow ->
                 Json.Decode.map requestTimeNow timePosixJsonCodec.jsonDecoder
@@ -2522,14 +2522,14 @@ httpExpectOnError : HttpExpect future -> (HttpError -> future)
 httpExpectOnError =
     \httpExpect ->
         case httpExpect of
-            HttpExpectString toState ->
-                \e -> e |> Err |> toState
+            HttpExpectString toFuture ->
+                \e -> e |> Err |> toFuture
 
-            HttpExpectBytes toState ->
-                \e -> e |> Err |> toState
+            HttpExpectBytes toFuture ->
+                \e -> e |> Err |> toFuture
 
-            HttpExpectWhatever toState ->
-                \e -> e |> Err |> toState
+            HttpExpectWhatever toFuture ->
+                \e -> e |> Err |> toFuture
 
 
 httpExpectJsonDecoder : HttpExpect future -> Json.Decode.Decoder future
@@ -2548,8 +2548,8 @@ httpExpectJsonDecoder expect =
                 in
                 Json.Decode.field "body"
                     (case expect of
-                        HttpExpectString toState ->
-                            Json.Decode.map toState
+                        HttpExpectString toFuture ->
+                            Json.Decode.map toFuture
                                 (if isOk then
                                     Json.Decode.map Ok Json.Decode.string
 
@@ -2557,8 +2557,8 @@ httpExpectJsonDecoder expect =
                                     badStatusJsonDecoder
                                 )
 
-                        HttpExpectBytes toState ->
-                            Json.Decode.map toState
+                        HttpExpectBytes toFuture ->
+                            Json.Decode.map toFuture
                                 (if isOk then
                                     Json.Decode.map Ok
                                         (Json.Decode.map Bytes.LocalExtra.fromUnsignedInt8List
@@ -2569,8 +2569,8 @@ httpExpectJsonDecoder expect =
                                     badStatusJsonDecoder
                                 )
 
-                        HttpExpectWhatever toState ->
-                            Json.Decode.map toState
+                        HttpExpectWhatever toFuture ->
+                            Json.Decode.map toFuture
                                 (if isOk then
                                     Json.Decode.succeed (Ok ())
 
@@ -2645,19 +2645,20 @@ listenFutureJsonDecoder interfaceSingleListen =
         WindowEventListen listen ->
             listen.on
 
-        WindowVisibilityChangeListen listen ->
-            Json.Decode.map listen windowVisibilityCodec.jsonDecoder
+        WindowVisibilityChangeListen toFuture ->
+            windowVisibilityCodec.jsonDecoder
+                |> Json.Decode.map toFuture
 
-        WindowAnimationFrameListen toState ->
+        WindowAnimationFrameListen toFuture ->
             timePosixJsonCodec.jsonDecoder
-                |> Json.Decode.map toState
+                |> Json.Decode.map toFuture
 
         DocumentEventListen listen ->
             listen.on
 
         TimePeriodicallyListen timePeriodicallyListen ->
-            Json.Decode.map timePeriodicallyListen.on
-                timePosixJsonCodec.jsonDecoder
+            timePosixJsonCodec.jsonDecoder
+                |> Json.Decode.map timePeriodicallyListen.on
 
         LocalStorageSetOnADifferentTabListen listen ->
             Json.Decode.map3
