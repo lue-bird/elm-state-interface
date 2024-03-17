@@ -1,6 +1,73 @@
 module Web.Random exposing (unsignedInt32s)
 
-{-| Helpers for randomness as part of an [`Interface`](Web#Interface)
+{-| Helpers for randomness as part of an [`Interface`](Web#Interface).
+Not familiar with random "generators"? [`elm/random`](https://package.elm-lang.org/packages/elm/random/latest)
+explains it nicely!
+
+Here's an example showing a number between 1 and 6 and a button to reroll
+
+    import Random.Pcg.Extended
+    import Web.Dom
+
+    type State
+        = WaitingForInitialRandomness
+        | DiceUiState { diceEyes : Int, seed : Random.Pcg.Extended.Seed }
+
+    type DiceUiEvent
+        = RerollClicked
+
+    diceEyesRandomGenerator : Random.Pcg.Extended.Generator Int
+    diceEyesRandomGenerator =
+        Random.Pcg.Extended.int 1 6
+
+    { initialState = WaitingForInitialRandomness
+    , interface =
+        \state ->
+            case state of
+                WaitingForInitialRandomness ->
+                    Web.Random.unsignedInt32s 4
+                        |> Web.futureMap
+                            (\unsignedInt32s ->
+                                case unsignedIn32s of
+                                    firstUint32 :: afterFirstUint32 ->
+                                        let
+                                            initialSeed : Random.Pcg.Extended.Seed
+                                            initialSeed =
+                                                Random.Pcg.Extended.initialSeed firstUint32 afterFirstUint32
+
+                                            ( diceEyes, newSeed ) =
+                                                Random.Pcg.Extended.step diceEyesRandomGenerator initialSeed
+                                        in
+                                        DiceUiState { diceEyes = diceEyes, seed = newSeed }
+
+                                    [] ->
+                                        WaitingForInitialRandomness
+                            )
+
+                DiceUiState randomStuff ->
+                    Web.Dom.element "div"
+                        []
+                        [ randomStuff.diceEyes |> String.fromInt |> Web.Dom.text
+                        , Web.Dom.element "button"
+                            [ Web.Dom.listenTo "click"
+                                |> Web.Dom.modifierFutureMap (\_ -> RerollClicked)
+                            ]
+                            [ "roll the dice" ]
+                        ]
+                        |> Web.Dom.render
+                        |> Web.interfaceFutureMap
+                            (\RerollClicked ->
+                                let
+                                    initialSeed : Random.Pcg.Extended.Seed
+                                    initialSeed =
+                                        Random.Pcg.Extended.initialSeed firstUnsignedInt32 afterFirstUnsignedInt32
+
+                                    ( diceEyes, newSeed ) =
+                                        Random.Pcg.Extended.step diceEyesRandomGenerator initialSeed
+                                in
+                                DiceUiState { diceEyes = diceEyes, seed = newSeed }
+                            )
+    }
 
 @docs unsignedInt32s
 
