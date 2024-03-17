@@ -1,12 +1,12 @@
 module Web.Window exposing
     ( animationFrameListen
-    , sizeRequest, eventListen, resizeListen
+    , sizeRequest, listenTo, resizeListen
     )
 
-{-| Helpers for `window` interaction as part of an [`Interface`](Web#Interface)
+{-| Observe the page's global environment as part of an [`Interface`](Web#Interface)
 
 @docs animationFrameListen
-@docs sizeRequest, eventListen, resizeListen
+@docs sizeRequest, listenTo, resizeListen
 
 -}
 
@@ -16,10 +16,10 @@ import Time
 import Web
 
 
-{-| An [`Interface`](Web#Interface) that listens for a specific `window` event
+{-| An [`Interface`](Web#Interface) that listens for a specific [`window` event](https://developer.mozilla.org/en-US/docs/Web/API/Window#events)
 -}
-eventListen : String -> Web.Interface Json.Decode.Value
-eventListen eventName =
+listenTo : String -> Web.Interface Json.Decode.Value
+listenTo eventName =
     Web.WindowEventListen { eventName = eventName, on = Json.Decode.value }
         |> Web.Listen
         |> Web.InterfaceWithFuture
