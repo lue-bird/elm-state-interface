@@ -1,8 +1,7 @@
 {
     "type": "module",
-    "main": "index.js",
-    "dependencies": {
+    "devDependencies": {
         "vite": "^5.1.2",
-        "vite-plugin-elm": "^3.0.0"
+        "vite-plugin-elm-watch": "^1.3.2"
     }
 }

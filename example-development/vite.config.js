@@ -1,7 +1,6 @@
-import { defineConfig } from "vite";
-import elmPlugin from "vite-plugin-elm";
+import { defineConfig } from 'vite'
+import elm from 'vite-plugin-elm-watch'
 
 export default defineConfig({
-    root: "src",
-    plugins: [elmPlugin()],
+    plugins: [elm()]
 })
