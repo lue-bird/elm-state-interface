@@ -5,6 +5,7 @@ module Web exposing
     , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketId(..)
+    , WindowVisibility(..)
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
     , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..)
@@ -51,6 +52,13 @@ Types used by [`Web.Http`](Web-Http)
 Types used by [`Web.Socket`](Web-Socket)
 
 @docs SocketId
+
+
+## window
+
+Types used by [`Web.Window`](Web-Window)
+
+@docs WindowVisibility
 
 
 ## embed
@@ -244,6 +252,7 @@ type InterfaceSingleRequest future
 -}
 type InterfaceSingleListen future
     = WindowEventListen { eventName : String, on : Json.Decode.Decoder future }
+    | WindowVisibilityChangeListen (WindowVisibility -> future)
     | WindowAnimationFrameListen (Time.Posix -> future)
     | DocumentEventListen { eventName : String, on : Json.Decode.Decoder future }
     | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
@@ -254,6 +263,17 @@ type InterfaceSingleListen future
         { key : String
         , on : { appUrl : AppUrl, oldValue : Maybe String, newValue : String } -> future
         }
+
+
+{-| The visibility to the user
+
+  - `WindowHidden`: the user has navigated to a new page, switched tabs, closed the tab, minimized or closed the browser, or, on mobile, switched from the browser to a different app
+  - `WindowShown` otherwise
+
+-}
+type WindowVisibility
+    = WindowShown
+    | WindowHidden
 
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
@@ -397,6 +417,7 @@ at multiple times in the future
 -}
 type InterfaceSingleListenId
     = IdWindowEventListen String
+    | IdWindowVisibilityChangeListen
     | IdWindowAnimationFrameListen
     | IdDocumentEventListen String
     | IdTimePeriodicallyListen { milliSeconds : Int }
@@ -637,6 +658,9 @@ interfaceListenFutureMap futureChange =
             WindowEventListen listen ->
                 { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
                     |> WindowEventListen
+
+            WindowVisibilityChangeListen toState ->
+                (\event -> toState event |> futureChange) |> WindowVisibilityChangeListen
 
             WindowAnimationFrameListen toState ->
                 (\event -> toState event |> futureChange) |> WindowAnimationFrameListen
@@ -894,6 +918,9 @@ interfaceSingleListenToId =
 
             WindowEventListen listen ->
                 IdWindowEventListen listen.eventName
+
+            WindowVisibilityChangeListen _ ->
+                IdWindowVisibilityChangeListen
 
             WindowAnimationFrameListen _ ->
                 IdWindowAnimationFrameListen
@@ -1171,6 +1198,9 @@ listenIdToComparable =
                     [ ComparableString "IdWindowEventListen"
                     , ComparableString eventName
                     ]
+
+            IdWindowVisibilityChangeListen ->
+                ComparableString "IdWindowVisibilityChangeListen"
 
             IdWindowAnimationFrameListen ->
                 ComparableString "IdWindowAnimationFrameListen"
@@ -1519,31 +1549,34 @@ socketIdJsonCodec =
 interfaceSingleListenIdJsonCodec : JsonCodec InterfaceSingleListenId
 interfaceSingleListenIdJsonCodec =
     Json.Codec.choice
-        (\addTimePeriodicallyListen addWindowEventListen addWindowAnimationFrameListen addDocumentEventListen addSocketDisconnectListen addSocketMessageListen addLocalStorageRemoveOnADifferentTabListen addLocalStorageSetOnADifferentTabListen interfaceSingleListenId ->
+        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idDocumentEventListen idSocketDisconnectListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen interfaceSingleListenId ->
             case interfaceSingleListenId of
                 IdTimePeriodicallyListen intervalDuration ->
-                    addTimePeriodicallyListen intervalDuration
+                    idTimePeriodicallyListen intervalDuration
 
                 IdWindowEventListen eventName ->
-                    addWindowEventListen eventName
+                    idWindowEventListen eventName
+
+                IdWindowVisibilityChangeListen ->
+                    idWindowVisibilityChangeListen ()
 
                 IdWindowAnimationFrameListen ->
-                    addWindowAnimationFrameListen ()
+                    idWindowAnimationFrameListen ()
 
                 IdDocumentEventListen eventName ->
-                    addDocumentEventListen eventName
+                    idDocumentEventListen eventName
 
                 IdSocketDisconnectListen id ->
-                    addSocketDisconnectListen id
+                    idSocketDisconnectListen id
 
                 IdSocketMessageListen id ->
-                    addSocketMessageListen id
+                    idSocketMessageListen id
 
                 IdLocalStorageRemoveOnADifferentTabListen listen ->
-                    addLocalStorageRemoveOnADifferentTabListen listen
+                    idLocalStorageRemoveOnADifferentTabListen listen
 
                 IdLocalStorageSetOnADifferentTabListen listen ->
-                    addLocalStorageSetOnADifferentTabListen listen
+                    idLocalStorageSetOnADifferentTabListen listen
         )
         |> Json.Codec.variant ( IdTimePeriodicallyListen, "TimePeriodicallyListen" )
             (Json.Codec.record (\ms -> { milliSeconds = ms })
@@ -1552,6 +1585,8 @@ interfaceSingleListenIdJsonCodec =
             )
         |> Json.Codec.variant ( IdWindowEventListen, "WindowEventListen" )
             Json.Codec.string
+        |> Json.Codec.variant ( \() -> IdWindowVisibilityChangeListen, "WindowVisibilityChangeListen" )
+            Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdWindowAnimationFrameListen, "WindowAnimationFrameListen" )
             Json.Codec.unit
         |> Json.Codec.variant ( IdDocumentEventListen, "DocumentEventListen" )
@@ -2503,6 +2538,9 @@ listenFutureJsonDecoder interfaceSingleListen =
         WindowEventListen listen ->
             listen.on
 
+        WindowVisibilityChangeListen listen ->
+            Json.Decode.map listen windowVisibilityCodec.jsonDecoder
+
         WindowAnimationFrameListen toState ->
             timePosixJsonCodec.jsonDecoder
                 |> Json.Decode.map toState
@@ -2539,6 +2577,19 @@ listenFutureJsonDecoder interfaceSingleListen =
         SocketMessageListen messageListen ->
             Json.Decode.string
                 |> Json.Decode.map messageListen.on
+
+
+windowVisibilityCodec : JsonCodec WindowVisibility
+windowVisibilityCodec =
+    Json.Codec.enum [ WindowShown, WindowHidden ]
+        (\windowVisibility ->
+            case windowVisibility of
+                WindowShown ->
+                    "visible"
+
+                WindowHidden ->
+                    "hidden"
+        )
 
 
 domElementAtReversePath : List Int -> (DomNode future -> Maybe (DomNode future))

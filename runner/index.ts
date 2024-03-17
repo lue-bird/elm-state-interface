@@ -92,6 +92,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 addTimePeriodicallyListen(config, sendToElm)
             }
             case "WindowEventListen": return windowEventListenAdd
+            case "WindowVisibilityChangeListen": return (_config: null, sendToElm) => {
+                window.document.onvisibilitychange = _eventWhichDoesNotContainTheNewVisibility => {
+                    sendToElm(window.document.visibilityState)
+                }
+            }
             case "WindowAnimationFrameListen": return (_config: null, sendToElm) => {
                 addAnimationFrameListen(sendToElm)
             }
@@ -149,6 +154,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         switch (tag) {
             case "TimePeriodicallyListen": return removeTimePeriodicallyListen
             case "WindowEventListen": return windowEventListenRemove
+            case "WindowVisibilityChangeListen": return (_config: null) => {
+                window.document.onvisibilitychange = null
+            }
             case "AnimationFrameListen": return (_config: null) => { removeAnimationFrameListen() }
             case "DocumentEventListen": return documentEventListenRemove
             case "SocketDisconnectListen": return (index: number) => {

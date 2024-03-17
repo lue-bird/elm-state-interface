@@ -1,12 +1,14 @@
 module Web.Window exposing
-    ( animationFrameListen
-    , sizeRequest, listenTo, resizeListen
+    ( animationFrameListen, visibilityChangeListen
+    , sizeRequest, resizeListen
+    , listenTo
     )
 
 {-| Observe the page's global environment as part of an [`Interface`](Web#Interface)
 
-@docs animationFrameListen
-@docs sizeRequest, listenTo, resizeListen
+@docs animationFrameListen, visibilityChangeListen
+@docs sizeRequest, resizeListen
+@docs listenTo
 
 -}
 
@@ -21,6 +23,20 @@ import Web
 listenTo : String -> Web.Interface Json.Decode.Value
 listenTo eventName =
     Web.WindowEventListen { eventName = eventName, on = Json.Decode.value }
+        |> Web.Listen
+        |> Web.InterfaceWithFuture
+        |> Rope.singleton
+
+
+{-| An [`Interface`](Web#Interface) for detecting changes to the [visibility to the user](Web#WindowVisibility)
+
+You can use times where the page becomes hidden to for example pause a currently running game.
+These times will also be the last reliable observation you can make before a user might close the page, so treat it as the likely end of the user's session
+
+-}
+visibilityChangeListen : Web.Interface Web.WindowVisibility
+visibilityChangeListen =
+    Web.WindowVisibilityChangeListen identity
         |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton
