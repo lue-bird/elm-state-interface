@@ -41,7 +41,6 @@ module Web.Audio exposing
                     Web.Audio.sourceLoad "https://archive.org/details/lp_the-caretakers-original-motion-picture-sco_elmer-bernstein/disc1/01.03.+Take+Care.mp3"
                         |> Web.interfaceFutureMap
                             (\result -> { state | musicSource = result |> Just })
-    , ...
     }
 
 @docs sourceLoad, fromSource, play
