@@ -8,6 +8,8 @@
       - `Web.Dom.modifierMap` name → `Web.Dom.modifierFutureMap`
       - `Web.interfaceMap` name → `Web.interfaceFutureMap`
       - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
+  - `module Web.Window`:
+      - `eventListen` name → `listenTo`
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
