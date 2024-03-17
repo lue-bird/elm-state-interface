@@ -5,7 +5,6 @@ module Web.Audio exposing
     )
 
 {-| Play [`Audio`](Web#Audio) as part of an [`Interface`](Web#Interface).
-Documentation and js implementation inspired by [MartinSStewart/elm-audio](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/). Thanks!
 
     import Time
     import Web
@@ -39,7 +38,7 @@ Documentation and js implementation inspired by [MartinSStewart/elm-audio](https
                                 |> Web.Audio.play
 
                 _ ->
-                    Web.Audio.sourceLoad "https://cors-anywhere.herokuapp.com/https://freepd.com/music/Wakka%20Wakka.mp3"
+                    Web.Audio.sourceLoad "https://archive.org/details/lp_the-caretakers-original-motion-picture-sco_elmer-bernstein/disc1/01.03.+Take+Care.mp3"
                         |> Web.interfaceFutureMap
                             (\result -> { state | musicSource = result |> Just })
     , ...
