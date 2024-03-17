@@ -1105,8 +1105,8 @@ pickApplesStateCodec =
         )
         |> Codec.field "name" .name Codec.string
         |> Codec.field "gemCount" .gemCount Codec.int
-        |> Codec.field "appleCountBefore" .gemCount Codec.int
-        |> Codec.field "pickedAppleCount" .gemCount Codec.int
+        |> Codec.field "appleCountBefore" .appleCountBefore Codec.int
+        |> Codec.field "pickedAppleCount" .pickedAppleCount Codec.int
         |> Codec.field "headDirection" .headDirection directionCodec
         |> Codec.field "headLocation" .headLocation pickApplesLocationCodec
         |> Codec.field "tailSegments" .tailSegments (Codec.list pickApplesLocationCodec)
