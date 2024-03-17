@@ -7,5 +7,3 @@ npm install
 npx vite
 ```
 then open http://localhost:5173/
-
-The actual source code is in [`example/src/Main.elm`](/example/src/Main.elm)
