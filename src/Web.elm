@@ -5,6 +5,7 @@ module Web exposing
     , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketId(..)
+    , GeoLocation
     , WindowVisibility(..)
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
@@ -54,6 +55,13 @@ Types used by [`Web.Socket`](Web-Socket)
 @docs SocketId
 
 
+## geo location
+
+Types used by [`Web.GeoLocation`](Web-GeoLocation)
+
+@docs GeoLocation
+
+
 ## window
 
 Types used by [`Web.Window`](Web-Window)
@@ -88,6 +96,7 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 -}
 
 import AndOr exposing (AndOr)
+import Angle exposing (Angle)
 import AppUrl exposing (AppUrl)
 import Array exposing (Array)
 import Bytes exposing (Bytes)
@@ -100,6 +109,7 @@ import Json.Decode
 import Json.Encode
 import Keys exposing (Key, Keys)
 import KeysSet exposing (KeysSet)
+import Length exposing (Length)
 import Map exposing (Mapping)
 import N exposing (N1)
 import Or
@@ -108,6 +118,7 @@ import Possibly exposing (Possibly)
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Set exposing (Set)
+import Speed exposing (Speed)
 import Time
 import Typed
 import Url exposing (Url)
@@ -246,6 +257,30 @@ type InterfaceSingleRequest future
     | HttpRequest (HttpRequest future)
     | ClipboardRequest (String -> future)
     | LocalStorageRequest { key : String, on : Maybe String -> future }
+    | GeoLocationRequest (GeoLocation -> future)
+
+
+{-| Position and (if available) altitude of the device on Earth, as well as the accuracy with which these properties are calculated.
+The geographic position information is provided in terms of World Geodetic System coordinates (WGS84).
+
+Device movement direction and speed might also be provided.
+
+[`Length`](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/Length),
+[`Angle`](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/Angle) and
+[`Speed`](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/Speed)
+are from `ianmackenzie/elm-units`
+
+-}
+type alias GeoLocation =
+    RecordWithoutConstructorFunction
+        { latitudeInDecimalDegrees : Float
+        , longitudeInDecimalDegrees : Float
+        , latitudeLongitudeAccuracy : Maybe Length
+        , altitudeAboveNominalSeaLevel : Maybe Length
+        , altitudeAccuracy : Maybe Length
+        , headingWith0AsTrueNorthAndIncreasingClockwise : Maybe Angle
+        , speed : Maybe Speed
+        }
 
 
 {-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will possibly notify elm multiple times in the future.
@@ -263,6 +298,7 @@ type InterfaceSingleListen future
         { key : String
         , on : { appUrl : AppUrl, oldValue : Maybe String, newValue : String } -> future
         }
+    | GeoLocationListen (GeoLocation -> future)
 
 
 {-| The visibility to the user
@@ -410,6 +446,7 @@ type InterfaceSingleRequestId
     | IdHttpRequest HttpRequestId
     | IdClipboardRequest
     | IdLocalStorageRequest { key : String }
+    | IdGeoLocationRequest
 
 
 {-| Safe to ignore. Possible identifier for an interface single that can send back values to elm
@@ -425,6 +462,7 @@ type InterfaceSingleListenId
     | IdSocketMessageListen SocketId
     | IdLocalStorageRemoveOnADifferentTabListen { key : String }
     | IdLocalStorageSetOnADifferentTabListen { key : String }
+    | IdGeoLocationListen
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -629,6 +667,9 @@ interfaceRequestFutureMap futureChange =
                 }
                     |> RandomUnsignedInt32sRequest
 
+            GeoLocationRequest toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GeoLocationRequest
+
 
 httpRequestMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
 httpRequestMap futureChange =
@@ -690,6 +731,9 @@ interfaceListenFutureMap futureChange =
             LocalStorageSetOnADifferentTabListen listen ->
                 { key = listen.key, on = \event -> event |> listen.on |> futureChange }
                     |> LocalStorageSetOnADifferentTabListen
+
+            GeoLocationListen toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GeoLocationListen
 
 
 domElementMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
@@ -928,6 +972,9 @@ interfaceSingleListenToId =
             DocumentEventListen listen ->
                 IdDocumentEventListen listen.eventName
 
+            GeoLocationListen _ ->
+                IdGeoLocationListen
+
 
 httpRequestToId : HttpRequest future_ -> HttpRequestId
 httpRequestToId =
@@ -985,6 +1032,9 @@ interfaceSingleRequestToId =
 
             LocalStorageRequest request ->
                 IdLocalStorageRequest { key = request.key }
+
+            GeoLocationRequest _ ->
+                IdGeoLocationRequest
 
 
 interfaceSingleWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
@@ -1094,6 +1144,9 @@ interfaceSingleRequestIdToComparable =
 
             IdClipboardRequest ->
                 ComparableString "IdClipboardRequest"
+
+            IdGeoLocationRequest ->
+                ComparableString "IdGeoLocationRequest"
 
 
 maybeToComparable : (value -> Comparable) -> (Maybe value -> Comparable)
@@ -1240,6 +1293,9 @@ listenIdToComparable =
                     [ ComparableString "IdLocalStorageSetOnADifferentTabListen"
                     , listen.key |> ComparableString
                     ]
+
+            IdGeoLocationListen ->
+                ComparableString "IdGeoLocationListen"
 
 
 interfaceSingleWithoutFutureToComparable : InterfaceSingleWithoutFuture -> Comparable
@@ -1469,6 +1525,9 @@ interfaceOldAndOrUpdatedDiffs =
                             Request (LocalStorageRequest _) ->
                                 []
 
+                            Request (GeoLocationRequest _) ->
+                                []
+
                             Listen listen ->
                                 listen |> interfaceSingleListenToId |> RemoveListen |> List.singleton
                 )
@@ -1549,7 +1608,7 @@ socketIdJsonCodec =
 interfaceSingleListenIdJsonCodec : JsonCodec InterfaceSingleListenId
 interfaceSingleListenIdJsonCodec =
     Json.Codec.choice
-        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idDocumentEventListen idSocketDisconnectListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen interfaceSingleListenId ->
+        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idDocumentEventListen idSocketDisconnectListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen interfaceSingleListenId ->
             case interfaceSingleListenId of
                 IdTimePeriodicallyListen intervalDuration ->
                     idTimePeriodicallyListen intervalDuration
@@ -1577,6 +1636,9 @@ interfaceSingleListenIdJsonCodec =
 
                 IdLocalStorageSetOnADifferentTabListen listen ->
                     idLocalStorageSetOnADifferentTabListen listen
+
+                IdGeoLocationListen ->
+                    idGeoLocationListen ()
         )
         |> Json.Codec.variant ( IdTimePeriodicallyListen, "TimePeriodicallyListen" )
             (Json.Codec.record (\ms -> { milliSeconds = ms })
@@ -1604,6 +1666,8 @@ interfaceSingleListenIdJsonCodec =
                 |> Json.Codec.field ( .key, "key" ) Json.Codec.string
                 |> Json.Codec.recordFinish
             )
+        |> Json.Codec.variant ( \() -> IdGeoLocationListen, "GeoLocationListen" )
+            Json.Codec.unit
 
 
 interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
@@ -1786,7 +1850,7 @@ httpExpectIdJsonCodec =
 interfaceSingleRequestIdJsonCodec : JsonCodec InterfaceSingleRequestId
 interfaceSingleRequestIdJsonCodec =
     Json.Codec.choice
-        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest httpRequest windowSizeRequest navigationUrlRequest clipboardRequest localStorageRequest interfaceSingleRequestId ->
+        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest httpRequest windowSizeRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest interfaceSingleRequestId ->
             case interfaceSingleRequestId of
                 IdTimePosixRequest ->
                     timePosixRequest ()
@@ -1814,6 +1878,9 @@ interfaceSingleRequestIdJsonCodec =
 
                 IdLocalStorageRequest request ->
                     localStorageRequest request
+
+                IdGeoLocationRequest ->
+                    geoLocationRequest ()
         )
         |> Json.Codec.variant ( \() -> IdTimePosixRequest, "TimePosixRequest" ) Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdTimezoneOffsetRequest, "TimezoneOffsetRequest" ) Json.Codec.unit
@@ -1832,6 +1899,7 @@ interfaceSingleRequestIdJsonCodec =
                 |> Json.Codec.field ( .key, "key" ) Json.Codec.string
                 |> Json.Codec.recordFinish
             )
+        |> Json.Codec.variant ( \() -> IdGeoLocationRequest, "GeoLocationRequest" ) Json.Codec.unit
 
 
 domNodeIdJsonCodec : JsonCodec DomNodeId
@@ -2365,6 +2433,42 @@ urlJsonDecoder =
         Json.Decode.string
 
 
+geoLocationJsonDecoder : Json.Decode.Decoder GeoLocation
+geoLocationJsonDecoder =
+    Json.Decode.map7
+        (\latitudeInDecimalDegrees longitudeInDecimalDegrees latitudeLongitudeAccuracy altitudeAboveNominalSeaLevel altitudeAccuracy headingWith0AsTrueNorthAndIncreasingClockwise speed ->
+            { latitudeInDecimalDegrees = latitudeInDecimalDegrees
+            , longitudeInDecimalDegrees = longitudeInDecimalDegrees
+            , latitudeLongitudeAccuracy = latitudeLongitudeAccuracy
+            , altitudeAboveNominalSeaLevel = altitudeAboveNominalSeaLevel
+            , altitudeAccuracy = altitudeAccuracy
+            , headingWith0AsTrueNorthAndIncreasingClockwise = headingWith0AsTrueNorthAndIncreasingClockwise
+            , speed = speed
+            }
+        )
+        Json.Decode.float
+        Json.Decode.float
+        (Json.Decode.nullable (Json.Decode.map Length.meters Json.Decode.float))
+        (Json.Decode.nullable (Json.Decode.map Length.meters Json.Decode.float))
+        (Json.Decode.nullable (Json.Decode.map Length.meters Json.Decode.float))
+        (Json.Decode.map
+            (\maybeDegrees ->
+                case maybeDegrees of
+                    Nothing ->
+                        Nothing
+
+                    Just degrees ->
+                        if degrees |> Basics.isNaN then
+                            Nothing
+
+                        else
+                            Angle.degrees degrees |> Just
+            )
+            (Json.Decode.nullable Json.Decode.float)
+        )
+        (Json.Decode.nullable (Json.Decode.map Speed.metersPerSecond Json.Decode.float))
+
+
 requestFutureJsonDecoder : InterfaceSingleRequest future -> Json.Decode.Decoder future
 requestFutureJsonDecoder =
     \interfaceSingleRequest ->
@@ -2409,6 +2513,9 @@ requestFutureJsonDecoder =
             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
                 Json.Decode.map randomUnsignedInt32sRequest.on
                     (Json.Decode.list Json.Decode.int)
+
+            GeoLocationRequest request ->
+                Json.Decode.map request geoLocationJsonDecoder
 
 
 httpExpectOnError : HttpExpect future -> (HttpError -> future)
@@ -2577,6 +2684,9 @@ listenFutureJsonDecoder interfaceSingleListen =
         SocketMessageListen messageListen ->
             Json.Decode.string
                 |> Json.Decode.map messageListen.on
+
+        GeoLocationListen toFuture ->
+            geoLocationJsonDecoder |> Json.Decode.map toFuture
 
 
 windowVisibilityCodec : JsonCodec WindowVisibility

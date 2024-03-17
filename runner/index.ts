@@ -145,6 +145,15 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 )
                 localStorageSetOnADifferentTabListenAbortControllers[config.key] = abortController
             }
+            case "GeoLocationListen": return (_config: null, sendToElm) => {
+                geoLocationListenId =
+                    navigator.geolocation.watchPosition(
+                        geoPosition => { sendToElm(geoPosition.coords) },
+                        error => {
+                            console.warn("lue-bird/elm-state-interface: geo location cannot be read", error)
+                        }
+                    )
+            }
             default: return (_config: any, _sendToElm) => {
                 notifyOfBug("Unknown message kind InterfaceWithFuture.AddListen." + tag + " from elm. The associated js implementation is missing")
             }
@@ -178,6 +187,12 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "LocalStorageSetOnADifferentTabListen": return (config: { key: string }) => {
                 localStorageSetOnADifferentTabListenAbortControllers[config.key]?.abort()
                 delete localStorageSetOnADifferentTabListenAbortControllers[config.key]
+            }
+            case "GeoLocationListen": return (_config: null) => {
+                if (geoLocationListenId) {
+                    navigator.geolocation.clearWatch(geoLocationListenId)
+                    geoLocationListenId = undefined
+                }
             }
             default: return (_config: any) => {
                 notifyOfBug("Unknown message kind InterfaceWithoutFuture.RemoveListen." + tag + " from elm. The associated js implementation is missing")
@@ -247,6 +262,17 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     .catch(_notAllowed => {
                         console.warn("lue-bird/elm-state-interface: clipboard cannot be read")
                     })
+            }
+            case "GeoLocationRequest": return (_config: null) => {
+                return new Promise((resolve, _reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        geoPosition => { resolve(geoPosition.coords) },
+                        error => {
+                            console.warn("lue-bird/elm-state-interface: geo location cannot be read", error)
+                        },
+                        { timeout: 10000 }
+                    )
+                })
             }
             default: return (_config: any) => Promise.reject(null)
         }
@@ -331,6 +357,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
 
 let sockets: (WebSocket | undefined)[] = []
 
+let geoLocationListenId: number | undefined = undefined
 let localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
 let localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
 let domListenAbortControllers: { domElement: Element, abortController: AbortController }[] = []
