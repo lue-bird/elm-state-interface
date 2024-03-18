@@ -350,13 +350,34 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     }
 }
 
-let sockets: (WebSocket | null)[] = []
+
+
+//// state
 
 let geoLocationListenId: number | null = null
-let localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
-let localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
+let runningAnimationFrameLoopId: number | null = null
+const localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
+const localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
+const timePeriodicallyListens: { [key: number]: number } = {}
+const httpRequestAbortControllers: { [key: string]: AbortController } = {}
 let domListenAbortControllers: { domElement: Element, abortController: AbortController }[] = []
 
+const sockets: (WebSocket | null)[] = []
+
+const audioBuffers: { [key: string]: AudioBuffer } = {}
+const audioContext = new AudioContext()
+let audioPlaying: {
+    url: string,
+    startTime: number,
+    sourceNode: AudioBufferSourceNode,
+    gainNode: GainNode,
+    stereoPanNode: StereoPannerNode,
+    processingNodes: AudioNode[]
+}[] = []
+
+
+
+//// other helpers
 
 function editDomModifiers(
     domNodeToEdit: Element & ElementCSSInlineStyle,
@@ -406,9 +427,6 @@ function editDomModifiers(
     }
 }
 
-const httpRequestAbortControllers: { [key: string]: AbortController } = {}
-
-const timePeriodicallyListens: { [key: number]: number } = {}
 function addTimePeriodicallyListen(intervalDuration: { milliSeconds: number }, sendToElm: (v: any) => void) {
     timePeriodicallyListens[intervalDuration.milliSeconds] =
         window.setInterval(
@@ -531,9 +549,9 @@ function domElementAddEventListens(
 // so freaky.
 
 const RE_script = /^script$/i
-var RE_on_formAction = /^(on|formAction$)/i;
-var RE_js = /^\s*j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:/i;
-var RE_js_html = /^\s*(j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:|d\s*a\s*t\s*a\s*:\s*t\s*e\s*x\s*t\s*\/\s*h\s*t\s*m\s*l\s*(,|;))/i;
+const RE_on_formAction = /^(on|formAction$)/i;
+const RE_js = /^\s*j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:/i;
+const RE_js_html = /^\s*(j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:|d\s*a\s*t\s*a\s*:\s*t\s*e\s*x\s*t\s*\/\s*h\s*t\s*m\s*l\s*(,|;))/i;
 
 function noScript(tag: string) {
     return RE_script.test(tag) ? 'p' : tag
@@ -582,7 +600,7 @@ function load(url: string) {
     }
 }
 
-let runningAnimationFrameLoopId: number | undefined = undefined
+
 function addAnimationFrameListen(sendToElm: (v: any) => void) {
     runningAnimationFrameLoopId =
         window.requestAnimationFrame(_timestamp => {
@@ -595,7 +613,7 @@ function addAnimationFrameListen(sendToElm: (v: any) => void) {
 function removeAnimationFrameListen() {
     if (runningAnimationFrameLoopId) {
         window.cancelAnimationFrame(runningAnimationFrameLoopId)
-        runningAnimationFrameLoopId = undefined
+        runningAnimationFrameLoopId = null
     }
 }
 
@@ -716,17 +734,6 @@ type AudioParameterTimeline = {
     startValue: number,
     keyFrames: { time: number, value: number }[]
 }
-
-const audioBuffers: { [key: string]: AudioBuffer } = {}
-const audioContext = new AudioContext()
-let audioPlaying: {
-    url: string,
-    startTime: number,
-    sourceNode: AudioBufferSourceNode,
-    gainNode: GainNode,
-    stereoPanNode: StereoPannerNode,
-    processingNodes: AudioNode[]
-}[] = []
 
 function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
     const request = new XMLHttpRequest()
