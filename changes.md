@@ -11,6 +11,7 @@
   - `module Web.Window`:
       - `eventListen` name → `listenTo`
       - add `visibilityChangeListen`
+      - add `titleReplaceBy`, `authorSet`, `keywordsSet`, `descriptionSet`
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
   - add `module Web.LocalStorage`

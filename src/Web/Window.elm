@@ -2,13 +2,19 @@ module Web.Window exposing
     ( animationFrameListen, visibilityChangeListen
     , sizeRequest, resizeListen
     , listenTo
+    , titleReplaceBy, authorSet, keywordsSet, descriptionSet
     )
 
-{-| Observe the page's global environment as part of an [`Interface`](Web#Interface)
+{-| Observe and alter the page's global environment as part of an [`Interface`](Web#Interface)
 
 @docs animationFrameListen, visibilityChangeListen
 @docs sizeRequest, resizeListen
 @docs listenTo
+
+When navigating to a new page on the same site,
+you may want to change the document's context:
+
+@docs titleReplaceBy, authorSet, keywordsSet, descriptionSet
 
 -}
 
@@ -16,6 +22,45 @@ import Json.Decode
 import Rope
 import Time
 import Web
+
+
+{-| An [`Interface`](Web#Interface) to set the document's title
+-}
+titleReplaceBy : String -> Web.Interface future_
+titleReplaceBy titleReplacement =
+    Web.DocumentTitleReplaceBy titleReplacement
+        |> Web.InterfaceWithoutFuture
+        |> Rope.singleton
+
+
+{-| An [`Interface`](Web#Interface) to add or replace the document's author metadata
+-}
+authorSet : String -> Web.Interface future_
+authorSet authorName =
+    Web.DocumentAuthorSet authorName
+        |> Web.InterfaceWithoutFuture
+        |> Rope.singleton
+
+
+{-| An [`Interface`](Web#Interface) to add or replace the document's keywords metadata
+which should consist of words relevant to the page's content
+-}
+keywordsSet : List String -> Web.Interface future_
+keywordsSet authorName =
+    Web.DocumentKeywordsSet authorName
+        |> Web.InterfaceWithoutFuture
+        |> Rope.singleton
+
+
+{-| An [`Interface`](Web#Interface) to add or replace the document's description metadata
+which should be a short and accurate summary of the content of the page.
+Several browsers, like Firefox and Opera, use this as the default description of bookmarked pages.
+-}
+descriptionSet : String -> Web.Interface future_
+descriptionSet authorName =
+    Web.DocumentDescriptionSet authorName
+        |> Web.InterfaceWithoutFuture
+        |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) that listens for a specific [`window` event](https://developer.mozilla.org/en-US/docs/Web/API/Window#events)

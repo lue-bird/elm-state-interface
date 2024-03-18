@@ -8,6 +8,10 @@ export interface ElmPorts {
 export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
     const addInterfaceWithoutSendToElmImplementation: (tag: string) => ((config: any) => any) = tag => {
         switch (tag) {
+            case "DocumentTitleReplaceBy": return (config: string) => { window.document.title = config }
+            case "DocumentAuthorSet": return (config: string) => { getMeta("author").content = config }
+            case "DocumentKeywordsSet": return (config: string) => { getMeta("keywords").content = config }
+            case "DocumentDescriptionSet": return (config: string) => { getMeta("description").content = config }
             case "ConsoleLog": return (config: string) => { console.log(config) }
             case "ConsoleWarn": return (config: string) => { console.warn(config) }
             case "ConsoleError": return (config: string) => { console.error(config) }
@@ -425,6 +429,20 @@ function getTimezoneName(): string | number {
         return Intl.DateTimeFormat().resolvedOptions().timeZone
     } catch (err) {
         return new Date().getTimezoneOffset()
+    }
+}
+
+function getMeta(name: string): HTMLMetaElement {
+    const maybeExistingMeta: HTMLMetaElement | undefined =
+        Array.from(document.getElementsByTagName('meta'))
+            .find(meta => meta.name === name)
+    if (maybeExistingMeta) {
+        return maybeExistingMeta
+    } else {
+        var meta = window.document.createElement('meta')
+        meta.name = name
+        window.document.getElementsByTagName('head')[0]?.appendChild(meta)
+        return meta
     }
 }
 

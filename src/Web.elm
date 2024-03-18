@@ -206,7 +206,11 @@ type InterfaceSingle future
 {-| An [`InterfaceSingle`](#InterfaceSingle) that will never notify elm
 -}
 type InterfaceSingleWithoutFuture
-    = ConsoleLog String
+    = DocumentTitleReplaceBy String
+    | DocumentAuthorSet String
+    | DocumentKeywordsSet (List String)
+    | DocumentDescriptionSet String
+    | ConsoleLog String
     | ConsoleWarn String
     | ConsoleError String
     | NavigationReplaceUrl AppUrl
@@ -1301,6 +1305,30 @@ interfaceSingleWithoutFutureToComparable : InterfaceSingleWithoutFuture -> Compa
 interfaceSingleWithoutFutureToComparable =
     \interfaceWithoutFuture ->
         case interfaceWithoutFuture of
+            DocumentTitleReplaceBy replacement ->
+                ComparableList
+                    [ ComparableString "DocumentTitleReplaceBy"
+                    , ComparableString replacement
+                    ]
+
+            DocumentAuthorSet new ->
+                ComparableList
+                    [ ComparableString "DocumentAuthorSet"
+                    , ComparableString new
+                    ]
+
+            DocumentKeywordsSet new ->
+                ComparableList
+                    [ ComparableString "DocumentKeywordsSet"
+                    , new |> List.map ComparableString |> ComparableList
+                    ]
+
+            DocumentDescriptionSet new ->
+                ComparableList
+                    [ ComparableString "DocumentDescriptionSet"
+                    , ComparableString new
+                    ]
+
             ConsoleLog string ->
                 ComparableList
                     [ ComparableString "ConsoleLog"
@@ -1446,6 +1474,18 @@ interfaceOldAndOrUpdatedDiffs =
                         case removedInterfaceWithoutFuture of
                             AudioPlay audio ->
                                 RemoveAudio { url = audio.url, startTime = audio.startTime } |> List.singleton
+
+                            DocumentTitleReplaceBy _ ->
+                                []
+
+                            DocumentAuthorSet _ ->
+                                []
+
+                            DocumentKeywordsSet _ ->
+                                []
+
+                            DocumentDescriptionSet _ ->
+                                []
 
                             ConsoleLog _ ->
                                 []
@@ -2137,6 +2177,18 @@ interfaceSingleWithoutFutureToJson =
     \add ->
         tagValueToJson
             (case add of
+                DocumentTitleReplaceBy replacement ->
+                    ( "DocumentTitleReplaceBy", replacement |> Json.Encode.string )
+
+                DocumentAuthorSet new ->
+                    ( "DocumentAuthorSet", new |> Json.Encode.string )
+
+                DocumentKeywordsSet new ->
+                    ( "DocumentKeywordsSet", new |> String.join "," |> Json.Encode.string )
+
+                DocumentDescriptionSet new ->
+                    ( "DocumentDescriptionSet", new |> Json.Encode.string )
+
                 ConsoleLog string ->
                     ( "ConsoleLog", string |> Json.Encode.string )
 
