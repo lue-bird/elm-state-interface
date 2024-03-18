@@ -457,10 +457,8 @@ If you're not familiar with The Elm Architecture, skip to ["future"](#future)
 ## comparison to The Elm Architecture
 
 The Elm Architecture with its model, view, msg, update, sub, cmd, task
-can be reduced down to state and interface, making it simpler, safer and more declarative.
-
-cmds, tasks, subs and view are combined into one view/subscriptions-like `state -> Interface state`
-which means
+can be reduced down to a state and a view/subscriptions-like `state -> Interface state` function that combines what you'd use cmds, tasks, subs and view for.
+This means
 
   - actions (like changing the url) aren't tied to a specific event happening but to a specific state
   - update is part of the interface and having an intermediate event type is optional (but often useful)
@@ -548,7 +546,7 @@ which feels a bit more explicit, declarative and less wiring-heavy at least.
 
 Note: This example is only supposed to show differences in architecture.
 Unlike [`andrewMacmurray/elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/), `elm-state-interface` does not allow custom tasks/interfaces.
-Instead, the goal of this package is to publish more browser APIs like webstorage instead of users doing the work only for their own projects. Since I'm a noob in the js world, feedback and contributions are super welcome ❀
+Instead, the goal of this package is to publish more browser APIs like gamepads instead of users doing the work only for their own projects. Since I'm a noob in the js world, feedback and contributions are super welcome ❀
 
 ## present
 
