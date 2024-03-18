@@ -408,7 +408,12 @@ in which case you'll receive the url pushed by you.
 Whenever **order of actions** is important, let your **state** represent that!
 
 
-Our final example shows what we need to actually run it as an elm program.
+## what we need to actually run it as an elm program
+
+For a minimal working setup, the [playground](https://github.com/lue-bird/elm-state-interface-hello) has everything you need.
+For a "showcase example" with a minigame etc, see [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example). You'll see that the basic setup hasn't changed.
+
+In case you want to create your own setup instead:
 
 ```elm
 port module Main exposing (main)
@@ -438,16 +443,14 @@ npm install @lue-bird/elm-state-interface
 in js
 ```javascript
 import * as Web from "@lue-bird/elm-state-interface";
+// import your Main.elm. Name and path depend on bundler+plugin
 
-const elmApp = Elm.Main.init({});
+const elmApp = Main.init();
 Web.programStart({
     elmPorts : elmApp.ports,
-    domElement : document.getElementById("your-app-element")
+    domElement : document.getElementById("your-app-element-id")
 });
 ```
-
-For a minimal working setup, see the [playground](https://github.com/lue-bird/elm-state-interface-hello).
-For a "showcase example" with a minigame etc, see [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example)
 
 If you're not familiar with The Elm Architecture, skip to ["future"](#future)
 
