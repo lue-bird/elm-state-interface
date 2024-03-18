@@ -16,4 +16,3 @@
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
   - add `module Web.GeoLocation`
-  - TODO example audio speed does not seem to work. Make sure it does!
