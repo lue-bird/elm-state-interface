@@ -405,7 +405,7 @@ you have to keep one thing in mind:
 It could happen that you push a new url before the requested initial url is sent to you
 in which case you'll receive the url pushed by you.
 
-Whenever **order of actions** is important, let your **state** represent that!
+> Whenever **order of actions** is important, let your **state** represent that!
 
 
 ## what we need to actually run it as an elm program
