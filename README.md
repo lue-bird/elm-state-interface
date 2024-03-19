@@ -312,8 +312,10 @@ even
 odd
 ```
 
-Even though thinking about when certain actions on the outside are triggered is natural to assure yourself that everything works,
-I encourage you to try just thinking about "oh, if the app is in this state, these actions will have happened at some point" and not worry about what interface could have been constructed previously.
+That being said, I encourage you to not think about when exactly certain actions on the outside are triggered. Try just thinking along the lines of
+> "oh, if the app is in this state, these actions will have happened at some point"
+
+and not worry about what interfaces could have been constructed previously.
 
 Now then, here's the promised counter+url example
 ```elm
