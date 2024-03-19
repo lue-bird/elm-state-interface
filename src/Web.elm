@@ -2,7 +2,7 @@ module Web exposing
     ( ProgramConfig, program, Program
     , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
     , DomNode(..), DomElement, DefaultActionHandling(..)
-    , Audio, AudioSource, AudioSourceLoadError(..), AudioParameterTimeline, EditAudioDiff(..)
+    , Audio, AudioSource, AudioSourceLoadError(..), AudioProcessing(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketConnectionEvent(..), SocketId(..)
     , GeoLocation
@@ -38,7 +38,7 @@ Types used by [`Web.Dom`](Web-Dom)
 
 Types used by [`Web.Audio`](Web-Audio)
 
-@docs Audio, AudioSource, AudioSourceLoadError, AudioParameterTimeline, EditAudioDiff
+@docs Audio, AudioSource, AudioSourceLoadError, AudioProcessing, AudioParameterTimeline, EditAudioDiff
 
 
 ## HTTP
@@ -1621,20 +1621,11 @@ audioDiff =
 
           else
             ReplacementAudioStereoPan new.stereoPan |> Just
-        , if
-            (previous.linearConvolutions == new.linearConvolutions)
-                && (previous.lowpasses == new.lowpasses)
-                && (previous.highpasses == new.highpasses)
-          then
+        , if previous.processingLastToFirst == new.processingLastToFirst then
             Nothing
 
           else
-            { linearConvolutions = new.linearConvolutions
-            , lowpasses = new.lowpasses
-            , highpasses = new.highpasses
-            }
-                |> ReplacementAudioProcessing
-                |> Just
+            new.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
         ]
             |> List.filterMap identity
 
@@ -2092,6 +2083,28 @@ audioParameterTimelineToJson =
             ]
 
 
+audioProcessingToJson : AudioProcessing -> Json.Encode.Value
+audioProcessingToJson =
+    \processing ->
+        tagValueToJson
+            (case processing of
+                AudioLinearConvolution linearConvolution ->
+                    ( "LinearConvolution"
+                    , Json.Encode.object [ ( "sourceUrl", linearConvolution.sourceUrl |> Json.Encode.string ) ]
+                    )
+
+                AudioLowpass lowpass ->
+                    ( "Lowpass"
+                    , Json.Encode.object [ ( "cutoffFrequency", lowpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                    )
+
+                AudioHighpass highpass ->
+                    ( "highpasses"
+                    , Json.Encode.object [ ( "cutoffFrequency", highpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                    )
+            )
+
+
 interfaceWithoutFutureDiffToJson : InterfaceWithoutFutureDiff -> Json.Encode.Value
 interfaceWithoutFutureDiffToJson =
     \interfaceRemoveDiff ->
@@ -2121,29 +2134,7 @@ interfaceWithoutFutureDiffToJson =
 
                                     ReplacementAudioProcessing new ->
                                         ( "Processing"
-                                        , Json.Encode.object
-                                            [ ( "linearConvolutions"
-                                              , new.linearConvolutions
-                                                    |> Json.Encode.list
-                                                        (\linearConvolution ->
-                                                            Json.Encode.object [ ( "sourceUrl", linearConvolution.sourceUrl |> Json.Encode.string ) ]
-                                                        )
-                                              )
-                                            , ( "lowpasses"
-                                              , new.lowpasses
-                                                    |> Json.Encode.list
-                                                        (\lowpass ->
-                                                            Json.Encode.object [ ( "cutoffFrequency", lowpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
-                                                        )
-                                              )
-                                            , ( "highpasses"
-                                              , new.highpasses
-                                                    |> Json.Encode.list
-                                                        (\highpass ->
-                                                            Json.Encode.object [ ( "cutoffFrequency", highpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
-                                                        )
-                                              )
-                                            ]
+                                        , new |> Json.Encode.list audioProcessingToJson
                                         )
                                 )
                           )
@@ -2263,26 +2254,10 @@ audioToJson audio =
         , ( "volume", audio.volume |> audioParameterTimelineToJson )
         , ( "speed", audio.speed |> audioParameterTimelineToJson )
         , ( "stereoPan", audio.stereoPan |> audioParameterTimelineToJson )
-        , ( "linearConvolutions"
-          , audio.linearConvolutions
-                |> Json.Encode.list
-                    (\linearConvolution ->
-                        Json.Encode.object [ ( "sourceUrl", linearConvolution.sourceUrl |> Json.Encode.string ) ]
-                    )
-          )
-        , ( "lowpasses"
-          , audio.lowpasses
-                |> Json.Encode.list
-                    (\lowpass ->
-                        Json.Encode.object [ ( "cutoffFrequency", lowpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
-                    )
-          )
-        , ( "highpasses"
-          , audio.highpasses
-                |> Json.Encode.list
-                    (\highpass ->
-                        Json.Encode.object [ ( "cutoffFrequency", highpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
-                    )
+        , ( "processing"
+          , audio.processingLastToFirst
+                |> List.reverse
+                |> Json.Encode.list audioProcessingToJson
           )
         ]
 
@@ -2941,14 +2916,10 @@ type EditAudioDiff
     = ReplacementAudioVolume AudioParameterTimeline
     | ReplacementAudioSpeed AudioParameterTimeline
     | ReplacementAudioStereoPan AudioParameterTimeline
-    | ReplacementAudioProcessing
-        { linearConvolutions : List { sourceUrl : String }
-        , lowpasses : List { cutoffFrequency : AudioParameterTimeline }
-        , highpasses : List { cutoffFrequency : AudioParameterTimeline }
-        }
+    | ReplacementAudioProcessing (List AudioProcessing)
 
 
-{-| Some kind of sound we want to play. To create `Audio` start with [`Web.Audio.fromSource`](Web-Audio#fromSource)
+{-| Some kind of sound we want to play. To create `Audio`, start with [`Web.Audio.fromSource`](Web-Audio#fromSource)
 -}
 type alias Audio =
     RecordWithoutConstructorFunction
@@ -2957,10 +2928,16 @@ type alias Audio =
         , volume : AudioParameterTimeline
         , speed : AudioParameterTimeline
         , stereoPan : AudioParameterTimeline
-        , linearConvolutions : List { sourceUrl : String }
-        , lowpasses : List { cutoffFrequency : AudioParameterTimeline }
-        , highpasses : List { cutoffFrequency : AudioParameterTimeline }
+        , processingLastToFirst : List AudioProcessing
         }
+
+
+{-| A single effect filter applied to an [`Audio`](#Audio)
+-}
+type AudioProcessing
+    = AudioLinearConvolution { sourceUrl : String }
+    | AudioLowpass { cutoffFrequency : AudioParameterTimeline }
+    | AudioHighpass { cutoffFrequency : AudioParameterTimeline }
 
 
 {-| Audio data we can use to play sounds.

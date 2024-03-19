@@ -645,9 +645,11 @@ interface HttpRequest {
     timeout: number | null
     body: HttpRequestBody
 }
-type Expect = "string" | "bytes" | "whatever"
-type HttpRequestBody = { tag: "uint8Array", value: Uint8Array }
-    | { tag: "string", value: string } | { tag: "empty" }
+type Expect = | "string" | "bytes" | "whatever"
+type HttpRequestBody =
+    | { tag: "uint8Array", value: Uint8Array }
+    | { tag: "string", value: string }
+    | { tag: "empty" }
 
 type HttpResponse = { ok: ResponseSuccess } | { err: any }
 interface ResponseSuccess {
@@ -726,10 +728,13 @@ type AudioInfo = {
     volume: AudioParameterTimeline,
     speed: AudioParameterTimeline,
     stereoPan: AudioParameterTimeline,
-    linearConvolutions: { sourceUrl: string }[],
-    lowpasses: { cutoffFrequency: AudioParameterTimeline }[],
-    highpasses: { cutoffFrequency: AudioParameterTimeline }[]
+    processing: AudioProcessingInfo[]
 }
+type AudioProcessingInfo =
+    | { tag: "LinearConvolution", value: { sourceUrl: string } }
+    | { tag: "Lowpass", value: { cutoffFrequency: AudioParameterTimeline } }
+    | { tag: "Highpass", value: { cutoffFrequency: AudioParameterTimeline } }
+
 type AudioParameterTimeline = {
     startValue: number,
     keyFrames: { time: number, value: number }[]
@@ -806,7 +811,7 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer) {
     const stereoPannerNode = new StereoPannerNode(audioContext)
     audioParameterTimelineApplyTo(stereoPannerNode.pan, config.stereoPan)
 
-    const processingNodes = createProcessingNodes(config)
+    const processingNodes = createProcessingNodes(config.processing)
 
     forEachConsecutive(
         [source, gainNode, stereoPannerNode, ...processingNodes, audioContext.destination],
@@ -827,42 +832,34 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer) {
         processingNodes: processingNodes,
     })
 }
-function createProcessingNodes(config: {
-    linearConvolutions: { sourceUrl: string }[],
-    lowpasses: { cutoffFrequency: AudioParameterTimeline }[],
-    highpasses: { cutoffFrequency: AudioParameterTimeline }[]
-}): AudioNode[] {
-    const convolverNodes =
-        config.linearConvolutions
-            .map(linearConvolution => {
-                const convolverNode = new ConvolverNode(audioContext)
-                const buffer = audioBuffers[linearConvolution.sourceUrl]
-                if (buffer) {
-                    convolverNode.buffer = buffer
-                } else {
-                    console.warn("lue-bird/elm-state-interface: tried to create a linear convolution from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
+function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): AudioNode[] {
+    return processingFirstToLast
+        .map(processing => {
+            switch (processing.tag) {
+                case "Lowpass": {
+                    const biquadNode = new BiquadFilterNode(audioContext)
+                    biquadNode.type = "lowpass"
+                    audioParameterTimelineApplyTo(biquadNode.frequency, processing.value.cutoffFrequency)
+                    return biquadNode
                 }
-                return convolverNode
-            })
-
-    const lowpassNodes =
-        config.lowpasses
-            .map(lowpass => {
-                const biquadNode = new BiquadFilterNode(audioContext)
-                biquadNode.type = "lowpass"
-                audioParameterTimelineApplyTo(biquadNode.frequency, lowpass.cutoffFrequency)
-                return biquadNode
-            })
-
-    const highpassNodes =
-        config.highpasses
-            .map(highpass => {
-                const biquadNode = new BiquadFilterNode(audioContext)
-                biquadNode.type = "highpass"
-                audioParameterTimelineApplyTo(biquadNode.frequency, highpass.cutoffFrequency)
-                return biquadNode
-            })
-    return [...convolverNodes, ...lowpassNodes, ...highpassNodes]
+                case "Highpass": {
+                    const biquadNode = new BiquadFilterNode(audioContext)
+                    biquadNode.type = "highpass"
+                    audioParameterTimelineApplyTo(biquadNode.frequency, processing.value.cutoffFrequency)
+                    return biquadNode
+                }
+                case "LinearConvolution": {
+                    const convolverNode = new ConvolverNode(audioContext)
+                    const buffer = audioBuffers[processing.value.sourceUrl]
+                    if (buffer) {
+                        convolverNode.buffer = buffer
+                    } else {
+                        console.warn("lue-bird/elm-state-interface: tried to create a linear convolution from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
+                    }
+                    return convolverNode
+                }
+            }
+        })
 }
 function removeAudio(config: { url: string, startTime: number }) {
     audioPlaying = audioPlaying.filter(audio => {

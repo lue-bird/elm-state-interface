@@ -114,6 +114,12 @@ volumeScaleBy volumeScaleFactor =
         }
 
 
+addProcessing : Web.AudioProcessing -> (Audio -> Audio)
+addProcessing newLastProcessing =
+    \a ->
+        { a | processingLastToFirst = a.processingLastToFirst |> (::) newLastProcessing }
+
+
 {-| Usually used to apply reverb and or echo.
 Given a loaded [`AudioSource`](Web#AudioSource) containing the impulse response,
 it performs a [Convolution](https://en.wikipedia.org/wiki/Convolution) with the [`Audio`](Web#Audio)
@@ -124,11 +130,7 @@ If you know more nice ones, don't hesitate to open an issue or a PR.
 -}
 addLinearConvolutionWith : AudioSource -> (Audio -> Audio)
 addLinearConvolutionWith bufferAudioSource =
-    \a ->
-        { a
-            | linearConvolutions =
-                a.linearConvolutions ++ [ { sourceUrl = bufferAudioSource.url } ]
-        }
+    \a -> a |> addProcessing (Web.AudioLinearConvolution { sourceUrl = bufferAudioSource.url })
 
 
 {-| Frequencies below a given cutoff [parameter](Web#AudioParameterTimeline) pass through;
@@ -139,11 +141,7 @@ Has a 12dB/octave rolloff and no peak at the cutoff.
 -}
 addLowpassUntilFrequency : AudioParameterTimeline -> (Audio -> Audio)
 addLowpassUntilFrequency cutoffFrequency =
-    \a ->
-        { a
-            | lowpasses =
-                a.lowpasses ++ [ { cutoffFrequency = cutoffFrequency } ]
-        }
+    \a -> a |> addProcessing (Web.AudioLowpass { cutoffFrequency = cutoffFrequency })
 
 
 {-| Frequencies below a given cutoff [parameter](Web#AudioParameterTimeline) are attenuated;
@@ -154,11 +152,7 @@ Has a 12dB/octave rolloff and no peak at the cutoff.
 -}
 addHighpassFromFrequency : AudioParameterTimeline -> (Audio -> Audio)
 addHighpassFromFrequency cutoffFrequency =
-    \a ->
-        { a
-            | highpasses =
-                a.highpasses ++ [ { cutoffFrequency = cutoffFrequency } ]
-        }
+    \a -> a |> addProcessing (Web.AudioHighpass { cutoffFrequency = cutoffFrequency })
 
 
 {-| Create [`Audio`](Web#Audio) from an given loaded [source](Web#AudioSource)
@@ -180,9 +174,7 @@ fromSource source startTime =
     , volume = Web.Audio.Parameter.at 1
     , speed = Web.Audio.Parameter.at 1
     , stereoPan = Web.Audio.Parameter.at 0
-    , linearConvolutions = []
-    , lowpasses = []
-    , highpasses = []
+    , processingLastToFirst = []
     }
 
 
