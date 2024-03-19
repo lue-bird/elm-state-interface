@@ -271,19 +271,49 @@ Now, how does the `warnings` thing work?
 ```elm
 interface =
     \_ ->
-        Web.Console.log "Hello world"
+        Web.Console.log "Hello"
 ```
 when will it print to the console? All the time? Every time the state changes?
 
 Here's where an `Interface` is different from a command and similar imperative code.
-There are two triggers for execution of js code:
+There are 2 triggers:
   - the updated `Interface` has an interface the old `Interface` didn't.
-    E.g. we include logging each individual internal warning from the state in the `Interface`
-    → log whenever a new warning is added
+    E.g. since we log each individual warning in the `Interface`, whenever we add a new warning it will be logged
   - a previously existing interface is absent in the updated `Interface`.
-    E.g. we don't include a HTTP GET request that we once had in the `Interface`
-    → the request gets canceled if it's still active
+    E.g. if we play menu music and now switch to the game interface which doesn't include this music, the menu music will stop.
+    Or similarly, if we now don't include an HTTP GET request that we once had in the `Interface`,
+    the request gets canceled if it's still active.
 
+Here's a little exercise for the first point:
+```elm
+interface =
+    \state ->
+        Web.Console.log
+            (case state |> Basics.remainderBy 2 of
+                0 ->
+                    "even"
+                
+                _ ->
+                    "odd"
+            )
+```
+the state will take on the values: `1 → 2 → 2 → 4`. What will have been printed to the console?
+
+Done? Here's the solution
+  - `state → 1`: we had no prior interface, so the `Web.Console.log "odd"` is a new addition. `odd` is printed
+  - `state → 2`: our prior interface had `Web.Console.log "odd"` which is not part of the new one.
+    But there's a new additional interface: `Web.Console.log "even"`. `even` is printed
+  - `state → 2`: our prior interface had `Web.Console.log "even"` which is also part of the new one. Nothing is printed
+  - `state → 4`: our prior interface had `Web.Console.log "even"` which is also part of the new one. Nothing is printed
+
+So in the end, the app will have printed
+```
+even
+odd
+```
+
+Even though thinking about when certain actions on the outside are triggered is natural to assure yourself that everything works,
+I encourage you to try just thinking about "oh, if the app is in this state, these actions will have happened at some point" and not worry about what interface could have been constructed previously.
 
 Now then, here's the promised counter+url example
 ```elm
