@@ -14,6 +14,7 @@
   - `module Web.Window`:
       - `eventListen` name → `listenTo`
       - add `visibilityChangeListen`
+      - add `preferredLanguagesRequest`, `preferredLanguagesChangeListen`
       - add `titleReplaceBy`, `authorSet`, `keywordsSet`, `descriptionSet`
   - `module Web`:
       - add `type alias Program` for results of `Web.program`

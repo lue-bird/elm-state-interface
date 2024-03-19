@@ -150,6 +150,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         }
                     )
             }
+            case "WindowPreferredLanguagesChangeListen": return (_config: null, sendToElm) => {
+                window.onlanguagechange = function (_event) { sendToElm(window.navigator.languages) }
+            }
             default: return (_config: any, _sendToElm) => {
                 notifyOfBug("Unknown message kind InterfaceWithFuture.AddListen." + tag + " from elm. The associated js implementation is missing")
             }
@@ -183,6 +186,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     navigator.geolocation.clearWatch(geoLocationListenId)
                     geoLocationListenId = null
                 }
+            }
+            case "WindowPreferredLanguagesChangeListen": return (_config: null) => {
+                window.onlanguagechange = null
             }
             default: return (_config: any) => {
                 notifyOfBug("Unknown message kind InterfaceWithoutFuture.RemoveListen." + tag + " from elm. The associated js implementation is missing")
@@ -253,14 +259,14 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 return Promise.resolve(window.location.href)
             }
             case "ClipboardRequest": return (_config: null) => {
-                return navigator.clipboard.readText()
+                return window.navigator.clipboard.readText()
                     .catch(_notAllowed => {
                         console.warn("lue-bird/elm-state-interface: clipboard cannot be read")
                     })
             }
             case "GeoLocationRequest": return (_config: null) => {
                 return new Promise((resolve, _reject) => {
-                    navigator.geolocation.getCurrentPosition(
+                    window.navigator.geolocation.getCurrentPosition(
                         geoPosition => { resolve(geoPosition.coords) },
                         error => {
                             console.warn("lue-bird/elm-state-interface: geo location cannot be read", error)
@@ -268,6 +274,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         { timeout: 10000 }
                     )
                 })
+            }
+            case "WindowPreferredLanguagesRequest": return (_config: null) => {
+                return Promise.resolve(window.navigator.languages)
             }
             default: return (_config: any) => Promise.reject(null)
         }

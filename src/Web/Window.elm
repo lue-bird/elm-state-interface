@@ -1,6 +1,7 @@
 module Web.Window exposing
     ( animationFrameListen, visibilityChangeListen
     , sizeRequest, resizeListen
+    , preferredLanguagesRequest, preferredLanguagesChangeListen
     , listenTo
     , titleReplaceBy, authorSet, keywordsSet, descriptionSet
     )
@@ -9,6 +10,7 @@ module Web.Window exposing
 
 @docs animationFrameListen, visibilityChangeListen
 @docs sizeRequest, resizeListen
+@docs preferredLanguagesRequest, preferredLanguagesChangeListen
 @docs listenTo
 
 When navigating to a new page on the same site,
@@ -133,6 +135,36 @@ Note: uses [`window.requestAnimationFrame`](https://developer.mozilla.org/en-US/
 animationFrameListen : Web.Interface Time.Posix
 animationFrameListen =
     Web.WindowAnimationFrameListen identity
+        |> Web.Listen
+        |> Web.InterfaceWithFuture
+        |> Rope.singleton
+
+
+{-| An [`Interface`](Web#Interface) for reading the languages the user prefers.
+Each described using language tags according to [RFC 5646: Tags for Identifying Languages (also known as BCP 47)](https://datatracker.ietf.org/doc/html/rfc5646).
+In the returned list they are ordered by preference with the most preferred language first.
+
+Note: uses [`window.navigator.languages`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/languages)
+
+-}
+preferredLanguagesRequest : Web.Interface (List String)
+preferredLanguagesRequest =
+    Web.WindowPreferredLanguagesRequest identity
+        |> Web.Request
+        |> Web.InterfaceWithFuture
+        |> Rope.singleton
+
+
+{-| An [`Interface`](Web#Interface) for detecting changes to the languages the user prefers.
+Each described using language tags according to [RFC 5646: Tags for Identifying Languages (also known as BCP 47)](https://datatracker.ietf.org/doc/html/rfc5646).
+In the returned list they are ordered by preference with the most preferred language first.
+
+Note: uses [`window.onlanguagechange`](https://developer.mozilla.org/en-US/docs/Web/API/Window/languagechange_event)
+
+-}
+preferredLanguagesChangeListen : Web.Interface (List String)
+preferredLanguagesChangeListen =
+    Web.WindowPreferredLanguagesChangeListen identity
         |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton

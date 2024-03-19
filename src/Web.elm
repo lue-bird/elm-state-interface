@@ -271,6 +271,7 @@ type InterfaceSingleRequest future
     | TimezoneNameRequest (Time.ZoneName -> future)
     | RandomUnsignedInt32sRequest { count : Int, on : List Int -> future }
     | WindowSizeRequest ({ width : Int, height : Int } -> future)
+    | WindowPreferredLanguagesRequest (List String -> future)
     | NavigationUrlRequest (AppUrl -> future)
     | HttpRequest (HttpRequest future)
     | ClipboardRequest (String -> future)
@@ -307,6 +308,7 @@ type InterfaceSingleListen future
     = WindowEventListen { eventName : String, on : Json.Decode.Decoder future }
     | WindowVisibilityChangeListen (WindowVisibility -> future)
     | WindowAnimationFrameListen (Time.Posix -> future)
+    | WindowPreferredLanguagesChangeListen (List String -> future)
     | DocumentEventListen { eventName : String, on : Json.Decode.Decoder future }
     | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
     | SocketMessageListen { id : SocketId, on : String -> future }
@@ -459,6 +461,7 @@ type InterfaceSingleRequestId
     | IdTimezoneNameRequest
     | IdRandomUnsignedInt32sRequest Int
     | IdWindowSizeRequest
+    | IdWindowPreferredLanguagesRequest
     | IdNavigationUrlRequest
     | IdHttpRequest HttpRequestId
     | IdClipboardRequest
@@ -473,6 +476,7 @@ type InterfaceSingleListenId
     = IdWindowEventListen String
     | IdWindowVisibilityChangeListen
     | IdWindowAnimationFrameListen
+    | IdWindowPreferredLanguagesChangeListen
     | IdDocumentEventListen String
     | IdTimePeriodicallyListen { milliSeconds : Int }
     | IdSocketMessageListen SocketId
@@ -656,8 +660,10 @@ interfaceRequestFutureMap futureChange =
                     |> HttpRequest
 
             WindowSizeRequest toFuture ->
-                (\event -> toFuture event |> futureChange)
-                    |> WindowSizeRequest
+                (\event -> toFuture event |> futureChange) |> WindowSizeRequest
+
+            WindowPreferredLanguagesRequest toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowPreferredLanguagesRequest
 
             NavigationUrlRequest toFuture ->
                 (\event -> toFuture event |> futureChange) |> NavigationUrlRequest
@@ -721,6 +727,9 @@ interfaceListenFutureMap futureChange =
 
             WindowAnimationFrameListen toFuture ->
                 (\event -> toFuture event |> futureChange) |> WindowAnimationFrameListen
+
+            WindowPreferredLanguagesChangeListen toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowPreferredLanguagesChangeListen
 
             TimePeriodicallyListen timePeriodicallyListen ->
                 { intervalDurationMilliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds
@@ -978,6 +987,9 @@ interfaceSingleListenToId =
             WindowAnimationFrameListen _ ->
                 IdWindowAnimationFrameListen
 
+            WindowPreferredLanguagesChangeListen _ ->
+                IdWindowPreferredLanguagesChangeListen
+
             DocumentEventListen listen ->
                 IdDocumentEventListen listen.eventName
 
@@ -1032,6 +1044,9 @@ interfaceSingleRequestToId =
 
             WindowSizeRequest _ ->
                 IdWindowSizeRequest
+
+            WindowPreferredLanguagesRequest _ ->
+                IdWindowPreferredLanguagesRequest
 
             NavigationUrlRequest _ ->
                 IdNavigationUrlRequest
@@ -1147,6 +1162,9 @@ interfaceSingleRequestIdToComparable =
 
             IdWindowSizeRequest ->
                 ComparableString "IdWindowSizeRequest"
+
+            IdWindowPreferredLanguagesRequest ->
+                ComparableString "IdWindowPreferredLanguagesRequest"
 
             IdNavigationUrlRequest ->
                 ComparableString "IdNavigationUrlRequest"
@@ -1266,6 +1284,9 @@ listenIdToComparable =
 
             IdWindowAnimationFrameListen ->
                 ComparableString "IdWindowAnimationFrameListen"
+
+            IdWindowPreferredLanguagesChangeListen ->
+                ComparableString "IdWindowPreferredLanguagesChangeListen"
 
             IdDocumentEventListen eventName ->
                 ComparableList
@@ -1549,6 +1570,9 @@ interfaceOldAndOrUpdatedDiffs =
                             Request (WindowSizeRequest _) ->
                                 []
 
+                            Request (WindowPreferredLanguagesRequest _) ->
+                                []
+
                             Request (NavigationUrlRequest _) ->
                                 []
 
@@ -1638,7 +1662,7 @@ socketIdJsonCodec =
 interfaceSingleListenIdJsonCodec : JsonCodec InterfaceSingleListenId
 interfaceSingleListenIdJsonCodec =
     Json.Codec.choice
-        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen interfaceSingleListenId ->
+        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idWindowPreferredLanguagesChangeListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen interfaceSingleListenId ->
             case interfaceSingleListenId of
                 IdTimePeriodicallyListen intervalDuration ->
                     idTimePeriodicallyListen intervalDuration
@@ -1651,6 +1675,9 @@ interfaceSingleListenIdJsonCodec =
 
                 IdWindowAnimationFrameListen ->
                     idWindowAnimationFrameListen ()
+
+                IdWindowPreferredLanguagesChangeListen ->
+                    idWindowPreferredLanguagesChangeListen ()
 
                 IdDocumentEventListen eventName ->
                     idDocumentEventListen eventName
@@ -1677,6 +1704,8 @@ interfaceSingleListenIdJsonCodec =
         |> Json.Codec.variant ( \() -> IdWindowVisibilityChangeListen, "WindowVisibilityChangeListen" )
             Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdWindowAnimationFrameListen, "WindowAnimationFrameListen" )
+            Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdWindowPreferredLanguagesChangeListen, "WindowPreferredLanguagesChangeListen" )
             Json.Codec.unit
         |> Json.Codec.variant ( IdDocumentEventListen, "DocumentEventListen" )
             Json.Codec.string
@@ -1875,7 +1904,7 @@ httpExpectIdJsonCodec =
 interfaceSingleRequestIdJsonCodec : JsonCodec InterfaceSingleRequestId
 interfaceSingleRequestIdJsonCodec =
     Json.Codec.choice
-        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest httpRequest windowSizeRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest interfaceSingleRequestId ->
+        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest httpRequest windowSizeRequest idWindowPreferredLanguagesRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest interfaceSingleRequestId ->
             case interfaceSingleRequestId of
                 IdTimePosixRequest ->
                     timePosixRequest ()
@@ -1894,6 +1923,9 @@ interfaceSingleRequestIdJsonCodec =
 
                 IdWindowSizeRequest ->
                     windowSizeRequest ()
+
+                IdWindowPreferredLanguagesRequest ->
+                    idWindowPreferredLanguagesRequest ()
 
                 IdNavigationUrlRequest ->
                     navigationUrlRequest ()
@@ -1915,6 +1947,8 @@ interfaceSingleRequestIdJsonCodec =
         |> Json.Codec.variant ( IdHttpRequest, "HttpRequest" )
             httpRequestIdJsonCodec
         |> Json.Codec.variant ( \() -> IdWindowSizeRequest, "WindowSizeRequest" )
+            Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdWindowPreferredLanguagesRequest, "WindowPreferredLanguagesRequest" )
             Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdNavigationUrlRequest, "NavigationUrlRequest" )
             Json.Codec.unit
@@ -2530,6 +2564,10 @@ requestFutureJsonDecoder =
                     (Json.Decode.field "width" Json.Decode.int)
                     (Json.Decode.field "height" Json.Decode.int)
 
+            WindowPreferredLanguagesRequest toFuture ->
+                Json.Decode.list Json.Decode.string
+                    |> Json.Decode.map toFuture
+
             NavigationUrlRequest toFuture ->
                 urlJsonDecoder
                     |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toFuture)
@@ -2692,6 +2730,10 @@ listenFutureJsonDecoder interfaceSingleListen =
 
         WindowAnimationFrameListen toFuture ->
             timePosixJsonCodec.jsonDecoder
+                |> Json.Decode.map toFuture
+
+        WindowPreferredLanguagesChangeListen toFuture ->
+            Json.Decode.list Json.Decode.string
                 |> Json.Decode.map toFuture
 
         DocumentEventListen listen ->
