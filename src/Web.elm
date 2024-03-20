@@ -3437,10 +3437,6 @@ programUpdate appConfig =
   - `BadStatus` means you got a response back, but the status code indicates failure. Contains:
       - The response `Metadata`.
       - The raw response body as a `Json.Decode.Value`.
-  - `BadBody` means you got a response back with a nice status code, but the body of the response was something unexpected. Contains:
-      - The response `Metadata`.
-      - The raw response body as a `Json.Decode.Value`.
-      - The `Json.Decode.Error` that caused the error.
 
 -}
 type HttpError
