@@ -589,7 +589,7 @@ For now, some more niche interfaces like [`Browser.Dom.setViewportOf`](https://d
 ## future
 
   - 🧩 add more [example projects](https://github.com/lue-bird/elm-state-interface/tree/main/example). Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
-  - 🔋 The web API you miss the most. Maybe [notifications](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API), [gamepads](https://developer.mozilla.org/en-US/docs/Web/API/Gamepad_API) (which currently isn't provided because there's no event API for user input), [MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API), [speech](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) or [sensors](https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs)?
+  - 🔋 The web API you miss the most. Maybe [notifications](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API), [MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API), [speech](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) or [sensors](https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs)?
   - 🗃️ only with help: basic `node` APIs
 
 If you have knowledge in any of these fields on the js side, have pointers or already 
@@ -603,5 +603,6 @@ The module and interface structure is also not equipped to support multiple plat
   - [andrewMacmurray for `elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) which was used as the base for many of the js implementations
   - [elm-radio hosts for the episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make a package out of it
   - [@a-teammate](https://github.com/a-teammate) for lots of valuable feedback 💚
-  - [MartinSStewart for `elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/) inspired the audio API
+  - [MartinSStewart for `elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/) which inspired the audio API
   - [kageurufu for `elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) which inspired me to also provide a websocket API
+  - [noordstar for `elm-gamepad`](https://dark.elm.dmy.fr/packages/noordstar/elm-gamepad/latest) which inspired the gamepads API

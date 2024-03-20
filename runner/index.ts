@@ -153,6 +153,18 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "WindowPreferredLanguagesChangeListen": return (_config: null, sendToElm) => {
                 window.onlanguagechange = function (_event) { sendToElm(window.navigator.languages) }
             }
+            case "GamepadsChangeListen": return (_config: null, sendToElm) => {
+                gamepadsChangePollingIntervalId = window.setInterval(
+                    function () {
+                        const newGamepads = window.navigator.getGamepads()
+                        if (gamepadsFromLastPoll !== newGamepads) {
+                            sendToElm(newGamepads)
+                            gamepadsFromLastPoll = newGamepads
+                        }
+                    },
+                    14
+                )
+            }
             default: return (_config: any, _sendToElm) => {
                 notifyOfBug("Unknown message kind InterfaceWithFuture.AddListen." + tag + " from elm. The associated js implementation is missing")
             }
@@ -189,6 +201,12 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             }
             case "WindowPreferredLanguagesChangeListen": return (_config: null) => {
                 window.onlanguagechange = null
+            }
+            case "GamepadsChangeListen": return (_config: null) => {
+                if (gamepadsChangePollingIntervalId) {
+                    window.clearInterval(gamepadsChangePollingIntervalId)
+                    gamepadsChangePollingIntervalId = null
+                }
             }
             default: return (_config: any) => {
                 notifyOfBug("Unknown message kind InterfaceWithoutFuture.RemoveListen." + tag + " from elm. The associated js implementation is missing")
@@ -368,6 +386,8 @@ let runningAnimationFrameLoopId: number | null = null
 const localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
 const localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
 const timePeriodicallyListens: { [key: number]: number } = {}
+let gamepadsChangePollingIntervalId: number | null = null
+let gamepadsFromLastPoll: (Gamepad | null)[] | null = null
 const httpRequestAbortControllers: { [key: string]: AbortController } = {}
 let domListenAbortControllers: { domElement: Element, abortController: AbortController }[] = []
 

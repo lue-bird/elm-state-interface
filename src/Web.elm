@@ -6,6 +6,7 @@ module Web exposing
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketConnectionEvent(..), SocketId(..)
     , GeoLocation
+    , Gamepad, GamepadButton(..)
     , WindowVisibility(..)
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
@@ -60,6 +61,13 @@ Types used by [`Web.Socket`](Web-Socket)
 Types used by [`Web.GeoLocation`](Web-GeoLocation)
 
 @docs GeoLocation
+
+
+## gamepads
+
+Types used by [`Web.Gamepads`](Web-Gamepads)
+
+@docs Gamepad, GamepadButton
 
 
 ## window
@@ -277,6 +285,7 @@ type InterfaceSingleRequest future
     | ClipboardRequest (String -> future)
     | LocalStorageRequest { key : String, on : Maybe String -> future }
     | GeoLocationRequest (GeoLocation -> future)
+    | GamepadsRequest (Dict Int Gamepad -> future)
 
 
 {-| Position and (if available) altitude of the device on Earth, as well as the accuracy with which these properties are calculated.
@@ -318,6 +327,7 @@ type InterfaceSingleListen future
         , on : { appUrl : AppUrl, oldValue : Maybe String, newValue : String } -> future
         }
     | GeoLocationListen (GeoLocation -> future)
+    | GamepadsChangeListen (Dict Int Gamepad -> future)
 
 
 {-| The visibility to the user
@@ -467,6 +477,7 @@ type InterfaceSingleRequestId
     | IdClipboardRequest
     | IdLocalStorageRequest { key : String }
     | IdGeoLocationRequest
+    | IdGamepadsRequest
 
 
 {-| Safe to ignore. Possible identifier for an interface single that can send back values to elm
@@ -483,6 +494,7 @@ type InterfaceSingleListenId
     | IdLocalStorageRemoveOnADifferentTabListen { key : String }
     | IdLocalStorageSetOnADifferentTabListen { key : String }
     | IdGeoLocationListen
+    | IdGamepadsChangeListen
 
 
 {-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
@@ -692,6 +704,9 @@ interfaceRequestFutureMap futureChange =
             GeoLocationRequest toFuture ->
                 (\event -> event |> toFuture |> futureChange) |> GeoLocationRequest
 
+            GamepadsRequest toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GamepadsRequest
+
 
 httpRequestMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
 httpRequestMap futureChange =
@@ -755,6 +770,9 @@ interfaceListenFutureMap futureChange =
 
             GeoLocationListen toFuture ->
                 (\event -> event |> toFuture |> futureChange) |> GeoLocationListen
+
+            GamepadsChangeListen toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GamepadsChangeListen
 
 
 domElementMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
@@ -996,6 +1014,9 @@ interfaceSingleListenToId =
             GeoLocationListen _ ->
                 IdGeoLocationListen
 
+            GamepadsChangeListen _ ->
+                IdGamepadsChangeListen
+
 
 httpRequestToId : HttpRequest future_ -> HttpRequestId
 httpRequestToId =
@@ -1059,6 +1080,9 @@ interfaceSingleRequestToId =
 
             GeoLocationRequest _ ->
                 IdGeoLocationRequest
+
+            GamepadsRequest _ ->
+                IdGamepadsRequest
 
 
 interfaceSingleWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
@@ -1174,6 +1198,9 @@ interfaceSingleRequestIdToComparable =
 
             IdGeoLocationRequest ->
                 ComparableString "IdGeoLocationRequest"
+
+            IdGamepadsRequest ->
+                ComparableString "IdGamepadsRequest"
 
 
 maybeToComparable : (value -> Comparable) -> (Maybe value -> Comparable)
@@ -1320,6 +1347,9 @@ listenIdToComparable =
 
             IdGeoLocationListen ->
                 ComparableString "IdGeoLocationListen"
+
+            IdGamepadsChangeListen ->
+                ComparableString "IdGamepadsChangeListen"
 
 
 interfaceSingleWithoutFutureToComparable : InterfaceSingleWithoutFuture -> Comparable
@@ -1591,6 +1621,9 @@ interfaceOldAndOrUpdatedDiffs =
                             Request (GeoLocationRequest _) ->
                                 []
 
+                            Request (GamepadsRequest _) ->
+                                []
+
                             Listen listen ->
                                 listen |> interfaceSingleListenToId |> RemoveListen |> List.singleton
                 )
@@ -1662,7 +1695,7 @@ socketIdJsonCodec =
 interfaceSingleListenIdJsonCodec : JsonCodec InterfaceSingleListenId
 interfaceSingleListenIdJsonCodec =
     Json.Codec.choice
-        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idWindowPreferredLanguagesChangeListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen interfaceSingleListenId ->
+        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idWindowPreferredLanguagesChangeListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen idGamepadsChangeListen interfaceSingleListenId ->
             case interfaceSingleListenId of
                 IdTimePeriodicallyListen intervalDuration ->
                     idTimePeriodicallyListen intervalDuration
@@ -1693,6 +1726,9 @@ interfaceSingleListenIdJsonCodec =
 
                 IdGeoLocationListen ->
                     idGeoLocationListen ()
+
+                IdGamepadsChangeListen ->
+                    idGamepadsChangeListen ()
         )
         |> Json.Codec.variant ( IdTimePeriodicallyListen, "TimePeriodicallyListen" )
             (Json.Codec.record (\ms -> { milliSeconds = ms })
@@ -1721,6 +1757,8 @@ interfaceSingleListenIdJsonCodec =
                 |> Json.Codec.recordFinish
             )
         |> Json.Codec.variant ( \() -> IdGeoLocationListen, "GeoLocationListen" )
+            Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdGamepadsChangeListen, "GamepadsChangeListen" )
             Json.Codec.unit
 
 
@@ -1904,7 +1942,7 @@ httpExpectIdJsonCodec =
 interfaceSingleRequestIdJsonCodec : JsonCodec InterfaceSingleRequestId
 interfaceSingleRequestIdJsonCodec =
     Json.Codec.choice
-        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest httpRequest windowSizeRequest idWindowPreferredLanguagesRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest interfaceSingleRequestId ->
+        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest httpRequest windowSizeRequest idWindowPreferredLanguagesRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest gamepadsRequest interfaceSingleRequestId ->
             case interfaceSingleRequestId of
                 IdTimePosixRequest ->
                     timePosixRequest ()
@@ -1938,6 +1976,9 @@ interfaceSingleRequestIdJsonCodec =
 
                 IdGeoLocationRequest ->
                     geoLocationRequest ()
+
+                IdGamepadsRequest ->
+                    gamepadsRequest ()
         )
         |> Json.Codec.variant ( \() -> IdTimePosixRequest, "TimePosixRequest" ) Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdTimezoneOffsetRequest, "TimezoneOffsetRequest" ) Json.Codec.unit
@@ -1959,6 +2000,7 @@ interfaceSingleRequestIdJsonCodec =
                 |> Json.Codec.recordFinish
             )
         |> Json.Codec.variant ( \() -> IdGeoLocationRequest, "GeoLocationRequest" ) Json.Codec.unit
+        |> Json.Codec.variant ( \() -> IdGamepadsRequest, "GamepadsRequest" ) Json.Codec.unit
 
 
 domNodeIdJsonCodec : JsonCodec DomNodeId
@@ -2544,6 +2586,402 @@ geoLocationJsonDecoder =
         (Json.Decode.nullable (Json.Decode.map Speed.metersPerSecond Json.Decode.float))
 
 
+gamepadsJsonDecoder : Json.Decode.Decoder (Dict Int Gamepad)
+gamepadsJsonDecoder =
+    Json.Decode.map
+        (\maybeGamepads ->
+            maybeGamepads
+                |> List.indexedMap (\index maybeGamepad -> { index = index, maybeGamepad = maybeGamepad })
+                |> List.foldl
+                    (\element soFar ->
+                        case element.maybeGamepad of
+                            Nothing ->
+                                soFar
+
+                            Just gamepad ->
+                                soFar |> Dict.insert element.index gamepad
+                    )
+                    Dict.empty
+        )
+        (Json.Decode.list maybeGamepadJsonDecoder)
+
+
+{-| <https://www.w3.org/TR/gamepad/#remapping>
+-}
+gamepadStandardButtonMap : GamepadButtonMap
+gamepadStandardButtonMap =
+    { primary = Just 0
+    , secondary = Just 1
+    , tertiary = Just 2
+    , quaternary = Just 3
+    , leftBumper = Just 4
+    , rightBumper = Just 5
+    , leftTrigger = Just 6
+    , rightTrigger = Just 7
+    , select = Just 8
+    , start = Just 9
+    , leftJoystickButton = Just 10
+    , rightJoystickButton = Just 11
+    , arrowUp = Just 12
+    , arrowDown = Just 13
+    , arrowLeft = Just 14
+    , arrowRight = Just 15
+    , homeButton = Just 16
+    , touchpad = Just 17
+    }
+
+
+maybeGamepadJsonDecoder : Json.Decode.Decoder (Maybe Gamepad)
+maybeGamepadJsonDecoder =
+    Json.Decode.nullable
+        (Json.Decode.field "connected" Json.Decode.bool
+            |> Json.Decode.andThen
+                (\connected ->
+                    if not connected then
+                        Nothing |> Json.Decode.succeed
+
+                    else
+                        Json.Decode.map3
+                            (\kindId buttons joysticks ->
+                                let
+                                    buttonMap : GamepadButtonMap
+                                    buttonMap =
+                                        buttonMapping |> Dict.get kindId |> Maybe.withDefault gamepadStandardButtonMap
+
+                                    at : (GamepadButtonMap -> Maybe Int) -> GamepadButton
+                                    at indexField =
+                                        case buttonMap |> indexField of
+                                            Nothing ->
+                                                gamepadButtonUnknown
+
+                                            Just index ->
+                                                buttons |> listAtIndex index |> Maybe.withDefault gamepadButtonUnknown
+                                in
+                                { primaryButton = at .primary
+                                , secondaryButton = at .secondary
+                                , tertiaryButton = at .tertiary
+                                , quaternaryButton = at .quaternary
+                                , leftBumperButton = at .leftBumper
+                                , rightBumperButton = at .rightBumper
+                                , leftTriggerButton = at .leftTrigger
+                                , rightTriggerButton = at .rightTrigger
+                                , selectButton = at .select
+                                , startButton = at .start
+                                , leftJoystickButton = at .leftJoystickButton
+                                , rightJoystickButton = at .rightJoystickButton
+                                , upButton = at .arrowUp
+                                , downButton = at .arrowDown
+                                , leftButton = at .arrowLeft
+                                , rightButton = at .arrowRight
+                                , homeButton = at .homeButton
+                                , touchpadButton = at .touchpad
+                                , additionalButtons =
+                                    let
+                                        mappedButtonIndexes : Set Int
+                                        mappedButtonIndexes =
+                                            [ .primary, .secondary, .tertiary, .quaternary, .leftBumper, .rightBumper, .leftTrigger, .rightTrigger, .select, .start, .leftJoystickButton, .rightJoystickButton, .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .homeButton, .touchpad ]
+                                                |> List.filterMap (\field -> buttonMap |> field)
+                                                |> Set.fromList
+                                    in
+                                    buttons
+                                        |> List.indexedMap
+                                            (\index button ->
+                                                if mappedButtonIndexes |> Set.member index then
+                                                    Nothing
+
+                                                else
+                                                    button |> Just
+                                            )
+                                        |> List.filterMap identity
+                                , kindId = kindId
+                                , joystickLeft = joysticks.left
+                                , joystickRight = joysticks.right
+                                , joysticksAdditional = joysticks.additional
+                                }
+                                    |> Just
+                            )
+                            (Json.Decode.field "id" Json.Decode.string)
+                            (Json.Decode.field "buttons" (Json.Decode.list gamepadButtonJsonDecoder))
+                            (Json.Decode.list Json.Decode.float
+                                |> Json.Decode.field "axes"
+                                |> Json.Decode.map
+                                    (\axes ->
+                                        case (axes |> gamepadJoysticksFromAxes) |> listPadToAtLeast 2 gamepadJoystickUnknown of
+                                            left :: right :: additional ->
+                                                { left = left
+                                                , right = right
+                                                , additional = additional
+                                                }
+
+                                            -- can't happen
+                                            _ ->
+                                                { left = gamepadJoystickUnknown, right = gamepadJoystickUnknown, additional = [] }
+                                    )
+                            )
+                )
+        )
+        |> Json.Decode.map (Maybe.andThen identity)
+
+
+gamepadButtonUnknown : GamepadButton
+gamepadButtonUnknown =
+    GamepadButtonReleased { isTouched = False }
+
+
+gamepadJoystickUnknown : { x : Float, y : Float }
+gamepadJoystickUnknown =
+    { x = 0, y = 0 }
+
+
+gamepadJoysticksFromAxes : List Float -> List { x : Float, y : Float }
+gamepadJoysticksFromAxes =
+    \axes ->
+        case axes of
+            x :: y :: rest ->
+                { x = x, y = y } :: gamepadJoysticksFromAxes rest
+
+            _ ->
+                []
+
+
+gamepadButtonJsonDecoder : Json.Decode.Decoder GamepadButton
+gamepadButtonJsonDecoder =
+    Json.Decode.map3
+        (\isPressed isTouched value ->
+            if isPressed then
+                GamepadButtonPressed { firmnessPercentage = value }
+
+            else
+                GamepadButtonReleased { isTouched = isTouched }
+        )
+        (Json.Decode.field "pressed" Json.Decode.bool)
+        (Json.Decode.field "touched" Json.Decode.bool)
+        (Json.Decode.field "value" Json.Decode.float)
+
+
+listPadToAtLeast : Int -> a -> (List a -> List a)
+listPadToAtLeast newMinimumSize paddingElement =
+    \list ->
+        list
+            ++ List.repeat (newMinimumSize - (list |> List.length)) paddingElement
+
+
+{-| using
+
+  - <https://dark.elm.dmy.fr/packages/noordstar/elm-gamepad/latest>
+  - <https://github.com/bluebitgame/GamepadServer/blob/6124d3d9a6d83f2efca21e53eb944c554b5755b5/web/gamepad.js#L9>
+  - <https://github.com/bmsuseluda/emuze/blob/ecc0c35a3b7399142f550d06eba89e88e6ca3f01/app/hooks/useGamepads/tests/gamepadTypeMapping.test.ts#L36>
+  - <https://github.com/beetrootpaul/beetpx/blob/2a5c38a0f5fbcd76efcd0d97e42566594c79eae9/src/game_input/gamepad_mapping/GamepadMapping8BitDo.ts>
+  - <https://github.com/philschatz/puzzlescript/tree/5f1444f426691fd8e87a817bf5821b6c71742381/packages/puzzlescript-web/src/browser/controller/configs>
+  - <https://github.com/bomblebees/bomblebees/tree/417156f942b7bd6bbee48f1f97b3611bf4db70d8/Assets/Plugins/InControl/Source/Unity/DeviceProfiles>
+  - <https://github.com/ericlathrop/html5-gamepad/blob/master/mappings>
+
+to consider adding
+
+  - <https://github.com/electrovir/gamepad-type>
+  - <https://github.com/STREGAsGate/GateEngine/blob/07bbc90668fafe211830b535128eee75a98aef3f/Sources/GateEngine/System/HID/GamePad/GamePadInterpreter/Interpreters/WASIGamePadInterpreter.swift#L58>
+  - <https://github.com/mdqinc/SDL_GameControllerDB>
+
+On many other models I didn't find good examples so I don't feel confident enough giving a mapping
+
+-}
+buttonMapping : Dict String GamepadButtonMap
+buttonMapping =
+    Dict.empty
+        |> dictInsertSameValueFor
+            [ "xinput", "Wireless Controller (STANDARD GAMEPAD)" ]
+            gamepadStandardButtonMap
+        |> dictInsertSameValueFor
+            [ "Xbox 360 Controller (XInput STANDARD GAMEPAD)"
+            , "Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)"
+            , "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)"
+            , "HID-compliant game controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)"
+            ]
+            { gamepadStandardButtonMap | touchpad = Nothing }
+        |> dictInsertSameValueFor
+            [ "Xbox Wireless Controller Extended Gamepad"
+            , "Unknown Gamepad (Vendor: beef Product: 046d)"
+            ]
+            gamepadStandardButtonMap
+        |> dictInsertSameValueFor
+            [ "054c-05c4-Wireless Controller", "Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)" ]
+            gamepadStandardButtonMap
+        |> dictInsertSameValueFor
+            [ "45e-28e-Xbox 360 Wired Controller" ]
+            { primary = Just 11
+            , secondary = Just 12
+            , tertiary = Just 13
+            , quaternary = Just 14
+            , leftBumper = Just 8
+            , rightBumper = Just 9
+            , touchpad = Nothing
+            , select = Just 5
+            , start = Just 4
+            , arrowUp = Just 0
+            , arrowDown = Just 1
+            , arrowLeft = Just 2
+            , arrowRight = Just 3
+            , leftJoystickButton = Just 6
+            , rightJoystickButton = Just 7
+            , homeButton = Just 10
+
+            -- these are only analog
+            , leftTrigger = Nothing
+            , rightTrigger = Nothing
+            }
+        |> dictInsertSameValueFor
+            [ "0810-0001- USB Gamepad          ", " USB Gamepad           (Vendor: 0810 Product: 0001)" ]
+            { gamepadStandardButtonMap
+                | primary = Just 2
+                , tertiary = Just 3
+                , quaternary = Just 0
+                , touchpad = Nothing
+            }
+        |> dictInsertSameValueFor
+            [ "0810-e501-usb gamepad           ", "usb gamepad            (Vendor: 0810 Product: e501)" ]
+            { gamepadStandardButtonMap
+                | primary = Just 1
+                , secondary = Just 2
+                , tertiary = Just 0
+                , leftTrigger = Nothing
+                , rightTrigger = Nothing
+                , leftJoystickButton = Nothing
+                , rightJoystickButton = Nothing
+                , arrowUp = Nothing
+                , arrowLeft = Nothing
+                , arrowRight = Nothing
+                , arrowDown = Nothing
+                , homeButton = Nothing
+            }
+        -- nintendo style
+        |> dictInsertSameValueFor
+            [ "057e-2009-Pro Controller"
+            , "Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)"
+            , "057e-2009-Pro Wireless Gamepad"
+            , "Wireless Gamepad (STANDARD GAMEPAD Vendor: 057e Product: 2009)"
+            ]
+            { gamepadStandardButtonMap
+                | primary = Just 1
+                , secondary = Just 0
+                , quaternary = Just 2
+            }
+        |> dictInsertSameValueFor
+            [ "Pro Controller Extended Gamepad" ]
+            { gamepadStandardButtonMap
+                | primary = Just 1
+                , secondary = Just 0
+                , quaternary = Just 2
+            }
+        -- dualsense style
+        -- too unclear to me how arrows and dpad are interpreted.
+        -- Like, some different button indexes belong to the same button output.
+        -- And some button values seem to be mixed up in the axis values
+        --     [ "54c-ce6-DualSense Wireless Controller"
+        --     , "DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)"
+        --     , "054c-0ce6-Wireless Controller"
+        --     , "Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)"
+        --     ]
+        -- 8BitDo style
+        -- too unclear to me how arrows and dpad are interpreted. Some button values seem to be mixed up in the axis values
+        --    [ "2dc8-5112-8BitDo Lite 2"
+        --    , "8BitDo Lite 2 (Vendor: 2dc8 Product: 5112)"
+        --    , "2dc8-5112-Bluetooth Wireless Controller   "
+        --    , "Bluetooth Wireless Controller    (Vendor: 2dc8 Product: 5112)"
+        --    , "8BitDo Lite 2 Extended Gamepad"
+        --    ]
+        --
+        -- playstation 3 style
+        |> dictInsertSameValueFor
+            [ "54c-268-PLAYSTATION(R)3 Controller"
+            , "PS3 GamePad (Vendor: 054c Product: 0268)"
+            ]
+            { primary = Just 14
+            , secondary = Just 13
+            , tertiary = Just 15
+            , quaternary = Just 12
+            , leftBumper = Just 10
+            , rightBumper = Just 11
+            , leftTrigger = Just 8
+            , rightTrigger = Just 9
+            , select = Just 0
+            , start = Just 3
+            , leftJoystickButton = Just 1
+            , rightJoystickButton = Just 2
+            , arrowUp = Just 4
+            , arrowDown = Just 6
+            , arrowLeft = Just 7
+            , arrowRight = Just 5
+            , homeButton = Nothing
+            , touchpad = Nothing
+            }
+        -- playstation 4 style
+        |> dictInsertSameValueFor
+            [ "54c-9cc-Wireless Controller" ]
+            { primary = Just 1
+            , secondary = Just 2
+            , tertiary = Just 0
+            , quaternary = Just 3
+            , leftBumper = Just 4
+            , rightBumper = Just 5
+            , leftTrigger = Just 6
+            , rightTrigger = Just 7
+            , select = Just 8
+            , start = Just 9
+            , leftJoystickButton = Just 10
+            , rightJoystickButton = Just 11
+            , arrowUp = Just 14
+            , arrowDown = Just 15
+            , arrowLeft = Just 16
+            , arrowRight = Just 17
+            , homeButton = Just 12
+            , touchpad = Just 13
+            }
+        -- logi style
+        |> dictInsertSameValueFor
+            [ "046d- c216-Logitech Dual Action"
+            , "Logitech Dual Action (STANDARD GAMEPAD Vendor: 046d Product: c216)"
+            ]
+            { primary = Just 0
+            , secondary = Just 1
+            , tertiary = Just 2
+            , quaternary = Just 3
+            , leftBumper = Just 4
+            , rightBumper = Just 5
+            , leftTrigger = Just 6
+            , rightTrigger = Just 7
+            , select = Just 8
+            , start = Just 9
+            , leftJoystickButton = Just 10
+            , rightJoystickButton = Just 11
+            , arrowUp = Just 12
+            , arrowDown = Just 13
+            , arrowLeft = Just 14
+            , arrowRight = Just 15
+            , homeButton = Nothing
+            , touchpad = Nothing
+            }
+
+
+dictInsertSameValueFor : List comparableKey -> value -> (Dict comparableKey value -> Dict comparableKey value)
+dictInsertSameValueFor keyList value =
+    \dict ->
+        keyList |> List.foldl (\key dictSoFar -> dictSoFar |> Dict.insert key value) dict
+
+
+listAtIndex : Int -> (List a -> Maybe a)
+listAtIndex index sticks =
+    case sticks of
+        [] ->
+            Nothing
+
+        head :: tail ->
+            if index <= 0 then
+                head |> Just
+
+            else
+                listAtIndex (index - 1) tail
+
+
 requestFutureJsonDecoder : InterfaceSingleRequest future -> Json.Decode.Decoder future
 requestFutureJsonDecoder =
     \interfaceSingleRequest ->
@@ -2595,6 +3033,9 @@ requestFutureJsonDecoder =
 
             GeoLocationRequest request ->
                 Json.Decode.map request geoLocationJsonDecoder
+
+            GamepadsRequest request ->
+                Json.Decode.map request gamepadsJsonDecoder
 
 
 httpExpectOnError : HttpExpect future -> (HttpError -> future)
@@ -2766,6 +3207,9 @@ listenFutureJsonDecoder interfaceSingleListen =
         GeoLocationListen toFuture ->
             geoLocationJsonDecoder |> Json.Decode.map toFuture
 
+        GamepadsChangeListen toFuture ->
+            gamepadsJsonDecoder |> Json.Decode.map toFuture
+
 
 windowVisibilityCodec : JsonCodec WindowVisibility
 windowVisibilityCodec =
@@ -2798,6 +3242,110 @@ domElementAtReversePath path domNode =
 
                         Just subNodeAtIndex ->
                             domElementAtReversePath parentsOfSub subNodeAtIndex
+
+
+{-| Controller information on button presses, joystick positions etc.
+
+  - `primaryButton`: The most common action like "enter"/"confirm" or jump
+
+  - `secondaryButton`: Usually "cancel"/"skip" or a common ability like duck/sneak, drop or heal
+
+  - `tertiaryButton`: common-ish ability like consume, interact, reload or an ultimate power
+
+  - `quaternaryButton`: less common action like quick menu or mode switch
+
+  - `leftBumperButton`, `rightBumperButton`: The top row of smaller buttons on the side opposite of you, sometimes called shoulder buttons.
+    Often used for alternative menu actions like slot switching or quick map
+
+  - `leftTriggerButton`, `rightTriggerButton`: The bottom row of larger buttons on the side opposite of you.
+    Often used for holdable abilities like sliding or dashing
+
+  - `selectButton`: Usually opens an in-world menu with for example inventory, lore, ability overview or a map
+
+  - `startButton`: Usually pauses the game and opens a menu with options like settings and quit
+
+  - `leftJoystickButton`, `rightJoystickButton`: Not all gamepads have these, so they often either double existing actions like "confirm"
+    or perform actions that are only very rarely helpful, like hiding ui elements or making a screenshot
+
+  - `upButton`, `downBottom`, `leftButton`, `rightButton`: exactly one step in a direction, usually in a (quick) menu/inventory
+
+  - \`homeButton: Usually turns the gamepad on/off, or changes the state of the game
+
+  - `touchpadButton`: Not present on most gamepads. While the touchpad is often used for controlling the mouse, it can also be used as a simple button
+
+  - `joystickLeft`, `joystickRight`: Those wiggly that can be moved in any direction by any amount.
+    They are provided as `x, y` signed percentages
+
+  - `kindId`: some information about the gamepad, usually containing the USB vendor, product id of the gamepad
+    and the name of the gamepad as provided by the driver. See [mdn](https://developer.mozilla.org/en-US/docs/Web/API/Gamepad/id)
+
+    You can use this information to for example determine how to show controls
+
+  - `buttonsAdditional`, `joysticksAdditional`: Maybe you have a weird gamepad with 3 joysticks? These might help 🤷
+
+Implementation note:
+As you know, gamepad layouts differ between models.
+For most of them, we're able to map them to the buttons and joysticks above.
+If you experience issues with some model, [open an issue]()
+
+-}
+type alias Gamepad =
+    RecordWithoutConstructorFunction
+        { primaryButton : GamepadButton
+        , secondaryButton : GamepadButton
+        , tertiaryButton : GamepadButton
+        , quaternaryButton : GamepadButton
+        , leftBumperButton : GamepadButton
+        , rightBumperButton : GamepadButton
+        , leftTriggerButton : GamepadButton
+        , rightTriggerButton : GamepadButton
+        , selectButton : GamepadButton
+        , startButton : GamepadButton
+        , leftJoystickButton : GamepadButton
+        , rightJoystickButton : GamepadButton
+        , upButton : GamepadButton
+        , downButton : GamepadButton
+        , leftButton : GamepadButton
+        , rightButton : GamepadButton
+        , homeButton : GamepadButton
+        , touchpadButton : GamepadButton
+        , additionalButtons : List GamepadButton
+        , kindId : String
+        , joystickLeft : { x : Float, y : Float }
+        , joystickRight : { x : Float, y : Float }
+        , joysticksAdditional : List { x : Float, y : Float }
+        }
+
+
+{-| Buttons are either held down with an optional value between 0 and 1 to measure how hard,
+or they are released with an optional detection of touch which defaults to false.
+-}
+type GamepadButton
+    = GamepadButtonPressed { firmnessPercentage : Float }
+    | GamepadButtonReleased { isTouched : Bool }
+
+
+type alias GamepadButtonMap =
+    RecordWithoutConstructorFunction
+        { primary : Maybe Int
+        , secondary : Maybe Int
+        , tertiary : Maybe Int
+        , quaternary : Maybe Int
+        , start : Maybe Int
+        , select : Maybe Int
+        , leftJoystickButton : Maybe Int
+        , rightJoystickButton : Maybe Int
+        , arrowUp : Maybe Int
+        , arrowLeft : Maybe Int
+        , arrowRight : Maybe Int
+        , arrowDown : Maybe Int
+        , leftTrigger : Maybe Int
+        , leftBumper : Maybe Int
+        , rightTrigger : Maybe Int
+        , rightBumper : Maybe Int
+        , homeButton : Maybe Int
+        , touchpad : Maybe Int
+        }
 
 
 domElementIdJsonCodec : JsonCodec DomElementId

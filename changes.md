@@ -24,3 +24,5 @@
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
   - add `module Web.GeoLocation`
+  - TODO mention "An Interface for" in every interface documentation
+  - TODO replace GeoLocationListen by GeoLocationChangeListen
