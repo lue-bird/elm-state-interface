@@ -29,7 +29,8 @@ import Rope
 import Web
 
 
-{-| An [`Interface`](Web#Interface) for getting what gamepads are connected and how buttons and axis are activated.
+{-| An [`Interface`](Web#Interface) for getting which [gamepads](Web#Gamepad)
+are connected and in which ways buttons and axes are activated.
 
 The given `Dict` keys uniquely identify each device for the whole session.
 
@@ -42,7 +43,8 @@ request =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) for detecting changes to what gamepads are connected and how buttons and axis are activated.
+{-| An [`Interface`](Web#Interface) for detecting changes to which [gamepads](Web#Gamepad)
+are connected and in which ways buttons and axes are activated.
 
 The given `Dict` keys uniquely identify each device for the whole session,
 so you can for example check for removed and added gamepads using `Dict.diff`
