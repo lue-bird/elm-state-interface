@@ -559,7 +559,7 @@ In practice, this is sometimes used like a kind of event-config pattern:
         |> Web.Dom.render
         |> Web.interfaceFutureMap (\Pressed -> ShowAllEntriesButtonClicked)
 
-sometimes as a way to deal with all events (equivalent to `update` in The Elm Architecture)
+sometimes as a way to deal with all events (like `update` in The Elm Architecture)
 
     ...
         |> Web.interfaceFutureMap
