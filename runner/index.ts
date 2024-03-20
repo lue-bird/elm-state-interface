@@ -141,8 +141,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 )
                 localStorageSetOnADifferentTabListenAbortControllers[config.key] = abortController
             }
-            case "GeoLocationListen": return (_config: null, sendToElm) => {
-                geoLocationListenId =
+            case "GeoLocationChangeListen": return (_config: null, sendToElm) => {
+                geoLocationChangeListenId =
                     navigator.geolocation.watchPosition(
                         geoPosition => { sendToElm(geoPosition.coords) },
                         error => {
@@ -193,10 +193,10 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 localStorageSetOnADifferentTabListenAbortControllers[config.key]?.abort()
                 delete localStorageSetOnADifferentTabListenAbortControllers[config.key]
             }
-            case "GeoLocationListen": return (_config: null) => {
-                if (geoLocationListenId) {
-                    navigator.geolocation.clearWatch(geoLocationListenId)
-                    geoLocationListenId = null
+            case "GeoLocationChangeListen": return (_config: null) => {
+                if (geoLocationChangeListenId) {
+                    navigator.geolocation.clearWatch(geoLocationChangeListenId)
+                    geoLocationChangeListenId = null
                 }
             }
             case "WindowPreferredLanguagesChangeListen": return (_config: null) => {
@@ -381,7 +381,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
 
 //// state
 
-let geoLocationListenId: number | null = null
+let geoLocationChangeListenId: number | null = null
 let runningAnimationFrameLoopId: number | null = null
 const localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
 const localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}

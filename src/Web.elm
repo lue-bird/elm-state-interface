@@ -326,7 +326,7 @@ type InterfaceSingleListen future
         { key : String
         , on : { appUrl : AppUrl, oldValue : Maybe String, newValue : String } -> future
         }
-    | GeoLocationListen (GeoLocation -> future)
+    | GeoLocationChangeListen (GeoLocation -> future)
     | GamepadsChangeListen (Dict Int Gamepad -> future)
 
 
@@ -493,7 +493,7 @@ type InterfaceSingleListenId
     | IdSocketMessageListen SocketId
     | IdLocalStorageRemoveOnADifferentTabListen { key : String }
     | IdLocalStorageSetOnADifferentTabListen { key : String }
-    | IdGeoLocationListen
+    | IdGeoLocationChangeListen
     | IdGamepadsChangeListen
 
 
@@ -768,8 +768,8 @@ interfaceListenFutureMap futureChange =
                 { key = listen.key, on = \event -> event |> listen.on |> futureChange }
                     |> LocalStorageSetOnADifferentTabListen
 
-            GeoLocationListen toFuture ->
-                (\event -> event |> toFuture |> futureChange) |> GeoLocationListen
+            GeoLocationChangeListen toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GeoLocationChangeListen
 
             GamepadsChangeListen toFuture ->
                 (\event -> event |> toFuture |> futureChange) |> GamepadsChangeListen
@@ -1011,8 +1011,8 @@ interfaceSingleListenToId =
             DocumentEventListen listen ->
                 IdDocumentEventListen listen.eventName
 
-            GeoLocationListen _ ->
-                IdGeoLocationListen
+            GeoLocationChangeListen _ ->
+                IdGeoLocationChangeListen
 
             GamepadsChangeListen _ ->
                 IdGamepadsChangeListen
@@ -1345,8 +1345,8 @@ listenIdToComparable =
                     , listen.key |> ComparableString
                     ]
 
-            IdGeoLocationListen ->
-                ComparableString "IdGeoLocationListen"
+            IdGeoLocationChangeListen ->
+                ComparableString "IdGeoLocationChangeListen"
 
             IdGamepadsChangeListen ->
                 ComparableString "IdGamepadsChangeListen"
@@ -1695,7 +1695,7 @@ socketIdJsonCodec =
 interfaceSingleListenIdJsonCodec : JsonCodec InterfaceSingleListenId
 interfaceSingleListenIdJsonCodec =
     Json.Codec.choice
-        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idWindowPreferredLanguagesChangeListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationListen idGamepadsChangeListen interfaceSingleListenId ->
+        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idWindowPreferredLanguagesChangeListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationChangeListen idGamepadsChangeListen interfaceSingleListenId ->
             case interfaceSingleListenId of
                 IdTimePeriodicallyListen intervalDuration ->
                     idTimePeriodicallyListen intervalDuration
@@ -1724,8 +1724,8 @@ interfaceSingleListenIdJsonCodec =
                 IdLocalStorageSetOnADifferentTabListen listen ->
                     idLocalStorageSetOnADifferentTabListen listen
 
-                IdGeoLocationListen ->
-                    idGeoLocationListen ()
+                IdGeoLocationChangeListen ->
+                    idGeoLocationChangeListen ()
 
                 IdGamepadsChangeListen ->
                     idGamepadsChangeListen ()
@@ -1756,7 +1756,7 @@ interfaceSingleListenIdJsonCodec =
                 |> Json.Codec.field ( .key, "key" ) Json.Codec.string
                 |> Json.Codec.recordFinish
             )
-        |> Json.Codec.variant ( \() -> IdGeoLocationListen, "GeoLocationListen" )
+        |> Json.Codec.variant ( \() -> IdGeoLocationChangeListen, "GeoLocationChangeListen" )
             Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdGamepadsChangeListen, "GamepadsChangeListen" )
             Json.Codec.unit
@@ -3204,7 +3204,7 @@ listenFutureJsonDecoder interfaceSingleListen =
             Json.Decode.string
                 |> Json.Decode.map messageListen.on
 
-        GeoLocationListen toFuture ->
+        GeoLocationChangeListen toFuture ->
             geoLocationJsonDecoder |> Json.Decode.map toFuture
 
         GamepadsChangeListen toFuture ->

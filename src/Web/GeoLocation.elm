@@ -25,7 +25,7 @@ request =
 -}
 changeListen : Web.Interface Web.GeoLocation
 changeListen =
-    Web.GeoLocationListen identity
+    Web.GeoLocationChangeListen identity
         |> Web.Listen
         |> Web.InterfaceWithFuture
         |> Rope.singleton
