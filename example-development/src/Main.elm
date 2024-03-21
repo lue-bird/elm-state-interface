@@ -15,6 +15,7 @@ import Web
 import Web.Audio
 import Web.Audio.Parameter
 import Web.Dom
+import Web.Gamepads
 import Web.Navigation
 import Web.Svg
 import Web.Time
@@ -530,6 +531,7 @@ type alias PickApplesLocation =
 
 type PickApplesEvent
     = PickApplesKeyPressed (Result Json.Decode.Error String)
+    | PickApplesGamepadReceived (Maybe Web.Gamepad)
     | PickApplesSimulationTick Time.Posix
     | WindowSizeReceived { width : Int, height : Int }
     | EatAppleAudioReceived (Result Web.AudioSourceLoadError Web.AudioSource)
@@ -564,13 +566,20 @@ pickApplesInterface state =
     , [ Web.Window.sizeRequest, Web.Window.resizeListen ]
         |> Web.interfaceBatch
         |> Web.interfaceFutureMap WindowSizeReceived
-    , Web.Dom.documentEventListen "keydown"
+    , Web.Window.listenTo "keydown"
         |> Web.interfaceFutureMap
             (\event ->
                 event
                     |> Json.Decode.decodeValue
                         (Json.Decode.field "key" Json.Decode.string)
                     |> PickApplesKeyPressed
+            )
+    , [ Web.Gamepads.request, Web.Gamepads.changeListen ]
+        |> Web.interfaceBatch
+        |> Web.interfaceFutureMap
+            (\gamepads ->
+                PickApplesGamepadReceived
+                    (gamepads |> Dict.foldr (\_ gamepad _ -> gamepad |> Just) Nothing)
             )
     , let
         rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.DomNode state_
@@ -646,6 +655,28 @@ pickApplesInterface state =
                 ]
                 [ state.pickedAppleCount |> String.fromInt |> Web.Dom.text ]
 
+        controlsUi : Web.DomNode state_
+        controlsUi =
+            Web.Svg.element "text"
+                [ Web.Dom.style "fill" (Color.rgba 0.3 1 0.5 0.13 |> Color.toCssString)
+                , Web.Dom.style "font-size" "3em"
+                , Web.Dom.attribute "text-anchor" "middle"
+                , Web.Dom.attribute "dominant-baseline" "middle"
+                , Web.Dom.attribute "font-weight" "bolder"
+                , Web.Dom.attribute "x" "50%"
+                , Web.Dom.attribute "y" "10%"
+                , Web.Dom.attribute "width" "50%"
+                , Web.Dom.attribute "height" "50%"
+                ]
+                [ (if state.pickedAppleCount >= 3 then
+                    ""
+
+                   else
+                    "arrow keys or left controller joystick"
+                  )
+                    |> Web.Dom.text
+                ]
+
         cellSideLength : Float
         cellSideLength =
             worldSize.width / (worldSizeCells.x |> Basics.toFloat)
@@ -686,6 +717,7 @@ pickApplesInterface state =
             ]
             [ worldUi
             , pickedAppleCountUi
+            , controlsUi
             , headTailUi
             , appleUi
             ]
@@ -793,6 +825,17 @@ pickApplesInterface state =
                             Just snakeDirection ->
                                 PickingApples { state | headDirection = snakeDirection }
 
+                    PickApplesGamepadReceived Nothing ->
+                        PickingApples state
+
+                    PickApplesGamepadReceived (Just gamepad) ->
+                        case gamepad.joystickLeft |> snakeDirectionFromJoystick of
+                            Nothing ->
+                                PickingApples state
+
+                            Just snakeDirection ->
+                                PickingApples { state | headDirection = snakeDirection }
+
                     EatAppleAudioReceived received ->
                         PickingApples { state | eatAppleAudio = received |> Just }
             )
@@ -810,6 +853,29 @@ snakeDirectionFromKeyboardKey =
         , ( "ArrowLeft", Left )
         , ( "ArrowRight", Right )
         ]
+
+
+snakeDirectionFromJoystick : { x : Float, y : Float } -> Maybe SnakeDirection
+snakeDirectionFromJoystick =
+    \thumbCoordinates ->
+        if (thumbCoordinates.y |> abs) <= 0.3 && (thumbCoordinates.x |> abs) <= 0.3 then
+            Nothing
+
+        else
+            (if (thumbCoordinates.y |> abs) > (thumbCoordinates.x |> abs) then
+                if thumbCoordinates.y < 0 then
+                    Up
+
+                else
+                    Down
+
+             else if thumbCoordinates.x < 0 then
+                Left
+
+             else
+                Right
+            )
+                |> Just
 
 
 directionToXYOffset : SnakeDirection -> { x : Int, y : Int }
