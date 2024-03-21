@@ -602,7 +602,7 @@ The module and interface structure is also not equipped to support multiple plat
 ## thanks 🌱
   - [andrewMacmurray for `elm-concurrent-task`](https://dark.elm.dmy.fr/packages/andrewMacmurray/elm-concurrent-task/latest/) which was used as the base for many of the js implementations
   - [elm-radio hosts for the episode about concurrent-task](https://elm-radio.com/episode/elm-concurrent-task) which motivated me to make a package out of it
-  - [@a-teammate](https://github.com/a-teammate) for lots of valuable feedback 💚
+  - [a-teammate (Malte H)](https://github.com/a-teammate) for lots of valuable feedback 💚
   - [MartinSStewart for `elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/) which inspired the audio API
-  - [kageurufu for `elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) which inspired me to also provide a websocket API
   - [noordstar for `elm-gamepad`](https://dark.elm.dmy.fr/packages/noordstar/elm-gamepad/latest) which inspired the gamepads API
+  - [kageurufu for `elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) which inspired me to also provide a websocket API
