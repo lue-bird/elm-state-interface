@@ -598,10 +598,10 @@ function windowEventListenRemove(eventName: string) {
 }
 
 function documentEventListenAdd(eventName: string, sendToElm: (v: any) => void) {
-    (window as { [key: string]: any })["on" + eventName] = sendToElm
+    (window.document as { [key: string]: any })["on" + eventName] = sendToElm
 }
 function documentEventListenRemove(eventName: string) {
-    (window as { [key: string]: any })["on" + eventName] = null
+    (window.document as { [key: string]: any })["on" + eventName] = null
 }
 
 function go(urlSteps: number) {
