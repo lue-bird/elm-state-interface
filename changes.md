@@ -7,6 +7,8 @@
       - `Web.Dom.modifierMap` name → `Web.Dom.modifierFutureMap`
       - `Web.interfaceMap` name → `Web.interfaceFutureMap`
       - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
+  - `module Web.Dom`:
+      - `documentEventListen` move into `Web.Window` as `documentListenTo`
   - `module Web.Http`:
       - remove variant `Web.HttpExpectJson` in favor of explicit `Json.Decode.Error` handling in `Web.Http.expectJson`
       - remove `Web.HttpHeader` in favor of inlined types
@@ -24,4 +26,4 @@
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
   - add `module Web.GeoLocation`
-  - TODO mention "An Interface for" in every interface documentation
+  - TODO incorporate  dpad into showcase

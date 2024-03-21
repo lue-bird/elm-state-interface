@@ -1,6 +1,5 @@
 module Web.Dom exposing
-    ( documentEventListen
-    , text
+    ( text
     , element, elementNamespaced
     , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style
     , listenTo, listenToPreventingDefaultAction
@@ -13,7 +12,6 @@ module Web.Dom exposing
 These are primitives used for svg and html.
 Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
 
-@docs documentEventListen
 @docs text
 @docs element, elementNamespaced
 @docs Modifier, ModifierSingle, attribute, attributeNamespaced, style
@@ -28,17 +26,6 @@ import Dict
 import Json.Decode
 import Rope exposing (Rope)
 import Web exposing (DomElement, DomNode)
-
-
-{-| An [`Interface`](Web#Interface) for detecting a specific [`document` event](https://developer.mozilla.org/en-US/docs/Web/API/Document#events)
-that has no native [`Interface`](Web#Interface) like like scroll, scrollend, selectionchange or paste
--}
-documentEventListen : String -> Web.Interface Json.Decode.Value
-documentEventListen eventName =
-    Web.DocumentEventListen { eventName = eventName, on = Json.Decode.value }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
-        |> Rope.singleton
 
 
 {-| An [`Interface`](Web#Interface) for displaying a given [`DomNode`](Web#DomNode).
@@ -193,6 +180,8 @@ For example to get `<p>flying</p>`
     Web.Dom.element "p"
         []
         [ Web.Dom.text "flying" ]
+
+To create SVG elements, use [`Web.Svg.element`](Web-Svg#element)
 
 -}
 element : String -> List (Modifier future) -> List (DomNode future) -> DomNode future

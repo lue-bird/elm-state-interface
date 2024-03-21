@@ -2,7 +2,7 @@ module Web.Window exposing
     ( animationFrameListen, visibilityChangeListen
     , sizeRequest, resizeListen
     , preferredLanguagesRequest, preferredLanguagesChangeListen
-    , listenTo
+    , documentListenTo, listenTo
     , titleReplaceBy, authorSet, keywordsSet, descriptionSet
     )
 
@@ -11,7 +11,7 @@ module Web.Window exposing
 @docs animationFrameListen, visibilityChangeListen
 @docs sizeRequest, resizeListen
 @docs preferredLanguagesRequest, preferredLanguagesChangeListen
-@docs listenTo
+@docs documentListenTo, listenTo
 
 When navigating to a new page on the same site,
 you may want to change the document's context:
@@ -62,6 +62,17 @@ descriptionSet : String -> Web.Interface future_
 descriptionSet authorName =
     Web.DocumentDescriptionSet authorName
         |> Web.InterfaceWithoutFuture
+        |> Rope.singleton
+
+
+{-| An [`Interface`](Web#Interface) for detecting a specific [`document` event](https://developer.mozilla.org/en-US/docs/Web/API/Document#events)
+that has no native [`Interface`](Web#Interface), like like scroll, scrollend, selectionchange or paste
+-}
+documentListenTo : String -> Web.Interface Json.Decode.Value
+documentListenTo eventName =
+    Web.DocumentEventListen { eventName = eventName, on = Json.Decode.value }
+        |> Web.Listen
+        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
