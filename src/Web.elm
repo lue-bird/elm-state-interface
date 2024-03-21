@@ -2620,8 +2620,8 @@ gamepadStandardButtonMap =
     , rightTrigger = Just 7
     , select = Just 8
     , start = Just 9
-    , leftJoystickButton = Just 10
-    , rightJoystickButton = Just 11
+    , leftThumbstickButton = Just 10
+    , rightThumbstickButton = Just 11
     , arrowUp = Just 12
     , arrowDown = Just 13
     , arrowLeft = Just 14
@@ -2642,7 +2642,7 @@ maybeGamepadJsonDecoder =
 
                     else
                         Json.Decode.map3
-                            (\kindId buttons joysticks ->
+                            (\kindId buttons thumbsticks ->
                                 let
                                     buttonMap : GamepadButtonMap
                                     buttonMap =
@@ -2667,8 +2667,8 @@ maybeGamepadJsonDecoder =
                                 , rightTriggerButton = at .rightTrigger
                                 , selectButton = at .select
                                 , startButton = at .start
-                                , leftJoystickButton = at .leftJoystickButton
-                                , rightJoystickButton = at .rightJoystickButton
+                                , leftThumbstickButton = at .leftThumbstickButton
+                                , rightThumbstickButton = at .rightThumbstickButton
                                 , upButton = at .arrowUp
                                 , downButton = at .arrowDown
                                 , leftButton = at .arrowLeft
@@ -2679,7 +2679,7 @@ maybeGamepadJsonDecoder =
                                     let
                                         mappedButtonIndexes : Set Int
                                         mappedButtonIndexes =
-                                            [ .primary, .secondary, .tertiary, .quaternary, .leftBumper, .rightBumper, .leftTrigger, .rightTrigger, .select, .start, .leftJoystickButton, .rightJoystickButton, .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .homeButton, .touchpad ]
+                                            [ .primary, .secondary, .tertiary, .quaternary, .leftBumper, .rightBumper, .leftTrigger, .rightTrigger, .select, .start, .leftThumbstickButton, .rightThumbstickButton, .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .homeButton, .touchpad ]
                                                 |> List.filterMap (\field -> buttonMap |> field)
                                                 |> Set.fromList
                                     in
@@ -2694,9 +2694,9 @@ maybeGamepadJsonDecoder =
                                             )
                                         |> List.filterMap identity
                                 , kindId = kindId
-                                , joystickLeft = joysticks.left
-                                , joystickRight = joysticks.right
-                                , joysticksAdditional = joysticks.additional
+                                , thumbstickLeft = thumbsticks.left
+                                , thumbstickRight = thumbsticks.right
+                                , thumbsticksAdditional = thumbsticks.additional
                                 }
                                     |> Just
                             )
@@ -2706,7 +2706,7 @@ maybeGamepadJsonDecoder =
                                 |> Json.Decode.field "axes"
                                 |> Json.Decode.map
                                     (\axes ->
-                                        case (axes |> gamepadJoysticksFromAxes) |> listPadToAtLeast 2 gamepadJoystickUnknown of
+                                        case (axes |> gamepadThumbsticksFromAxes) |> listPadToAtLeast 2 gamepadThumbstickUnknown of
                                             left :: right :: additional ->
                                                 { left = left
                                                 , right = right
@@ -2715,7 +2715,7 @@ maybeGamepadJsonDecoder =
 
                                             -- can't happen
                                             _ ->
-                                                { left = gamepadJoystickUnknown, right = gamepadJoystickUnknown, additional = [] }
+                                                { left = gamepadThumbstickUnknown, right = gamepadThumbstickUnknown, additional = [] }
                                     )
                             )
                 )
@@ -2728,17 +2728,17 @@ gamepadButtonUnknown =
     GamepadButtonReleased { isTouched = False }
 
 
-gamepadJoystickUnknown : { x : Float, y : Float }
-gamepadJoystickUnknown =
+gamepadThumbstickUnknown : { x : Float, y : Float }
+gamepadThumbstickUnknown =
     { x = 0, y = 0 }
 
 
-gamepadJoysticksFromAxes : List Float -> List { x : Float, y : Float }
-gamepadJoysticksFromAxes =
+gamepadThumbsticksFromAxes : List Float -> List { x : Float, y : Float }
+gamepadThumbsticksFromAxes =
     \axes ->
         case axes of
             x :: y :: rest ->
-                { x = x, y = y } :: gamepadJoysticksFromAxes rest
+                { x = x, y = y } :: gamepadThumbsticksFromAxes rest
 
             _ ->
                 []
@@ -2821,8 +2821,8 @@ buttonMapping =
             , arrowDown = Just 1
             , arrowLeft = Just 2
             , arrowRight = Just 3
-            , leftJoystickButton = Just 6
-            , rightJoystickButton = Just 7
+            , leftThumbstickButton = Just 6
+            , rightThumbstickButton = Just 7
             , homeButton = Just 10
 
             -- these are only analog
@@ -2845,8 +2845,8 @@ buttonMapping =
                 , tertiary = Just 0
                 , leftTrigger = Nothing
                 , rightTrigger = Nothing
-                , leftJoystickButton = Nothing
-                , rightJoystickButton = Nothing
+                , leftThumbstickButton = Nothing
+                , rightThumbstickButton = Nothing
                 , arrowUp = Nothing
                 , arrowLeft = Nothing
                 , arrowRight = Nothing
@@ -2905,8 +2905,8 @@ buttonMapping =
             , rightTrigger = Just 9
             , select = Just 0
             , start = Just 3
-            , leftJoystickButton = Just 1
-            , rightJoystickButton = Just 2
+            , leftThumbstickButton = Just 1
+            , rightThumbstickButton = Just 2
             , arrowUp = Just 4
             , arrowDown = Just 6
             , arrowLeft = Just 7
@@ -2927,8 +2927,8 @@ buttonMapping =
             , rightTrigger = Just 7
             , select = Just 8
             , start = Just 9
-            , leftJoystickButton = Just 10
-            , rightJoystickButton = Just 11
+            , leftThumbstickButton = Just 10
+            , rightThumbstickButton = Just 11
             , arrowUp = Just 14
             , arrowDown = Just 15
             , arrowLeft = Just 16
@@ -2951,8 +2951,8 @@ buttonMapping =
             , rightTrigger = Just 7
             , select = Just 8
             , start = Just 9
-            , leftJoystickButton = Just 10
-            , rightJoystickButton = Just 11
+            , leftThumbstickButton = Just 10
+            , rightThumbstickButton = Just 11
             , arrowUp = Just 12
             , arrowDown = Just 13
             , arrowLeft = Just 14
@@ -3244,7 +3244,7 @@ domElementAtReversePath path domNode =
                             domElementAtReversePath parentsOfSub subNodeAtIndex
 
 
-{-| Controller information on button presses, joystick positions etc.
+{-| Controller information on button presses, thumbstick positions etc.
 
   - `primaryButton`: The most common action like "enter"/"confirm" or jump
 
@@ -3264,7 +3264,7 @@ domElementAtReversePath path domNode =
 
   - `startButton`: Usually pauses the game and opens a menu with options like settings and quit
 
-  - `leftJoystickButton`, `rightJoystickButton`: Not all gamepads have these, so they often either double existing actions like "confirm"
+  - `leftThumbstickButton`, `rightThumbstickButton`: Not all gamepads have these, so they often either double existing actions like "confirm"
     or perform actions that are only very rarely helpful, like hiding ui elements or making a screenshot
 
   - `upButton`, `downBottom`, `leftButton`, `rightButton`: exactly one step in a direction, usually in a (quick) menu/inventory
@@ -3273,7 +3273,7 @@ domElementAtReversePath path domNode =
 
   - `touchpadButton`: Not present on most gamepads. While the touchpad is often used for controlling the mouse, it can also be used as a simple button
 
-  - `joystickLeft`, `joystickRight`: Those wiggly that can be moved in any direction by any amount.
+  - `thumbstickLeft`, `thumbstickRight`: Those wiggly that can be moved in any direction by any amount.
     They are provided as `x, y` signed percentages
 
   - `kindId`: some information about the gamepad, usually containing the USB vendor, product id of the gamepad
@@ -3281,11 +3281,11 @@ domElementAtReversePath path domNode =
 
     You can use this information to for example determine how to show controls
 
-  - `buttonsAdditional`, `joysticksAdditional`: Maybe you have a weird gamepad with 3 joysticks? These might help 🤷
+  - `buttonsAdditional`, `thumbsticksAdditional`: Maybe you have a weird gamepad with 3 thumbsticks? These might help 🤷
 
 Implementation note:
 As you know, gamepad layouts differ between models.
-For most of them, we're able to map them to the buttons and joysticks above.
+For most of them, we're able to map them to the buttons and thumbsticks above.
 If you experience issues with some model, [open an issue]()
 
 -}
@@ -3301,8 +3301,8 @@ type alias Gamepad =
         , rightTriggerButton : GamepadButton
         , selectButton : GamepadButton
         , startButton : GamepadButton
-        , leftJoystickButton : GamepadButton
-        , rightJoystickButton : GamepadButton
+        , leftThumbstickButton : GamepadButton
+        , rightThumbstickButton : GamepadButton
         , upButton : GamepadButton
         , downButton : GamepadButton
         , leftButton : GamepadButton
@@ -3311,9 +3311,9 @@ type alias Gamepad =
         , touchpadButton : GamepadButton
         , additionalButtons : List GamepadButton
         , kindId : String
-        , joystickLeft : { x : Float, y : Float }
-        , joystickRight : { x : Float, y : Float }
-        , joysticksAdditional : List { x : Float, y : Float }
+        , thumbstickLeft : { x : Float, y : Float }
+        , thumbstickRight : { x : Float, y : Float }
+        , thumbsticksAdditional : List { x : Float, y : Float }
         }
 
 
@@ -3333,8 +3333,8 @@ type alias GamepadButtonMap =
         , quaternary : Maybe Int
         , start : Maybe Int
         , select : Maybe Int
-        , leftJoystickButton : Maybe Int
-        , rightJoystickButton : Maybe Int
+        , leftThumbstickButton : Maybe Int
+        , rightThumbstickButton : Maybe Int
         , arrowUp : Maybe Int
         , arrowLeft : Maybe Int
         , arrowRight : Maybe Int

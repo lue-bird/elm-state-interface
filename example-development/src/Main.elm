@@ -672,7 +672,7 @@ pickApplesInterface state =
                     ""
 
                    else
-                    "arrow keys or left controller joystick"
+                    "arrow keys or left controller thumbstick"
                   )
                     |> Web.Dom.text
                 ]
@@ -829,7 +829,7 @@ pickApplesInterface state =
                         PickingApples state
 
                     PickApplesGamepadReceived (Just gamepad) ->
-                        case gamepad.joystickLeft |> snakeDirectionFromJoystick of
+                        case gamepad.thumbstickLeft |> snakeDirectionFromThumbstick of
                             Nothing ->
                                 PickingApples state
 
@@ -855,8 +855,8 @@ snakeDirectionFromKeyboardKey =
         ]
 
 
-snakeDirectionFromJoystick : { x : Float, y : Float } -> Maybe SnakeDirection
-snakeDirectionFromJoystick =
+snakeDirectionFromThumbstick : { x : Float, y : Float } -> Maybe SnakeDirection
+snakeDirectionFromThumbstick =
     \thumbCoordinates ->
         if (thumbCoordinates.y |> abs) <= 0.3 && (thumbCoordinates.x |> abs) <= 0.3 then
             Nothing
