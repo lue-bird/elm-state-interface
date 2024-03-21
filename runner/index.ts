@@ -12,9 +12,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "DocumentAuthorSet": return (config: string) => { getMeta("author").content = config }
             case "DocumentKeywordsSet": return (config: string) => { getMeta("keywords").content = config }
             case "DocumentDescriptionSet": return (config: string) => { getMeta("description").content = config }
-            case "ConsoleLog": return (config: string) => { console.log(config) }
-            case "ConsoleWarn": return (config: string) => { console.warn(config) }
-            case "ConsoleError": return (config: string) => { console.error(config) }
+            case "ConsoleLog": return (config: string) => { window?.console.log(config) }
+            case "ConsoleWarn": return (config: string) => { window?.console.warn(config) }
+            case "ConsoleError": return (config: string) => { window?.console.error(config) }
             case "NavigationPushUrl": return (config: string) => { pushUrl(config) }
             case "NavigationReplaceUrl": return (config: string) => { replaceUrl(config) }
             case "NavigationGo": return (config: number) => { go(config) }
@@ -40,7 +40,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 if (socketToDisconnect) {
                     socketToDisconnect.send(config.data)
                 } else {
-                    console.warn("lue-bird/elm-state-interface: trying to send messages on closed socket")
+                    warn("trying to send messages on closed socket")
                 }
             }
             case "LocalStorageSet": return (config: { key: string, value: string | null }) => {
@@ -51,7 +51,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         window.localStorage.setItem(config.key, config.value)
                     }
                 } catch (disallowedByUserOrQuotaExceeded) {
-                    console.warn("lue-bird/elm-state-interface: local storage cannot be written to", disallowedByUserOrQuotaExceeded)
+                    warn("local storage cannot be written to: " + disallowedByUserOrQuotaExceeded)
                 }
             }
             default: return (_config: any) => {
@@ -112,7 +112,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         sendToElm(event.data)
                     }
                 } else {
-                    console.warn("lue-bird/elm-state-interface: trying to listen to messages on closed socket")
+                    warn("trying to listen to messages on closed socket")
                 }
             }
             case "LocalStorageRemoveOnADifferentTabListen": return (config: { key: string }, sendToElm) => {
@@ -146,7 +146,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     navigator.geolocation.watchPosition(
                         geoPosition => { sendToElm(geoPosition.coords) },
                         error => {
-                            console.warn("lue-bird/elm-state-interface: geo location cannot be read", error)
+                            warn("geo location cannot be read: " + error)
                         }
                     )
             }
@@ -279,7 +279,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "ClipboardRequest": return (_config: null) => {
                 return window.navigator.clipboard.readText()
                     .catch(_notAllowed => {
-                        console.warn("lue-bird/elm-state-interface: clipboard cannot be read")
+                        warn("clipboard cannot be read")
                     })
             }
             case "GeoLocationRequest": return (_config: null) => {
@@ -287,7 +287,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     window.navigator.geolocation.getCurrentPosition(
                         geoPosition => { resolve(geoPosition.coords) },
                         error => {
-                            console.warn("lue-bird/elm-state-interface: geo location cannot be read", error)
+                            warn("geo location cannot be read: " + error)
                         },
                         { timeout: 10000 }
                     )
@@ -825,7 +825,7 @@ function addAudio(config: AudioInfo) {
     if (buffer) {
         createAudio(config, buffer)
     } else {
-        console.warn("lue-bird/elm-state-interface: tried to play audio from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
+        warn("tried to play audio from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
     }
 }
 function createAudio(config: AudioInfo, buffer: AudioBuffer) {
@@ -883,7 +883,7 @@ function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): Au
                     if (buffer) {
                         convolverNode.buffer = buffer
                     } else {
-                        console.warn("lue-bird/elm-state-interface: tried to create a linear convolution from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
+                        warn("tried to create a linear convolution from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
                     }
                     return convolverNode
                 }
@@ -935,8 +935,11 @@ function editAudio(config: { url: string, startTime: number, replacement: { tag:
 
 // helpers
 
+function warn(warning: string) {
+    window?.console.warn(warning + " (lue-bird/elm-state-interface)")
+}
 function notifyOfBug(bugDescription: string) {
-    console.error("lue-bird/elm-state-interface bug: " + bugDescription + ". Please open an issue on github.")
+    window?.console.error("bug: " + bugDescription + ". Please open an issue on github.com/lue-bird/elm-state-interface")
 }
 
 function posixToContextTime(posix: number, currentTimePosix: number) {
