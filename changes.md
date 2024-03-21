@@ -26,4 +26,3 @@
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
   - add `module Web.GeoLocation`
-  - TODO incorporate  dpad into showcase
