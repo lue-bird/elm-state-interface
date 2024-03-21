@@ -52,7 +52,7 @@ connectTo address =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) to close a given connection.
+{-| An [`Interface`](Web#Interface) for closing a given connection
 -}
 disconnect : Web.SocketId -> Web.Interface future_
 disconnect id =

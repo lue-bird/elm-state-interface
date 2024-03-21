@@ -10,8 +10,16 @@ import Rope
 import Web
 
 
-{-| Like [`Debug.log`](https://dark.elm.dmy.fr/packages/elm/core/latest/Debug#log)
-as an [`Interface`](Web#Interface)
+{-| An [`Interface`](Web#Interface) for printing a message with general information
+like if certain tasks have been successful
+
+> survey submitted and received successfully
+
+Depending on what minifying tools you use for your production build, these might get removed.
+
+Note: uses [`console.log`](https://developer.mozilla.org/en-US/docs/Web/API/console/log_static),
+just like [`Debug.log`](https://dark.elm.dmy.fr/packages/elm/core/latest/Debug#log)
+
 -}
 log : String -> Web.Interface future_
 log string =
@@ -20,7 +28,7 @@ log string =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) for printing a message that something didn't succeed, for example
+{-| An [`Interface`](Web#Interface) for printing a message that something didn't succeed but you could recover from, for example
 
 > ⚠️ Unknown device - there may be compatibility issues.
 

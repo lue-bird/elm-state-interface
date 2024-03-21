@@ -11,7 +11,7 @@ import Rope
 import Web
 
 
-{-| An [`Interface`](Web#Interface) to get the current [position of the device](Web#GeoLocation)
+{-| An [`Interface`](Web#Interface) for getting the current [position of the device](Web#GeoLocation)
 -}
 request : Web.Interface Web.GeoLocation
 request =
@@ -21,7 +21,7 @@ request =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) to detect in changes in the current [position of the device](Web#GeoLocation)
+{-| An [`Interface`](Web#Interface) for detecting changes in the current [position of the device](Web#GeoLocation)
 -}
 changeListen : Web.Interface Web.GeoLocation
 changeListen =

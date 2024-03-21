@@ -26,7 +26,7 @@ import Time
 import Web
 
 
-{-| An [`Interface`](Web#Interface) to set the document's title
+{-| An [`Interface`](Web#Interface) for setting the document's title
 -}
 titleReplaceBy : String -> Web.Interface future_
 titleReplaceBy titleReplacement =
@@ -35,7 +35,7 @@ titleReplaceBy titleReplacement =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) to add or replace the document's author metadata
+{-| An [`Interface`](Web#Interface) for adding or replacing the document's author metadata
 -}
 authorSet : String -> Web.Interface future_
 authorSet authorName =
@@ -44,7 +44,7 @@ authorSet authorName =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) to add or replace the document's keywords metadata
+{-| An [`Interface`](Web#Interface) for adding or replacing the document's keywords metadata
 which should consist of words relevant to the page's content
 -}
 keywordsSet : List String -> Web.Interface future_
@@ -54,7 +54,7 @@ keywordsSet authorName =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) to add or replace the document's description metadata
+{-| An [`Interface`](Web#Interface) for adding or replacing the document's description metadata
 which should be a short and accurate summary of the content of the page.
 Several browsers, like Firefox and Opera, use this as the default description of bookmarked pages.
 -}
@@ -65,7 +65,7 @@ descriptionSet authorName =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that listens for a specific [`window` event](https://developer.mozilla.org/en-US/docs/Web/API/Window#events)
+{-| An [`Interface`](Web#Interface) for detecting a specific [`window` event](https://developer.mozilla.org/en-US/docs/Web/API/Window#events)
 -}
 listenTo : String -> Web.Interface Json.Decode.Value
 listenTo eventName =
@@ -90,7 +90,7 @@ visibilityChangeListen =
 
 
 {-| An [`Interface`](Web#Interface) for getting the inner window width and height in pixels,
-not including toolbars/scrollbars.
+not including toolbars/scrollbars
 -}
 sizeRequest : Web.Interface { width : Int, height : Int }
 sizeRequest =
@@ -100,7 +100,7 @@ sizeRequest =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that listens for changes to the inner window width and height.
+{-| An [`Interface`](Web#Interface) for detecting changes to the inner window width and height
 -}
 resizeListen : Web.Interface { width : Int, height : Int }
 resizeListen =
@@ -118,7 +118,7 @@ resizeListen =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that continuously listens for an animation frame.
+{-| An [`Interface`](Web#Interface) for detecting when animation frames occur.
 This will be about 60 times per second, though 75, 120, and 144 are also widely used.
 To balance this out in your animation, the [current time](https://dark.elm.dmy.fr/packages/elm/time/latest/Time#Posix) is provided each frame.
 

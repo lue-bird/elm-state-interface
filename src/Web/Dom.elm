@@ -30,7 +30,7 @@ import Rope exposing (Rope)
 import Web exposing (DomElement, DomNode)
 
 
-{-| An [`Interface`](Web#Interface) for detecting a specific [`document`](https://developer.mozilla.org/en-US/docs/Web/API/Document) event
+{-| An [`Interface`](Web#Interface) for detecting a specific [`document` event](https://developer.mozilla.org/en-US/docs/Web/API/Document#events)
 that has no native [`Interface`](Web#Interface) like like scroll, scrollend, selectionchange or paste
 -}
 documentEventListen : String -> Web.Interface Json.Decode.Value

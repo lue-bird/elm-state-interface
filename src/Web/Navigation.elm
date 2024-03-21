@@ -38,10 +38,11 @@ urlRequest =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that changes the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/),
-but neither triggers a page load nor adds a new entry to the browser history.
+{-| An [`Interface`](Web#Interface) for changing the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/),
+without triggering a page load or adding a new entry to the browser history.
 
-This can be useful if you have search box and you want the ?search=hats in the URL to match without adding a history entry for every single key stroke. Imagine how annoying it would be to click back thirty times and still be on the same page!
+This can be useful if you have search box and you want the ?search=hats in the URL to match without adding a history entry for every single key stroke.
+Imagine how annoying it would be to click back thirty times and still be on the same page!
 
 Replacement for [`Browser.Navigation.replaceUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#replaceUrl)
 
@@ -53,9 +54,9 @@ replaceUrl appUrl =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that changes the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/)
-and adds a new entry to the browser history,
-but does not trigger a page load.
+{-| An [`Interface`](Web#Interface) for changing the [app-specific URL](https://dark.elm.dmy.fr/packages/lydell/elm-app-url/latest/)
+and adding a new entry to the browser history
+without triggering a page load.
 
 Replacement for [`Browser.Navigation.pushUrl`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#pushUrl)
 
@@ -67,7 +68,7 @@ pushUrl appUrl =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that goes forward a given number of pages.
+{-| An [`Interface`](Web#Interface) for going forward a given number of pages.
 If there are no more pages in the future, this will do nothing.
 
 Note: You only manage the browser history that you created.
@@ -82,7 +83,7 @@ moveForward urlSteps =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that goes back a given number of pages.
+{-| An [`Interface`](Web#Interface) for going back a given number of pages.
 
 Note: You only manage the browser history that you created.
 
@@ -96,7 +97,7 @@ moveBack urlSteps =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that leaves the current page and loads the given [URL](https://dark.elm.dmy.fr/packages/elm/url/latest/).
+{-| An [`Interface`](Web#Interface) for leaving the current page and loading the given [URL](https://dark.elm.dmy.fr/packages/elm/url/latest/).
 This always results in a page load, even if the provided URL is the same as the current one.
 
     gotoElmWebsite : Web.Interface future_
@@ -121,7 +122,7 @@ load url =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that reloads the current page.
+{-| An [`Interface`](Web#Interface) for reloading the current page.
 This always results in a page load!
 
 Note: This may grab resources from the browser cache.
@@ -140,7 +141,7 @@ reload =
 when the user clicks ← or → buttons (or you call [`moveForward`](#moveForward) or [`moveBack`](#moveBack) yourself),
 the URL will change but your UI will not.
 
-Use [`movementListen`](#movementListen) to detect those URL changes and make ui changes as needed.
+[`movementListen`](#movementListen) is an [`Interface`](Web#Interface) for detecting those URL changes and making ui changes as needed.
 
 When the app itself initiates a url change with [`pushUrl`](#pushUrl) or [`replaceUrl`](#replaceUrl), no such event is triggered.
 

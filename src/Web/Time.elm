@@ -57,7 +57,7 @@ zoneNameRequest =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) that sends you the current time
+{-| An [`Interface`](Web#Interface) for getting the current time
 every time a given [`Duration`](https://dark.elm.dmy.fr/packages/ianmackenzie/elm-units/latest/Duration) has passed.
 
 Note: Do not use it for animations.
