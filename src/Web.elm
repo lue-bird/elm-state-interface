@@ -111,6 +111,7 @@ import Json.Codec exposing (JsonCodec)
 import Json.Decode
 import Json.Encode
 import Length exposing (Length)
+import List.LocalExtra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Set exposing (Set)
@@ -1696,7 +1697,7 @@ httpRequestIdJsonCodec =
                                 maybeContentType : Maybe String
                                 maybeContentType =
                                     headers
-                                        |> listFirstJust
+                                        |> List.LocalExtra.firstJustMap
                                             (\header ->
                                                 case header.name of
                                                     "Content-Type" ->
@@ -1718,21 +1719,6 @@ httpRequestIdJsonCodec =
                         (Json.Decode.field "timeout" httpTimeoutJsonCodec.jsonDecoder)
                 )
     }
-
-
-listFirstJust : (node -> Maybe found) -> List node -> Maybe found
-listFirstJust tryMapToFound list =
-    case list of
-        [] ->
-            Nothing
-
-        head :: tail ->
-            case tryMapToFound head of
-                Just b ->
-                    Just b
-
-                Nothing ->
-                    listFirstJust tryMapToFound tail
 
 
 headerJsonCodec : JsonCodec { name : String, value : String }
