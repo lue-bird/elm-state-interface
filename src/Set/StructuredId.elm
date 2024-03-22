@@ -1,4 +1,4 @@
-module Set.StructuredId exposing (Set, empty, fold2From, fromRope, toList)
+module Set.StructuredId exposing (Set, empty, firstJustMap, fold2From, fromRope)
 
 import FastDict
 import Rope exposing (Rope)
@@ -37,6 +37,26 @@ empty =
     FastDict.empty
 
 
+firstJustMap : (element -> Maybe value) -> (Set element -> Maybe value)
+firstJustMap elementToMaybe =
+    \dict ->
+        dict
+            |> FastDict.restructure Nothing
+                (\branch ->
+                    case branch.value |> elementToMaybe of
+                        Just found ->
+                            found |> Just
+
+                        Nothing ->
+                            case branch.left () of
+                                Just found ->
+                                    found |> Just
+
+                                Nothing ->
+                                    branch.right ()
+                )
+
+
 fold2From :
     result
     -> (first -> (result -> result))
@@ -52,9 +72,3 @@ fold2From initialFolded onlyFirstReduce bothReduce onlySecondReduce =
             firstDict
             secondDict
             initialFolded
-
-
-toList : Set element -> List element
-toList =
-    \set ->
-        set |> FastDict.values

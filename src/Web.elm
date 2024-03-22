@@ -1658,21 +1658,6 @@ interfaceWithFutureDiffJsonCodec =
         |> Json.Codec.variant ( AddRequest, "AddRequest" ) interfaceSingleRequestIdJsonCodec
 
 
-listFirstJust : (node -> Maybe found) -> List node -> Maybe found
-listFirstJust tryMapToFound list =
-    case list of
-        [] ->
-            Nothing
-
-        head :: tail ->
-            case tryMapToFound head of
-                Just b ->
-                    Just b
-
-                Nothing ->
-                    listFirstJust tryMapToFound tail
-
-
 httpRequestIdJsonCodec : JsonCodec HttpRequestId
 httpRequestIdJsonCodec =
     { toJson =
@@ -1733,6 +1718,21 @@ httpRequestIdJsonCodec =
                         (Json.Decode.field "timeout" httpTimeoutJsonCodec.jsonDecoder)
                 )
     }
+
+
+listFirstJust : (node -> Maybe found) -> List node -> Maybe found
+listFirstJust tryMapToFound list =
+    case list of
+        [] ->
+            Nothing
+
+        head :: tail ->
+            case tryMapToFound head of
+                Just b ->
+                    Just b
+
+                Nothing ->
+                    listFirstJust tryMapToFound tail
 
 
 headerJsonCodec : JsonCodec { name : String, value : String }
@@ -2266,8 +2266,7 @@ interfaceAssociateFutureState comingBack =
     \interfaces ->
         case
             interfaces
-                |> Set.StructuredId.toList
-                |> listFirstJust
+                |> Set.StructuredId.firstJustMap
                     (\stateInterface ->
                         case stateInterface of
                             InterfaceWithoutFuture _ ->
