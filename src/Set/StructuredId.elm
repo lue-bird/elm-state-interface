@@ -37,11 +37,6 @@ empty =
     FastDict.empty
 
 
-foldUpFrom : folded -> (element -> folded -> folded) -> (Set element -> folded)
-foldUpFrom initialFolded reduce =
-    FastDict.foldl (\_ element soFar -> soFar |> reduce element) initialFolded
-
-
 fold2From :
     result
     -> (first -> (result -> result))
