@@ -3,7 +3,7 @@
 ## 2.0.0
 
   - rename ...map to ...futureMap
-      - `Web.Dom.futureMap` name → `Web.Dom.futureMap`
+      - `Web.Dom.map` name → `Web.Dom.futureMap`
       - `Web.Dom.modifierMap` name → `Web.Dom.modifierFutureMap`
       - `Web.interfaceMap` name → `Web.interfaceFutureMap`
       - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
