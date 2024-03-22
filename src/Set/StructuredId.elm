@@ -1,4 +1,4 @@
-module Set.StructuredId exposing (Set, fold2From, fromRope, toList)
+module Set.StructuredId exposing (Set, empty, fold2From, fromRope, toList)
 
 import FastDict
 import Rope exposing (Rope)
@@ -20,11 +20,6 @@ fromRope elementToStructuredId =
                 empty
 
 
-empty : Set element_
-empty =
-    FastDict.empty
-
-
 insert :
     (element -> StructuredId)
     -> element
@@ -35,6 +30,11 @@ insert elementToStructuredId element =
             |> FastDict.insert
                 (element |> elementToStructuredId |> StructuredId.toComparable)
                 element
+
+
+empty : Set element_
+empty =
+    FastDict.empty
 
 
 foldUpFrom : folded -> (element -> folded -> folded) -> (Set element -> folded)

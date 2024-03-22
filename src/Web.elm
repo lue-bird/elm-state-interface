@@ -11,8 +11,7 @@ module Web exposing
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
     , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..)
-    , InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
-    , InterfaceSingleRequestId(..), InterfaceSingleListenId(..), DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
+    , interfaceDiffs, interfaceAssociateFutureState, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program that can run in the browser
@@ -96,8 +95,7 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 
 @docs ProgramState, ProgramEvent
 @docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture
-@docs InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff
-@docs InterfaceSingleRequestId, InterfaceSingleListenId, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
+@docs interfaceDiffs, interfaceAssociateFutureState, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
 -}
 
@@ -867,15 +865,37 @@ domElementDiff path =
             [ { path = path, replacement = bElement |> domElementToId |> DomElementId |> ReplacementDomNode } ]
 
 
-interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
-interfaceSingleToStructuredId =
-    \interfaceSingle ->
-        case interfaceSingle of
-            InterfaceWithoutFuture interfaceWithoutFuture ->
-                interfaceWithoutFuture |> interfaceSingleWithoutFutureToStructuredId
+{-| Determine which outgoing effects need to be executed based on the difference between old and updated interfaces
 
-            InterfaceWithFuture interfaceWithFuture ->
-                interfaceWithFuture |> interfaceSingleWithFutureToStructuredId
+To for example determine the initial effects, use
+
+    { old = Set.StructuredId.empty, updated = initialInterface }
+        |> interfaceDiffs
+
+-}
+interfaceDiffs :
+    { old : FastDict.Dict (List String) (InterfaceSingle future)
+    , updated : FastDict.Dict (List String) (InterfaceSingle future)
+    }
+    -> List InterfaceDiff
+interfaceDiffs =
+    \interfaces ->
+        ( interfaces.old, interfaces.updated )
+            |> Set.StructuredId.fold2From []
+                (\onlyOld soFar ->
+                    case toRemoveDiff onlyOld of
+                        Nothing ->
+                            soFar
+
+                        Just removeDiff ->
+                            (removeDiff |> InterfaceWithoutFutureDiff) :: soFar
+                )
+                (\oldAndNew soFar ->
+                    (oldAndNew |> toMergeDiff) ++ soFar
+                )
+                (\onlyNew soFar ->
+                    toAddDiff onlyNew :: soFar
+                )
 
 
 interfaceSingleListenToId : InterfaceSingleListen future_ -> InterfaceSingleListenId
@@ -943,6 +963,177 @@ httpExpectToId =
                 IdHttpExpectBytes
 
 
+toRemoveDiff : InterfaceSingle future_ -> Maybe InterfaceWithoutFutureDiff
+toRemoveDiff =
+    \onlyOld ->
+        case onlyOld of
+            InterfaceWithoutFuture removedInterfaceWithoutFuture ->
+                case removedInterfaceWithoutFuture of
+                    AudioPlay audio ->
+                        RemoveAudio { url = audio.url, startTime = audio.startTime } |> Just
+
+                    DocumentTitleReplaceBy _ ->
+                        Nothing
+
+                    DocumentAuthorSet _ ->
+                        Nothing
+
+                    DocumentKeywordsSet _ ->
+                        Nothing
+
+                    DocumentDescriptionSet _ ->
+                        Nothing
+
+                    ConsoleLog _ ->
+                        Nothing
+
+                    ConsoleWarn _ ->
+                        Nothing
+
+                    ConsoleError _ ->
+                        Nothing
+
+                    NavigationReplaceUrl _ ->
+                        Nothing
+
+                    NavigationPushUrl _ ->
+                        Nothing
+
+                    NavigationGo _ ->
+                        Nothing
+
+                    NavigationLoad _ ->
+                        Nothing
+
+                    NavigationReload ->
+                        Nothing
+
+                    FileDownloadUnsignedInt8s _ ->
+                        Nothing
+
+                    ClipboardReplaceBy _ ->
+                        Nothing
+
+                    SocketMessage _ ->
+                        Nothing
+
+                    SocketDisconnect _ ->
+                        Nothing
+
+                    LocalStorageSet _ ->
+                        Nothing
+
+            InterfaceWithFuture interfaceWithFuture ->
+                case interfaceWithFuture of
+                    Request (TimePosixRequest _) ->
+                        Nothing
+
+                    Request (TimezoneOffsetRequest _) ->
+                        Nothing
+
+                    Request (TimezoneNameRequest _) ->
+                        Nothing
+
+                    Request (RandomUnsignedInt32sRequest _) ->
+                        Nothing
+
+                    Request (HttpRequest request) ->
+                        RemoveHttpRequest (request |> httpRequestToId) |> Just
+
+                    DomNodeRender _ ->
+                        RemoveDom |> Just
+
+                    Request (WindowSizeRequest _) ->
+                        Nothing
+
+                    Request (WindowPreferredLanguagesRequest _) ->
+                        Nothing
+
+                    Request (NavigationUrlRequest _) ->
+                        Nothing
+
+                    Request (ClipboardRequest _) ->
+                        Nothing
+
+                    AudioSourceLoad _ ->
+                        Nothing
+
+                    SocketConnect connect ->
+                        RemoveSocketConnect { address = connect.address } |> Just
+
+                    Request (LocalStorageRequest _) ->
+                        Nothing
+
+                    Request (GeoLocationRequest _) ->
+                        Nothing
+
+                    Request (GamepadsRequest _) ->
+                        Nothing
+
+                    Listen listen ->
+                        listen |> interfaceSingleListenToId |> RemoveListen |> Just
+
+
+toMergeDiff : ( InterfaceSingle future, InterfaceSingle future ) -> List InterfaceDiff
+toMergeDiff =
+    \oldAndNewInterfaceSingles ->
+        case oldAndNewInterfaceSingles of
+            ( InterfaceWithFuture (DomNodeRender domElementPreviouslyRendered), InterfaceWithFuture (DomNodeRender domElementToRender) ) ->
+                ( domElementPreviouslyRendered, domElementToRender )
+                    |> domNodeDiff []
+                    |> List.map (\diff -> diff |> EditDom |> InterfaceWithFutureDiff)
+
+            ( InterfaceWithoutFuture (AudioPlay previouslyPlayed), InterfaceWithoutFuture (AudioPlay toPlay) ) ->
+                ( previouslyPlayed, toPlay )
+                    |> audioDiff
+                    |> List.map
+                        (\diff ->
+                            { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
+                                |> EditAudio
+                                |> InterfaceWithoutFutureDiff
+                        )
+
+            _ ->
+                []
+
+
+audioDiff : ( Audio, Audio ) -> List EditAudioDiff
+audioDiff =
+    \( previous, new ) ->
+        [ if previous.volume == new.volume then
+            Nothing
+
+          else
+            ReplacementAudioVolume new.volume |> Just
+        , if previous.speed == new.speed then
+            Nothing
+
+          else
+            ReplacementAudioSpeed new.speed |> Just
+        , if previous.stereoPan == new.stereoPan then
+            Nothing
+
+          else
+            ReplacementAudioStereoPan new.stereoPan |> Just
+        , if previous.processingLastToFirst == new.processingLastToFirst then
+            Nothing
+
+          else
+            new.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
+        ]
+            |> List.filterMap identity
+
+
+domNodeToId : DomNode future_ -> DomNodeId
+domNodeToId domNode =
+    case domNode of
+        DomText text ->
+            DomTextId text
+
+        DomElement element ->
+            DomElementId (element |> domElementToId)
+
+
 interfaceSingleRequestToId : InterfaceSingleRequest future_ -> InterfaceSingleRequestId
 interfaceSingleRequestToId =
     \interfaceSingleRequest ->
@@ -982,6 +1173,48 @@ interfaceSingleRequestToId =
 
             GamepadsRequest _ ->
                 IdGamepadsRequest
+
+
+toAddDiff : InterfaceSingle future_ -> InterfaceDiff
+toAddDiff =
+    \onlyNew ->
+        case onlyNew of
+            InterfaceWithoutFuture interfaceWithoutFuture ->
+                Add interfaceWithoutFuture
+                    |> InterfaceWithoutFutureDiff
+
+            InterfaceWithFuture interfaceWithFuture ->
+                (case interfaceWithFuture of
+                    DomNodeRender domElementToRender ->
+                        { path = []
+                        , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
+                        }
+                            |> EditDom
+
+                    AudioSourceLoad load ->
+                        AddAudioSourceLoad load.url
+
+                    SocketConnect connect ->
+                        AddSocketConnect { address = connect.address }
+
+                    Request request ->
+                        request |> interfaceSingleRequestToId |> AddRequest
+
+                    Listen listen ->
+                        listen |> interfaceSingleListenToId |> AddListen
+                )
+                    |> InterfaceWithFutureDiff
+
+
+interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
+interfaceSingleToStructuredId =
+    \interfaceSingle ->
+        case interfaceSingle of
+            InterfaceWithoutFuture interfaceWithoutFuture ->
+                interfaceWithoutFuture |> interfaceSingleWithoutFutureToStructuredId
+
+            InterfaceWithFuture interfaceWithFuture ->
+                interfaceWithFuture |> interfaceSingleWithFutureToStructuredId
 
 
 interfaceSingleWithFutureToStructuredId : InterfaceSingleWithFuture future_ -> StructuredId
@@ -1310,233 +1543,6 @@ interfaceSingleWithoutFutureToStructuredId =
                     , set.key |> StructuredId.ofString
                     , set.value |> StructuredId.ofMaybe StructuredId.ofString
                     ]
-
-
-interfaceDiffs :
-    { old : Set.StructuredId.Set (InterfaceSingle future)
-    , updated : Set.StructuredId.Set (InterfaceSingle future)
-    }
-    -> List InterfaceDiff
-interfaceDiffs =
-    \interfaces ->
-        ( interfaces.old, interfaces.updated )
-            |> Set.StructuredId.fold2From []
-                (\onlyOld soFar ->
-                    case toRemoveDiff onlyOld of
-                        Nothing ->
-                            soFar
-
-                        Just removeDiff ->
-                            (removeDiff |> InterfaceWithoutFutureDiff) :: soFar
-                )
-                (\oldAndNew soFar ->
-                    (oldAndNew |> toMergeDiff) ++ soFar
-                )
-                (\onlyNew soFar ->
-                    toAddDiff onlyNew :: soFar
-                )
-
-
-toRemoveDiff : InterfaceSingle future_ -> Maybe InterfaceWithoutFutureDiff
-toRemoveDiff =
-    \onlyOld ->
-        case onlyOld of
-            InterfaceWithoutFuture removedInterfaceWithoutFuture ->
-                case removedInterfaceWithoutFuture of
-                    AudioPlay audio ->
-                        RemoveAudio { url = audio.url, startTime = audio.startTime } |> Just
-
-                    DocumentTitleReplaceBy _ ->
-                        Nothing
-
-                    DocumentAuthorSet _ ->
-                        Nothing
-
-                    DocumentKeywordsSet _ ->
-                        Nothing
-
-                    DocumentDescriptionSet _ ->
-                        Nothing
-
-                    ConsoleLog _ ->
-                        Nothing
-
-                    ConsoleWarn _ ->
-                        Nothing
-
-                    ConsoleError _ ->
-                        Nothing
-
-                    NavigationReplaceUrl _ ->
-                        Nothing
-
-                    NavigationPushUrl _ ->
-                        Nothing
-
-                    NavigationGo _ ->
-                        Nothing
-
-                    NavigationLoad _ ->
-                        Nothing
-
-                    NavigationReload ->
-                        Nothing
-
-                    FileDownloadUnsignedInt8s _ ->
-                        Nothing
-
-                    ClipboardReplaceBy _ ->
-                        Nothing
-
-                    SocketMessage _ ->
-                        Nothing
-
-                    SocketDisconnect _ ->
-                        Nothing
-
-                    LocalStorageSet _ ->
-                        Nothing
-
-            InterfaceWithFuture interfaceWithFuture ->
-                case interfaceWithFuture of
-                    Request (TimePosixRequest _) ->
-                        Nothing
-
-                    Request (TimezoneOffsetRequest _) ->
-                        Nothing
-
-                    Request (TimezoneNameRequest _) ->
-                        Nothing
-
-                    Request (RandomUnsignedInt32sRequest _) ->
-                        Nothing
-
-                    Request (HttpRequest request) ->
-                        RemoveHttpRequest (request |> httpRequestToId) |> Just
-
-                    DomNodeRender _ ->
-                        RemoveDom |> Just
-
-                    Request (WindowSizeRequest _) ->
-                        Nothing
-
-                    Request (WindowPreferredLanguagesRequest _) ->
-                        Nothing
-
-                    Request (NavigationUrlRequest _) ->
-                        Nothing
-
-                    Request (ClipboardRequest _) ->
-                        Nothing
-
-                    AudioSourceLoad _ ->
-                        Nothing
-
-                    SocketConnect connect ->
-                        RemoveSocketConnect { address = connect.address } |> Just
-
-                    Request (LocalStorageRequest _) ->
-                        Nothing
-
-                    Request (GeoLocationRequest _) ->
-                        Nothing
-
-                    Request (GamepadsRequest _) ->
-                        Nothing
-
-                    Listen listen ->
-                        listen |> interfaceSingleListenToId |> RemoveListen |> Just
-
-
-toMergeDiff : ( InterfaceSingle future, InterfaceSingle future ) -> List InterfaceDiff
-toMergeDiff =
-    \oldAndNewInterfaceSingles ->
-        case oldAndNewInterfaceSingles of
-            ( InterfaceWithFuture (DomNodeRender domElementPreviouslyRendered), InterfaceWithFuture (DomNodeRender domElementToRender) ) ->
-                ( domElementPreviouslyRendered, domElementToRender )
-                    |> domNodeDiff []
-                    |> List.map (\diff -> diff |> EditDom |> InterfaceWithFutureDiff)
-
-            ( InterfaceWithoutFuture (AudioPlay previouslyPlayed), InterfaceWithoutFuture (AudioPlay toPlay) ) ->
-                ( previouslyPlayed, toPlay )
-                    |> audioDiff
-                    |> List.map
-                        (\diff ->
-                            { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
-                                |> EditAudio
-                                |> InterfaceWithoutFutureDiff
-                        )
-
-            _ ->
-                []
-
-
-audioDiff : ( Audio, Audio ) -> List EditAudioDiff
-audioDiff =
-    \( previous, new ) ->
-        [ if previous.volume == new.volume then
-            Nothing
-
-          else
-            ReplacementAudioVolume new.volume |> Just
-        , if previous.speed == new.speed then
-            Nothing
-
-          else
-            ReplacementAudioSpeed new.speed |> Just
-        , if previous.stereoPan == new.stereoPan then
-            Nothing
-
-          else
-            ReplacementAudioStereoPan new.stereoPan |> Just
-        , if previous.processingLastToFirst == new.processingLastToFirst then
-            Nothing
-
-          else
-            new.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
-        ]
-            |> List.filterMap identity
-
-
-domNodeToId : DomNode future_ -> DomNodeId
-domNodeToId domNode =
-    case domNode of
-        DomText text ->
-            DomTextId text
-
-        DomElement element ->
-            DomElementId (element |> domElementToId)
-
-
-toAddDiff : InterfaceSingle future_ -> InterfaceDiff
-toAddDiff =
-    \onlyNew ->
-        case onlyNew of
-            InterfaceWithoutFuture interfaceWithoutFuture ->
-                Add interfaceWithoutFuture
-                    |> InterfaceWithoutFutureDiff
-
-            InterfaceWithFuture interfaceWithFuture ->
-                (case interfaceWithFuture of
-                    DomNodeRender domElementToRender ->
-                        { path = []
-                        , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
-                        }
-                            |> EditDom
-
-                    AudioSourceLoad load ->
-                        AddAudioSourceLoad load.url
-
-                    SocketConnect connect ->
-                        AddSocketConnect { address = connect.address }
-
-                    Request request ->
-                        request |> interfaceSingleRequestToId |> AddRequest
-
-                    Listen listen ->
-                        listen |> interfaceSingleListenToId |> AddListen
-                )
-                    |> InterfaceWithFutureDiff
 
 
 socketIdJsonCodec : JsonCodec SocketId
@@ -2195,7 +2201,7 @@ audioToJson audio =
 programInit : ProgramConfig state -> ( ProgramState state, Cmd (ProgramEvent state) )
 programInit appConfig =
     let
-        initialInterface : FastDict.Dict (List String) (InterfaceSingle state)
+        initialInterface : Set.StructuredId.Set (InterfaceSingle state)
         initialInterface =
             appConfig.initialState
                 |> appConfig.interface
@@ -2205,7 +2211,7 @@ programInit appConfig =
         { interface = initialInterface
         , appState = appConfig.initialState
         }
-    , { old = FastDict.empty, updated = initialInterface }
+    , { old = Set.StructuredId.empty, updated = initialInterface }
         |> interfaceDiffs
         |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
         |> Cmd.batch
@@ -2221,28 +2227,14 @@ programSubscriptions appConfig =
         -- re-associate event based on current interface
         appConfig.ports.fromJs
             (\interfaceJson ->
-                case interfaceJson |> Json.Decode.decodeValue (Json.Decode.field "diff" interfaceWithFutureDiffJsonCodec.jsonDecoder) of
-                    Ok interfaceDiff ->
-                        case
-                            state.interface
-                                |> Set.StructuredId.toList
-                                |> listFirstJust
-                                    (\stateInterface ->
-                                        case stateInterface of
-                                            InterfaceWithoutFuture _ ->
-                                                Nothing
+                case interfaceJson |> Json.Decode.decodeValue comingBackJsonDecoder of
+                    Ok comingBack ->
+                        case state.interface |> interfaceAssociateFutureState comingBack of
+                            Just (Ok appEvent) ->
+                                appEvent |> AppEventToNewAppState
 
-                                            InterfaceWithFuture withFuture ->
-                                                interfaceFutureJsonDecoder interfaceDiff withFuture
-                                    )
-                        of
-                            Just eventDataDecoderToConstructedEvent ->
-                                case Json.Decode.decodeValue (Json.Decode.field "eventData" eventDataDecoderToConstructedEvent) interfaceJson of
-                                    Ok appEvent ->
-                                        appEvent |> AppEventToNewAppState
-
-                                    Err eventDataJsonDecodeError ->
-                                        eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
+                            Just (Err eventDataJsonDecodeError) ->
+                                eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
 
                             Nothing ->
                                 InterfaceEventIgnored
@@ -2252,7 +2244,56 @@ programSubscriptions appConfig =
             )
 
 
-interfaceFutureJsonDecoder : InterfaceWithFutureDiff -> InterfaceSingleWithFuture state -> Maybe (Json.Decode.Decoder state)
+comingBackJsonDecoder : Json.Decode.Decoder { diff : InterfaceWithFutureDiff, eventData : Json.Decode.Value }
+comingBackJsonDecoder =
+    Json.Decode.map2 (\diff eventData -> { diff = diff, eventData = eventData })
+        (Json.Decode.field "diff" interfaceWithFutureDiffJsonCodec.jsonDecoder)
+        (Json.Decode.field "eventData" Json.Decode.value)
+
+
+{-| Determine the new state based on what comes back
+
+  - `Just` with `Ok` will contain the new state that was created by re-associating the old interface from the diff
+    and successfully decoding the event data into the expected event shape so it could be used to create the new state
+  - `Just` with `Err` will contain the `Json.Decode.Error` in case the event data comes in an unexpected shape
+  - `Nothing` means the new interface doesn't care anymore about this value.
+
+-}
+interfaceAssociateFutureState :
+    { diff : InterfaceWithFutureDiff, eventData : Json.Decode.Value }
+    -> (FastDict.Dict (List String) (InterfaceSingle state) -> Maybe (Result Json.Decode.Error state))
+interfaceAssociateFutureState comingBack =
+    \interfaces ->
+        case
+            interfaces
+                |> Set.StructuredId.toList
+                |> listFirstJust
+                    (\stateInterface ->
+                        case stateInterface of
+                            InterfaceWithoutFuture _ ->
+                                Nothing
+
+                            InterfaceWithFuture withFuture ->
+                                interfaceFutureJsonDecoder comingBack.diff withFuture
+                    )
+        of
+            Just eventDataDecoderToConstructedEvent ->
+                case Json.Decode.decodeValue eventDataDecoderToConstructedEvent comingBack.eventData of
+                    Ok futureState ->
+                        futureState |> Ok |> Just
+
+                    Err eventDataJsonDecodeError ->
+                        eventDataJsonDecodeError |> Err |> Just
+
+            Nothing ->
+                Nothing
+
+
+{-| [`Decoder`] for the json that contains the event data for a given [`InterfaceWithFutureDiff`](#InterfaceWithFutureDiff)
+-}
+interfaceFutureJsonDecoder :
+    InterfaceWithFutureDiff
+    -> (InterfaceSingleWithFuture future -> Maybe (Json.Decode.Decoder future))
 interfaceFutureJsonDecoder interfaceAddDiff interface =
     case interface of
         DomNodeRender domElementToRender ->
@@ -3236,7 +3277,7 @@ programUpdate appConfig =
             InterfaceDiffFailedToDecode jsonError ->
                 \state ->
                     ( state
-                    , ("bug in lue-bird/elm-state-interface: interface diff failed to decode: "
+                    , ("lue-bird/elm-state-interface bug: interface diff failed to decode: "
                         ++ (jsonError |> Json.Decode.errorToString)
                       )
                         |> ConsoleError

@@ -20,10 +20,11 @@
       - add `titleReplaceBy`, `authorSet`, `keywordsSet`, `descriptionSet`
   - `module Web`:
       - add `type alias Program` for results of `Web.program`
-      - internally, split off request, listen and action interface types
-      - internally, rename ...Receive to ...Future
-      - internally, switch from `KeysSet` and all its dependencies to `miniBill/elm-fast-dict`
+      - internal: split off request, listen and action interface types
+      - internal: rename ...Receive to ...Future
+      - internal: switch from `KeysSet` and all its dependencies to `miniBill/elm-fast-dict`
         and a simpler and more performant process of comparing elements
+      - internal: allow actual simulation using `interfaceAssociateFutureState` and `interfaceDiffs`
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
