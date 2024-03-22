@@ -13,28 +13,14 @@
             "elm/url": "1.0.0",
             "ianmackenzie/elm-units": "2.10.0",
             "lue-bird/elm-no-record-type-alias-constructor-function": "1.0.8",
-            "lue-bird/elm-state-interface": "2.0.0",
             "lydell/elm-app-url": "1.0.4",
-            "miniBill/elm-codec": "2.1.0"
+            "miniBill/elm-codec": "2.1.0",
+            "lue-bird/elm-state-interface": "2.0.0"
         },
         "indirect": {
-            "bburdette/toop": "1.2.0",
-            "elm/bytes": "1.0.8",
-            "elm/html": "1.0.0",
-            "elm/random": "1.0.0",
-            "elm/virtual-dom": "1.0.3",
-            "elm-community/array-extra": "2.6.0",
-            "elm-explorations/test": "2.2.0",
-            "lue-bird/elm-allowable-state": "1.0.2",
-            "lue-bird/elm-and-or": "1.0.0",
-            "lue-bird/elm-bounded-nat": "35.0.0",
-            "lue-bird/elm-emptiness-typed": "9.2.1",
-            "lue-bird/elm-keysset": "5.0.2",
-            "lue-bird/elm-linear-direction": "11.2.0",
-            "lue-bird/elm-partial-or-complete": "1.0.2",
-            "lue-bird/elm-typed-value": "8.2.0",
-            "lue-bird/elm-typesafe-array": "34.0.1",
-            "miniBill/elm-rope": "1.0.0"
+            "miniBill/elm-fast-dict": "1.1.0",
+            "miniBill/elm-rope": "1.0.0",
+            "elm/bytes": "1.0.8"
         }
     },
     "test-dependencies": {
