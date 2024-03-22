@@ -31,14 +31,9 @@
         "elm/time": "1.0.0 <= v < 2.0.0",
         "elm/url": "1.0.0 <= v < 2.0.0",
         "ianmackenzie/elm-units": "2.10.0 <= v < 3.0.0",
-        "lue-bird/elm-allowable-state": "1.0.2 <= v < 2.0.0",
-        "lue-bird/elm-and-or": "1.0.0 <= v < 2.0.0",
-        "lue-bird/elm-bounded-nat": "35.0.0 <= v < 36.0.0",
-        "lue-bird/elm-emptiness-typed": "9.2.1 <= v < 10.0.0",
-        "lue-bird/elm-keysset": "5.0.2 <= v < 6.0.0",
         "lue-bird/elm-no-record-type-alias-constructor-function": "1.0.8 <= v < 2.0.0",
-        "lue-bird/elm-typed-value": "8.2.0 <= v < 9.0.0",
         "lydell/elm-app-url": "1.0.4 <= v < 2.0.0",
+        "miniBill/elm-fast-dict": "1.1.0 <= v < 2.0.0",
         "miniBill/elm-rope": "1.0.0 <= v < 2.0.0"
     },
     "test-dependencies": {}

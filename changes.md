@@ -22,6 +22,8 @@
       - add `type alias Program` for results of `Web.program`
       - internally, split off request, listen and action interface types
       - internally, rename ...Receive to ...Future
+      - internally, switch from `KeysSet` and all its dependencies to `miniBill/elm-fast-dict`
+        and a simpler and more performant process of comparing elements
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
   - add `module Web.LocalStorage`

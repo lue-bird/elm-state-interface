@@ -12,8 +12,7 @@ module Web exposing
     , ProgramState(..), ProgramEvent(..)
     , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..)
     , InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..)
-    , InterfaceSingleKeys, InterfaceSingleIdOrderTag
-    , InterfaceSingleId(..), InterfaceSingleWithFutureId(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), InterfaceSingleToIdTag, DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
+    , InterfaceSingleRequestId(..), InterfaceSingleListenId(..), DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program that can run in the browser
@@ -98,12 +97,10 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 @docs ProgramState, ProgramEvent
 @docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture
 @docs InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff
-@docs InterfaceSingleKeys, InterfaceSingleIdOrderTag
-@docs InterfaceSingleId, InterfaceSingleWithFutureId, InterfaceSingleRequestId, InterfaceSingleListenId, InterfaceSingleToIdTag, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
+@docs InterfaceSingleRequestId, InterfaceSingleListenId, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
 -}
 
-import AndOr exposing (AndOr)
 import Angle exposing (Angle)
 import AppUrl exposing (AppUrl)
 import Array exposing (Array)
@@ -111,24 +108,18 @@ import Bytes exposing (Bytes)
 import Bytes.LocalExtra
 import Dict exposing (Dict)
 import Duration exposing (Duration)
-import Emptiable exposing (Emptiable)
+import FastDict
 import Json.Codec exposing (JsonCodec)
 import Json.Decode
 import Json.Encode
-import Keys exposing (Key, Keys)
-import KeysSet exposing (KeysSet)
 import Length exposing (Length)
-import Map exposing (Mapping)
-import N exposing (N1)
-import Or
-import Order exposing (Ordering)
-import Possibly exposing (Possibly)
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Set exposing (Set)
+import Set.StructuredId
 import Speed exposing (Speed)
+import StructuredId exposing (StructuredId)
 import Time
-import Typed
 import Url exposing (Url)
 
 
@@ -146,27 +137,9 @@ In practice, please use [`Web.Program YourState`](#Program)
 -}
 type ProgramState appState
     = State
-        { interface : Emptiable (KeysSet (InterfaceSingle appState) (InterfaceSingleKeys appState) N1) Possibly
+        { interface : FastDict.Dict (List String) (InterfaceSingle appState)
         , appState : appState
         }
-
-
-{-| Safe to ignore. Identification and order of an [`Interface`](#Interface)
--}
-type alias InterfaceSingleKeys state =
-    Key (InterfaceSingle state) (Order.By InterfaceSingleToIdTag InterfaceSingleIdOrderTag) InterfaceSingleId N1
-
-
-{-| Safe to ignore. Tag for the ordering of an [`InterfaceSingleId`](#InterfaceSingleId)
--}
-type InterfaceSingleIdOrderTag
-    = InterfaceSingleIdOrderTag
-
-
-{-| Safe to ignore. Tag for the identification mapping of an [`InterfaceSingle`](#InterfaceSingle) → [`InterfaceSingleId`](#InterfaceSingleId)
--}
-type InterfaceSingleToIdTag
-    = InterfaceSingleToIdTag
 
 
 {-| What's needed to create a state-interface program.
@@ -443,23 +416,6 @@ type alias DomElement future =
 type DefaultActionHandling
     = DefaultActionPrevent
     | DefaultActionExecute
-
-
-{-| Safe to ignore. Identifier for an [`Interface`](#Interface)
--}
-type InterfaceSingleId
-    = IdInterfaceWithFuture InterfaceSingleWithFutureId
-    | IdInterfaceWithoutFuture InterfaceSingleWithoutFuture
-
-
-{-| Safe to ignore. Identifier for an [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture)
--}
-type InterfaceSingleWithFutureId
-    = IdDomNodeRender
-    | IdAudioSourceLoad String
-    | IdSocketConnect { address : String }
-    | IdRequest InterfaceSingleRequestId
-    | IdListen InterfaceSingleListenId
 
 
 {-| Safe to ignore. Possible identifier for an interface single that can send back values to elm
@@ -911,72 +867,15 @@ domElementDiff path =
             [ { path = path, replacement = bElement |> domElementToId |> DomElementId |> ReplacementDomNode } ]
 
 
-type Comparable
-    = ComparableString String
-    | ComparableList (List Comparable)
-
-
-comparableOrder : ( Comparable, Comparable ) -> Order
-comparableOrder =
-    \( a, b ) ->
-        case ( a, b ) of
-            ( ComparableString aString, ComparableString bString ) ->
-                compare aString bString
-
-            ( ComparableString _, ComparableList _ ) ->
-                LT
-
-            ( ComparableList _, ComparableString _ ) ->
-                GT
-
-            ( ComparableList aList, ComparableList bList ) ->
-                ( aList, bList ) |> comparableListOrder
-
-
-comparableListOrder : ( List Comparable, List Comparable ) -> Order
-comparableListOrder =
-    \( a, b ) ->
-        case ( a, b ) of
-            ( [], [] ) ->
-                EQ
-
-            ( [], _ :: _ ) ->
-                LT
-
-            ( _ :: _, [] ) ->
-                GT
-
-            ( head0 :: tail0, head1 :: tail1 ) ->
-                case ( head0, head1 ) |> comparableOrder of
-                    LT ->
-                        LT
-
-                    GT ->
-                        GT
-
-                    EQ ->
-                        comparableListOrder ( tail0, tail1 )
-
-
-interfaceKeys : Keys (InterfaceSingle future) (InterfaceSingleKeys future) N1
-interfaceKeys =
-    Keys.oneBy interfaceToIdMapping interfaceIdOrder
-
-
-interfaceToIdMapping : Mapping (InterfaceSingle future_) InterfaceSingleToIdTag InterfaceSingleId
-interfaceToIdMapping =
-    Map.tag InterfaceSingleToIdTag interfaceSingleToId
-
-
-interfaceSingleToId : InterfaceSingle future_ -> InterfaceSingleId
-interfaceSingleToId =
-    \interface ->
-        case interface of
+interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
+interfaceSingleToStructuredId =
+    \interfaceSingle ->
+        case interfaceSingle of
             InterfaceWithoutFuture interfaceWithoutFuture ->
-                interfaceWithoutFuture |> IdInterfaceWithoutFuture
+                interfaceWithoutFuture |> interfaceSingleWithoutFutureToStructuredId
 
             InterfaceWithFuture interfaceWithFuture ->
-                interfaceWithFuture |> interfaceSingleWithFutureToId |> IdInterfaceWithFuture
+                interfaceWithFuture |> interfaceSingleWithFutureToStructuredId
 
 
 interfaceSingleListenToId : InterfaceSingleListen future_ -> InterfaceSingleListenId
@@ -1085,428 +984,480 @@ interfaceSingleRequestToId =
                 IdGamepadsRequest
 
 
-interfaceSingleWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
-interfaceSingleWithFutureToId =
-    \interfaceWithFuture ->
-        case interfaceWithFuture of
-            DomNodeRender _ ->
-                IdDomNodeRender
-
-            AudioSourceLoad load ->
-                IdAudioSourceLoad load.url
-
-            SocketConnect connect ->
-                IdSocketConnect { address = connect.address }
-
-            Request request ->
-                request |> interfaceSingleRequestToId |> IdRequest
-
-            Listen listen ->
-                listen |> interfaceSingleListenToId |> IdListen
-
-
-interfaceIdOrder : Ordering InterfaceSingleId InterfaceSingleIdOrderTag
-interfaceIdOrder =
-    Typed.tag InterfaceSingleIdOrderTag
-        (\( a, b ) -> ( a |> interfaceSingleIdToComparable, b |> interfaceSingleIdToComparable ) |> comparableOrder)
-
-
-interfaceSingleIdToComparable : InterfaceSingleId -> Comparable
-interfaceSingleIdToComparable =
-    \interfaceId ->
-        case interfaceId of
-            IdInterfaceWithoutFuture interfaceWithoutFuture ->
-                interfaceWithoutFuture |> interfaceSingleWithoutFutureToComparable
-
-            IdInterfaceWithFuture idInterfaceWithoutFuture ->
-                idInterfaceWithoutFuture |> idInterfaceSingleWithFutureToComparable
-
-
-idInterfaceSingleWithFutureToComparable : InterfaceSingleWithFutureId -> Comparable
-idInterfaceSingleWithFutureToComparable =
+interfaceSingleWithFutureToStructuredId : InterfaceSingleWithFuture future_ -> StructuredId
+interfaceSingleWithFutureToStructuredId =
     \idInterfaceWithoutFuture ->
-        case idInterfaceWithoutFuture of
-            IdDomNodeRender ->
-                ComparableString "IdDomNodeRender"
+        StructuredId.ofVariant
+            (case idInterfaceWithoutFuture of
+                DomNodeRender _ ->
+                    ( "DomNodeRender", [] )
 
-            IdAudioSourceLoad url ->
-                ComparableList
-                    [ ComparableString "IdAudioSourceLoad"
-                    , ComparableString url
-                    ]
+                AudioSourceLoad audio ->
+                    ( "AudioSourceLoad"
+                    , [ StructuredId.ofString audio.url
+                      ]
+                    )
 
-            IdSocketConnect connect ->
-                ComparableList
-                    [ ComparableString "IdSocketConnect"
-                    , ComparableString connect.address
-                    ]
+                SocketConnect connect ->
+                    ( "SocketConnect"
+                    , [ StructuredId.ofString connect.address
+                      ]
+                    )
 
-            IdRequest request ->
-                request |> interfaceSingleRequestIdToComparable
+                Request request ->
+                    request |> interfaceSingleRequestToId |> interfaceSingleRequestIdToStructuredId
 
-            IdListen listenId ->
-                listenId |> listenIdToComparable
-
-
-intToComparable : Int -> Comparable
-intToComparable =
-    \int -> int |> String.fromInt |> ComparableString
+                Listen listenId ->
+                    listenId |> interfaceSingleListenToId |> listenIdToStructuredId
+            )
 
 
-interfaceSingleRequestIdToComparable : InterfaceSingleRequestId -> Comparable
-interfaceSingleRequestIdToComparable =
+interfaceSingleRequestIdToStructuredId : InterfaceSingleRequestId -> ( String, List StructuredId )
+interfaceSingleRequestIdToStructuredId =
     \interfaceSingleRequestId ->
         case interfaceSingleRequestId of
             IdTimePosixRequest ->
-                ComparableString "IdTimePosixRequest"
+                ( "TimePosixRequest", [] )
 
             IdTimezoneOffsetRequest ->
-                ComparableString "IdTimezoneOffsetRequest"
+                ( "TimezoneOffsetRequest", [] )
 
             IdTimezoneNameRequest ->
-                ComparableString "IdTimezoneNameRequest"
+                ( "TimezoneNameRequest", [] )
 
             IdRandomUnsignedInt32sRequest count ->
-                ComparableList
-                    [ ComparableString "IdRandomUnsignedInt32sRequest"
-                    , count |> intToComparable
-                    ]
+                ( "RandomUnsignedInt32sRequest"
+                , [ count |> StructuredId.ofInt
+                  ]
+                )
 
             IdLocalStorageRequest request ->
-                ComparableList
-                    [ ComparableString "IdLocalStorageRequest"
-                    , request.key |> ComparableString
-                    ]
+                ( "LocalStorageRequest"
+                , [ request.key |> StructuredId.ofString
+                  ]
+                )
 
             IdHttpRequest request ->
-                ComparableList
-                    [ ComparableString "IdHttpRequest"
-                    , request |> httpRequestIdToComparable
-                    ]
+                ( "HttpRequest"
+                , [ request |> httpRequestIdToStructuredId
+                  ]
+                )
 
             IdWindowSizeRequest ->
-                ComparableString "IdWindowSizeRequest"
+                ( "WindowSizeRequest", [] )
 
             IdWindowPreferredLanguagesRequest ->
-                ComparableString "IdWindowPreferredLanguagesRequest"
+                ( "WindowPreferredLanguagesRequest", [] )
 
             IdNavigationUrlRequest ->
-                ComparableString "IdNavigationUrlRequest"
+                ( "NavigationUrlRequest", [] )
 
             IdClipboardRequest ->
-                ComparableString "IdClipboardRequest"
+                ( "ClipboardRequest", [] )
 
             IdGeoLocationRequest ->
-                ComparableString "IdGeoLocationRequest"
+                ( "GeoLocationRequest", [] )
 
             IdGamepadsRequest ->
-                ComparableString "IdGamepadsRequest"
+                ( "GamepadsRequest", [] )
 
 
-maybeToComparable : (value -> Comparable) -> (Maybe value -> Comparable)
-maybeToComparable valueToComparable =
-    \maybe ->
-        case maybe of
-            Nothing ->
-                "Nothing" |> ComparableString
-
-            Just value ->
-                ComparableList
-                    [ "Just" |> ComparableString
-                    , value |> valueToComparable
-                    ]
-
-
-httpRequestIdToComparable : HttpRequestId -> Comparable
-httpRequestIdToComparable =
+httpRequestIdToStructuredId : HttpRequestId -> StructuredId
+httpRequestIdToStructuredId =
     \httpRequestId ->
-        ComparableList
-            [ httpRequestId.url |> ComparableString
-            , httpRequestId.method |> ComparableString
-            , httpRequestId.headers |> List.map httpHeaderToComparable |> ComparableList
-            , httpRequestId.body |> httpBodyToComparable
-            , httpRequestId.expect |> httpExpectIdToComparable
-            , httpRequestId.timeout |> maybeToComparable intToComparable
+        StructuredId.ofList
+            [ httpRequestId.url |> StructuredId.ofString
+            , httpRequestId.method |> StructuredId.ofString
+            , httpRequestId.headers |> List.map httpHeaderToStructuredId |> StructuredId.ofList
+            , httpRequestId.body |> httpBodyToStructuredId
+            , httpRequestId.expect |> httpExpectIdToStructuredId
+            , httpRequestId.timeout |> StructuredId.ofMaybe StructuredId.ofInt
             ]
 
 
-httpHeaderToComparable : { name : String, value : String } -> Comparable
-httpHeaderToComparable =
+httpHeaderToStructuredId : { name : String, value : String } -> StructuredId
+httpHeaderToStructuredId =
     \httpHeader ->
-        ComparableList
-            [ httpHeader.name |> ComparableString
-            , httpHeader.value |> ComparableString
+        StructuredId.ofList
+            [ httpHeader.name |> StructuredId.ofString
+            , httpHeader.value |> StructuredId.ofString
             ]
 
 
-httpBodyToComparable : HttpBody -> Comparable
-httpBodyToComparable =
+httpBodyToStructuredId : HttpBody -> StructuredId
+httpBodyToStructuredId =
     \httpBody ->
         case httpBody of
             HttpBodyEmpty ->
-                "HttpBodyEmpty" |> ComparableString
+                "HttpBodyEmpty" |> StructuredId.ofString
 
             HttpBodyString stringBody ->
-                ComparableList
-                    [ "HttpBodyString" |> ComparableString
-                    , stringBody |> httpStringBodyToComparable
+                StructuredId.ofList
+                    [ "HttpBodyString" |> StructuredId.ofString
+                    , stringBody |> httpStringBodyToStructuredId
                     ]
 
             HttpBodyUnsignedInt8s stringBody ->
-                ComparableList
-                    [ "HttpBodyBytes" |> ComparableString
-                    , stringBody |> httpBytesBodyToComparable
+                StructuredId.ofList
+                    [ "HttpBodyBytes" |> StructuredId.ofString
+                    , stringBody |> httpBytesBodyToStructuredId
                     ]
 
 
-httpBytesBodyToComparable : { mimeType : String, content : List Int } -> Comparable
-httpBytesBodyToComparable =
+httpBytesBodyToStructuredId : { mimeType : String, content : List Int } -> StructuredId
+httpBytesBodyToStructuredId =
     \httpStringBody ->
-        ComparableList
-            [ httpStringBody.mimeType |> ComparableString
-            , httpStringBody.content |> List.map intToComparable |> ComparableList
+        StructuredId.ofList
+            [ httpStringBody.mimeType |> StructuredId.ofString
+            , httpStringBody.content |> List.map StructuredId.ofInt |> StructuredId.ofList
             ]
 
 
-httpStringBodyToComparable : { mimeType : String, content : String } -> Comparable
-httpStringBodyToComparable =
+httpStringBodyToStructuredId : { mimeType : String, content : String } -> StructuredId
+httpStringBodyToStructuredId =
     \httpStringBody ->
-        ComparableList
-            [ httpStringBody.mimeType |> ComparableString
-            , httpStringBody.content |> ComparableString
+        StructuredId.ofList
+            [ httpStringBody.mimeType |> StructuredId.ofString
+            , httpStringBody.content |> StructuredId.ofString
             ]
 
 
-httpExpectIdToComparable : HttpExpectId -> Comparable
-httpExpectIdToComparable =
+httpExpectIdToStructuredId : HttpExpectId -> StructuredId
+httpExpectIdToStructuredId =
     \httpExpectId ->
         case httpExpectId of
             IdHttpExpectString ->
-                "IdHttpExpectString" |> ComparableString
+                "HttpExpectString" |> StructuredId.ofString
 
             IdHttpExpectBytes ->
-                "IdHttpExpectBytes" |> ComparableString
+                "HttpExpectBytes" |> StructuredId.ofString
 
             IdHttpExpectWhatever ->
-                "IdHttpExpectWhatever" |> ComparableString
+                "HttpExpectWhatever" |> StructuredId.ofString
 
 
-socketIdToComparable : SocketId -> Comparable
-socketIdToComparable =
-    \(SocketId raw) -> raw |> intToComparable
+socketIdToStructuredId : SocketId -> StructuredId
+socketIdToStructuredId =
+    \(SocketId raw) -> raw |> StructuredId.ofInt
 
 
-listenIdToComparable : InterfaceSingleListenId -> Comparable
-listenIdToComparable =
+listenIdToStructuredId : InterfaceSingleListenId -> ( String, List StructuredId )
+listenIdToStructuredId =
     \listenId ->
         case listenId of
             IdWindowEventListen eventName ->
-                ComparableList
-                    [ ComparableString "IdWindowEventListen"
-                    , ComparableString eventName
-                    ]
+                ( "WindowEventListen"
+                , [ StructuredId.ofString eventName
+                  ]
+                )
 
             IdWindowVisibilityChangeListen ->
-                ComparableString "IdWindowVisibilityChangeListen"
+                ( "WindowVisibilityChangeListen", [] )
 
             IdWindowAnimationFrameListen ->
-                ComparableString "IdWindowAnimationFrameListen"
+                ( "WindowAnimationFrameListen", [] )
 
             IdWindowPreferredLanguagesChangeListen ->
-                ComparableString "IdWindowPreferredLanguagesChangeListen"
+                ( "WindowPreferredLanguagesChangeListen", [] )
 
             IdDocumentEventListen eventName ->
-                ComparableList
-                    [ ComparableString "IdDocumentEventListen"
-                    , ComparableString eventName
-                    ]
+                ( "DocumentEventListen"
+                , [ StructuredId.ofString eventName
+                  ]
+                )
 
             IdTimePeriodicallyListen intervalDuration ->
-                ComparableList
-                    [ ComparableString "IdTimePeriodicallyListen"
-                    , intervalDuration.milliSeconds |> intToComparable
-                    ]
+                ( "TimePeriodicallyListen"
+                , [ intervalDuration.milliSeconds |> StructuredId.ofInt
+                  ]
+                )
 
             IdSocketMessageListen id ->
-                ComparableList
-                    [ ComparableString "IdSocketConnect"
-                    , id |> socketIdToComparable
-                    ]
+                ( "SocketConnect"
+                , [ id |> socketIdToStructuredId
+                  ]
+                )
 
             IdLocalStorageRemoveOnADifferentTabListen listen ->
-                ComparableList
-                    [ ComparableString "IdLocalStorageRemoveOnADifferentTabListen"
-                    , listen.key |> ComparableString
-                    ]
+                ( "LocalStorageRemoveOnADifferentTabListen"
+                , [ listen.key |> StructuredId.ofString ]
+                )
 
             IdLocalStorageSetOnADifferentTabListen listen ->
-                ComparableList
-                    [ ComparableString "IdLocalStorageSetOnADifferentTabListen"
-                    , listen.key |> ComparableString
-                    ]
+                ( "LocalStorageSetOnADifferentTabListen"
+                , [ listen.key |> StructuredId.ofString ]
+                )
 
             IdGeoLocationChangeListen ->
-                ComparableString "IdGeoLocationChangeListen"
+                ( "GeoLocationChangeListen", [] )
 
             IdGamepadsChangeListen ->
-                ComparableString "IdGamepadsChangeListen"
+                ( "GamepadsChangeListen", [] )
 
 
-interfaceSingleWithoutFutureToComparable : InterfaceSingleWithoutFuture -> Comparable
-interfaceSingleWithoutFutureToComparable =
+interfaceSingleWithoutFutureToStructuredId : InterfaceSingleWithoutFuture -> StructuredId
+interfaceSingleWithoutFutureToStructuredId =
     \interfaceWithoutFuture ->
         case interfaceWithoutFuture of
             DocumentTitleReplaceBy replacement ->
-                ComparableList
-                    [ ComparableString "DocumentTitleReplaceBy"
-                    , ComparableString replacement
+                StructuredId.ofList
+                    [ StructuredId.ofString "DocumentTitleReplaceBy"
+                    , StructuredId.ofString replacement
                     ]
 
             DocumentAuthorSet new ->
-                ComparableList
-                    [ ComparableString "DocumentAuthorSet"
-                    , ComparableString new
+                StructuredId.ofList
+                    [ StructuredId.ofString "DocumentAuthorSet"
+                    , StructuredId.ofString new
                     ]
 
             DocumentKeywordsSet new ->
-                ComparableList
-                    [ ComparableString "DocumentKeywordsSet"
-                    , new |> List.map ComparableString |> ComparableList
+                StructuredId.ofList
+                    [ StructuredId.ofString "DocumentKeywordsSet"
+                    , new |> List.map StructuredId.ofString |> StructuredId.ofList
                     ]
 
             DocumentDescriptionSet new ->
-                ComparableList
-                    [ ComparableString "DocumentDescriptionSet"
-                    , ComparableString new
+                StructuredId.ofList
+                    [ StructuredId.ofString "DocumentDescriptionSet"
+                    , StructuredId.ofString new
                     ]
 
             ConsoleLog string ->
-                ComparableList
-                    [ ComparableString "ConsoleLog"
-                    , ComparableString string
+                StructuredId.ofList
+                    [ StructuredId.ofString "ConsoleLog"
+                    , StructuredId.ofString string
                     ]
 
             ConsoleWarn string ->
-                ComparableList
-                    [ ComparableString "ConsoleWarn"
-                    , ComparableString string
+                StructuredId.ofList
+                    [ StructuredId.ofString "ConsoleWarn"
+                    , StructuredId.ofString string
                     ]
 
             ConsoleError string ->
-                ComparableList
-                    [ ComparableString "ConsoleError"
-                    , ComparableString string
+                StructuredId.ofList
+                    [ StructuredId.ofString "ConsoleError"
+                    , StructuredId.ofString string
                     ]
 
             NavigationReplaceUrl url ->
-                ComparableList
-                    [ ComparableString "NavigationReplaceUrl"
-                    , ComparableString (url |> AppUrl.toString)
+                StructuredId.ofList
+                    [ StructuredId.ofString "NavigationReplaceUrl"
+                    , StructuredId.ofString (url |> AppUrl.toString)
                     ]
 
             NavigationPushUrl url ->
-                ComparableList
-                    [ ComparableString "NavigationPushUrl"
-                    , ComparableString (url |> AppUrl.toString)
+                StructuredId.ofList
+                    [ StructuredId.ofString "NavigationPushUrl"
+                    , StructuredId.ofString (url |> AppUrl.toString)
                     ]
 
             NavigationGo urlSteps ->
-                ComparableList
-                    [ ComparableString "NavigationGo"
-                    , urlSteps |> intToComparable
+                StructuredId.ofList
+                    [ StructuredId.ofString "NavigationGo"
+                    , urlSteps |> StructuredId.ofInt
                     ]
 
             NavigationLoad url ->
-                ComparableList
-                    [ ComparableString "NavigationLoad"
-                    , ComparableString (url |> Url.toString)
+                StructuredId.ofList
+                    [ StructuredId.ofString "NavigationLoad"
+                    , StructuredId.ofString (url |> Url.toString)
                     ]
 
             NavigationReload ->
-                ComparableString "NavigationReload"
+                StructuredId.ofString "NavigationReload"
 
             FileDownloadUnsignedInt8s config ->
-                ComparableList
-                    [ ComparableString "FileDownloadUnsignedInt8s"
-                    , ComparableString config.name
-                    , ComparableString config.mimeType
+                StructuredId.ofList
+                    [ StructuredId.ofString "FileDownloadUnsignedInt8s"
+                    , StructuredId.ofString config.name
+                    , StructuredId.ofString config.mimeType
                     , config.content
-                        |> List.map (\bit -> bit |> String.fromInt |> ComparableString)
-                        |> ComparableList
+                        |> List.map (\bit -> bit |> String.fromInt |> StructuredId.ofString)
+                        |> StructuredId.ofList
                     ]
 
             ClipboardReplaceBy replacement ->
-                ComparableList
-                    [ ComparableString "ClipboardReplaceBy"
-                    , ComparableString replacement
+                StructuredId.ofList
+                    [ StructuredId.ofString "ClipboardReplaceBy"
+                    , StructuredId.ofString replacement
                     ]
 
             AudioPlay audio ->
-                ComparableList
-                    [ ComparableString "AudioPlay"
-                    , audio.url |> ComparableString
-                    , audio.startTime |> Time.posixToMillis |> String.fromInt |> ComparableString
+                StructuredId.ofList
+                    [ StructuredId.ofString "AudioPlay"
+                    , audio.url |> StructuredId.ofString
+                    , audio.startTime |> StructuredId.ofTimePosix
                     ]
 
             SocketMessage message ->
-                ComparableList
-                    [ ComparableString "SocketMessage"
-                    , message.id |> socketIdToComparable
-                    , message.data |> ComparableString
+                StructuredId.ofList
+                    [ StructuredId.ofString "SocketMessage"
+                    , message.id |> socketIdToStructuredId
+                    , message.data |> StructuredId.ofString
                     ]
 
             SocketDisconnect id ->
-                ComparableList
-                    [ ComparableString "SocketDisconnect"
-                    , id |> socketIdToComparable
+                StructuredId.ofList
+                    [ StructuredId.ofString "SocketDisconnect"
+                    , id |> socketIdToStructuredId
                     ]
 
             LocalStorageSet set ->
-                ComparableList
-                    [ ComparableString "LocalStorageSet"
-                    , set.key |> ComparableString
-                    , set.value |> maybeToComparable ComparableString
+                StructuredId.ofList
+                    [ StructuredId.ofString "LocalStorageSet"
+                    , set.key |> StructuredId.ofString
+                    , set.value |> StructuredId.ofMaybe StructuredId.ofString
                     ]
 
 
 interfaceDiffs :
-    { old : Emptiable (KeysSet (InterfaceSingle future) (InterfaceSingleKeys future) N1) Possibly
-    , updated : Emptiable (KeysSet (InterfaceSingle future) (InterfaceSingleKeys future) N1) Possibly
+    { old : Set.StructuredId.Set (InterfaceSingle future)
+    , updated : Set.StructuredId.Set (InterfaceSingle future)
     }
     -> List InterfaceDiff
 interfaceDiffs =
     \interfaces ->
-        ( { key = interfaceKeys, set = interfaces.old }
-        , { key = interfaceKeys, set = interfaces.updated }
-        )
-            |> KeysSet.fold2From
-                []
-                (\interfaceAndOr soFar ->
-                    interfaceOldAndOrUpdatedDiffs interfaceAndOr
-                        ++ soFar
+        ( interfaces.old, interfaces.updated )
+            |> Set.StructuredId.fold2From []
+                (\onlyOld soFar ->
+                    case toRemoveDiff onlyOld of
+                        Nothing ->
+                            soFar
+
+                        Just removeDiff ->
+                            (removeDiff |> InterfaceWithoutFutureDiff) :: soFar
+                )
+                (\oldAndNew soFar ->
+                    (oldAndNew |> toMergeDiff) ++ soFar
+                )
+                (\onlyNew soFar ->
+                    toAddDiff onlyNew :: soFar
                 )
 
 
-domNodeToId : DomNode future_ -> DomNodeId
-domNodeToId domNode =
-    case domNode of
-        DomText text ->
-            DomTextId text
+toRemoveDiff : InterfaceSingle future_ -> Maybe InterfaceWithoutFutureDiff
+toRemoveDiff =
+    \onlyOld ->
+        case onlyOld of
+            InterfaceWithoutFuture removedInterfaceWithoutFuture ->
+                case removedInterfaceWithoutFuture of
+                    AudioPlay audio ->
+                        RemoveAudio { url = audio.url, startTime = audio.startTime } |> Just
 
-        DomElement element ->
-            DomElementId (element |> domElementToId)
+                    DocumentTitleReplaceBy _ ->
+                        Nothing
+
+                    DocumentAuthorSet _ ->
+                        Nothing
+
+                    DocumentKeywordsSet _ ->
+                        Nothing
+
+                    DocumentDescriptionSet _ ->
+                        Nothing
+
+                    ConsoleLog _ ->
+                        Nothing
+
+                    ConsoleWarn _ ->
+                        Nothing
+
+                    ConsoleError _ ->
+                        Nothing
+
+                    NavigationReplaceUrl _ ->
+                        Nothing
+
+                    NavigationPushUrl _ ->
+                        Nothing
+
+                    NavigationGo _ ->
+                        Nothing
+
+                    NavigationLoad _ ->
+                        Nothing
+
+                    NavigationReload ->
+                        Nothing
+
+                    FileDownloadUnsignedInt8s _ ->
+                        Nothing
+
+                    ClipboardReplaceBy _ ->
+                        Nothing
+
+                    SocketMessage _ ->
+                        Nothing
+
+                    SocketDisconnect _ ->
+                        Nothing
+
+                    LocalStorageSet _ ->
+                        Nothing
+
+            InterfaceWithFuture interfaceWithFuture ->
+                case interfaceWithFuture of
+                    Request (TimePosixRequest _) ->
+                        Nothing
+
+                    Request (TimezoneOffsetRequest _) ->
+                        Nothing
+
+                    Request (TimezoneNameRequest _) ->
+                        Nothing
+
+                    Request (RandomUnsignedInt32sRequest _) ->
+                        Nothing
+
+                    Request (HttpRequest request) ->
+                        RemoveHttpRequest (request |> httpRequestToId) |> Just
+
+                    DomNodeRender _ ->
+                        RemoveDom |> Just
+
+                    Request (WindowSizeRequest _) ->
+                        Nothing
+
+                    Request (WindowPreferredLanguagesRequest _) ->
+                        Nothing
+
+                    Request (NavigationUrlRequest _) ->
+                        Nothing
+
+                    Request (ClipboardRequest _) ->
+                        Nothing
+
+                    AudioSourceLoad _ ->
+                        Nothing
+
+                    SocketConnect connect ->
+                        RemoveSocketConnect { address = connect.address } |> Just
+
+                    Request (LocalStorageRequest _) ->
+                        Nothing
+
+                    Request (GeoLocationRequest _) ->
+                        Nothing
+
+                    Request (GamepadsRequest _) ->
+                        Nothing
+
+                    Listen listen ->
+                        listen |> interfaceSingleListenToId |> RemoveListen |> Just
 
 
-interfaceOldAndOrUpdatedDiffs : AndOr (InterfaceSingle future) (InterfaceSingle future) -> List InterfaceDiff
-interfaceOldAndOrUpdatedDiffs =
-    \interfaceAndOr ->
-        case interfaceAndOr of
-            AndOr.Both ( InterfaceWithFuture (DomNodeRender domElementPreviouslyRendered), InterfaceWithFuture (DomNodeRender domElementToRender) ) ->
+toMergeDiff : ( InterfaceSingle future, InterfaceSingle future ) -> List InterfaceDiff
+toMergeDiff =
+    \oldAndNewInterfaceSingles ->
+        case oldAndNewInterfaceSingles of
+            ( InterfaceWithFuture (DomNodeRender domElementPreviouslyRendered), InterfaceWithFuture (DomNodeRender domElementToRender) ) ->
                 ( domElementPreviouslyRendered, domElementToRender )
                     |> domNodeDiff []
                     |> List.map (\diff -> diff |> EditDom |> InterfaceWithFutureDiff)
 
-            AndOr.Both ( InterfaceWithoutFuture (AudioPlay previouslyPlayed), InterfaceWithoutFuture (AudioPlay toPlay) ) ->
+            ( InterfaceWithoutFuture (AudioPlay previouslyPlayed), InterfaceWithoutFuture (AudioPlay toPlay) ) ->
                 ( previouslyPlayed, toPlay )
                     |> audioDiff
                     |> List.map
@@ -1516,148 +1467,8 @@ interfaceOldAndOrUpdatedDiffs =
                                 |> InterfaceWithoutFutureDiff
                         )
 
-            AndOr.Both _ ->
+            _ ->
                 []
-
-            AndOr.Only (Or.First onlyOld) ->
-                (case onlyOld of
-                    InterfaceWithoutFuture removedInterfaceWithoutFuture ->
-                        case removedInterfaceWithoutFuture of
-                            AudioPlay audio ->
-                                RemoveAudio { url = audio.url, startTime = audio.startTime } |> List.singleton
-
-                            DocumentTitleReplaceBy _ ->
-                                []
-
-                            DocumentAuthorSet _ ->
-                                []
-
-                            DocumentKeywordsSet _ ->
-                                []
-
-                            DocumentDescriptionSet _ ->
-                                []
-
-                            ConsoleLog _ ->
-                                []
-
-                            ConsoleWarn _ ->
-                                []
-
-                            ConsoleError _ ->
-                                []
-
-                            NavigationReplaceUrl _ ->
-                                []
-
-                            NavigationPushUrl _ ->
-                                []
-
-                            NavigationGo _ ->
-                                []
-
-                            NavigationLoad _ ->
-                                []
-
-                            NavigationReload ->
-                                []
-
-                            FileDownloadUnsignedInt8s _ ->
-                                []
-
-                            ClipboardReplaceBy _ ->
-                                []
-
-                            SocketMessage _ ->
-                                []
-
-                            SocketDisconnect _ ->
-                                []
-
-                            LocalStorageSet _ ->
-                                []
-
-                    InterfaceWithFuture interfaceWithFuture ->
-                        case interfaceWithFuture of
-                            Request (TimePosixRequest _) ->
-                                []
-
-                            Request (TimezoneOffsetRequest _) ->
-                                []
-
-                            Request (TimezoneNameRequest _) ->
-                                []
-
-                            Request (RandomUnsignedInt32sRequest _) ->
-                                []
-
-                            Request (HttpRequest request) ->
-                                RemoveHttpRequest (request |> httpRequestToId) |> List.singleton
-
-                            DomNodeRender _ ->
-                                RemoveDom |> List.singleton
-
-                            Request (WindowSizeRequest _) ->
-                                []
-
-                            Request (WindowPreferredLanguagesRequest _) ->
-                                []
-
-                            Request (NavigationUrlRequest _) ->
-                                []
-
-                            Request (ClipboardRequest _) ->
-                                []
-
-                            AudioSourceLoad _ ->
-                                []
-
-                            SocketConnect connect ->
-                                RemoveSocketConnect { address = connect.address } |> List.singleton
-
-                            Request (LocalStorageRequest _) ->
-                                []
-
-                            Request (GeoLocationRequest _) ->
-                                []
-
-                            Request (GamepadsRequest _) ->
-                                []
-
-                            Listen listen ->
-                                listen |> interfaceSingleListenToId |> RemoveListen |> List.singleton
-                )
-                    |> List.map InterfaceWithoutFutureDiff
-
-            AndOr.Only (Or.Second onlyUpdated) ->
-                (case onlyUpdated of
-                    InterfaceWithoutFuture interfaceWithoutFuture ->
-                        Add interfaceWithoutFuture
-                            |> InterfaceWithoutFutureDiff
-
-                    InterfaceWithFuture interfaceWithFuture ->
-                        (case interfaceWithFuture of
-                            DomNodeRender domElementToRender ->
-                                { path = []
-                                , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
-                                }
-                                    |> EditDom
-
-                            AudioSourceLoad load ->
-                                AddAudioSourceLoad load.url
-
-                            SocketConnect connect ->
-                                AddSocketConnect { address = connect.address }
-
-                            Request request ->
-                                request |> interfaceSingleRequestToId |> AddRequest
-
-                            Listen listen ->
-                                listen |> interfaceSingleListenToId |> AddListen
-                        )
-                            |> InterfaceWithFutureDiff
-                )
-                    |> List.singleton
 
 
 audioDiff : ( Audio, Audio ) -> List EditAudioDiff
@@ -1685,6 +1496,47 @@ audioDiff =
             new.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
         ]
             |> List.filterMap identity
+
+
+domNodeToId : DomNode future_ -> DomNodeId
+domNodeToId domNode =
+    case domNode of
+        DomText text ->
+            DomTextId text
+
+        DomElement element ->
+            DomElementId (element |> domElementToId)
+
+
+toAddDiff : InterfaceSingle future_ -> InterfaceDiff
+toAddDiff =
+    \onlyNew ->
+        case onlyNew of
+            InterfaceWithoutFuture interfaceWithoutFuture ->
+                Add interfaceWithoutFuture
+                    |> InterfaceWithoutFutureDiff
+
+            InterfaceWithFuture interfaceWithFuture ->
+                (case interfaceWithFuture of
+                    DomNodeRender domElementToRender ->
+                        { path = []
+                        , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
+                        }
+                            |> EditDom
+
+                    AudioSourceLoad load ->
+                        AddAudioSourceLoad load.url
+
+                    SocketConnect connect ->
+                        AddSocketConnect { address = connect.address }
+
+                    Request request ->
+                        request |> interfaceSingleRequestToId |> AddRequest
+
+                    Listen listen ->
+                        listen |> interfaceSingleListenToId |> AddListen
+                )
+                    |> InterfaceWithFutureDiff
 
 
 socketIdJsonCodec : JsonCodec SocketId
@@ -2343,18 +2195,17 @@ audioToJson audio =
 programInit : ProgramConfig state -> ( ProgramState state, Cmd (ProgramEvent state) )
 programInit appConfig =
     let
-        initialInterface : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
+        initialInterface : FastDict.Dict (List String) (InterfaceSingle state)
         initialInterface =
             appConfig.initialState
                 |> appConfig.interface
-                |> Rope.toList
-                |> KeysSet.fromList interfaceKeys
+                |> Set.StructuredId.fromRope interfaceSingleToStructuredId
     in
     ( State
         { interface = initialInterface
         , appState = appConfig.initialState
         }
-    , { old = Emptiable.empty, updated = initialInterface }
+    , { old = FastDict.empty, updated = initialInterface }
         |> interfaceDiffs
         |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
         |> Cmd.batch
@@ -2374,7 +2225,7 @@ programSubscriptions appConfig =
                     Ok interfaceDiff ->
                         case
                             state.interface
-                                |> KeysSet.toList interfaceKeys
+                                |> Set.StructuredId.toList
                                 |> listFirstJust
                                     (\stateInterface ->
                                         case stateInterface of
@@ -3413,12 +3264,11 @@ programUpdate appConfig =
             AppEventToNewAppState updatedAppState ->
                 \(State oldState) ->
                     let
-                        updatedInterface : Emptiable (KeysSet (InterfaceSingle state) (InterfaceSingleKeys state) N1) Possibly
+                        updatedInterface : Set.StructuredId.Set (InterfaceSingle state)
                         updatedInterface =
                             updatedAppState
                                 |> appConfig.interface
-                                |> Rope.toList
-                                |> KeysSet.fromList interfaceKeys
+                                |> Set.StructuredId.fromRope interfaceSingleToStructuredId
                     in
                     ( State { interface = updatedInterface, appState = updatedAppState }
                     , { old = oldState.interface, updated = updatedInterface }
