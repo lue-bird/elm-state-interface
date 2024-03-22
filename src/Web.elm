@@ -18,7 +18,7 @@ module Web exposing
 
 @docs ProgramConfig, program, Program
 
-Tip: you can also [embed](#embed) a state-interface program as part of an existing app that uses The Elm Architecture
+You can also [embed](#embed) a state-interface program as part of an existing app that uses The Elm Architecture
 
 
 # interfaces
