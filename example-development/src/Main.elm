@@ -475,19 +475,29 @@ atSignInterface =
 
                         PickApplesClicked ->
                             PickingApples
-                                { name = state.name
-                                , gemCount = state.gemCount
-                                , windowSize = dummyWindowSize
-                                , headDirection = Right
-                                , headLocation = { x = 4, y = 5 }
-                                , tailSegments = [ { x = 3, y = 5 } ]
-                                , appleLocation = { x = 3, y = 2 }
-                                , appleCountBefore = state.appleCount
-                                , pickedAppleCount = 0
-                                , eatAppleAudio = Nothing
-                                , eatAppleTimes = []
-                                }
+                                ({ name = state.name
+                                 , gemCount = state.gemCount
+                                 , appleCountBefore = state.appleCount
+                                 }
+                                    |> initialPickingApplesState
+                                )
                 )
+
+
+initialPickingApplesState : { name : String, gemCount : Int, appleCountBefore : Int } -> PickApplesState
+initialPickingApplesState state =
+    { name = state.name
+    , gemCount = state.gemCount
+    , windowSize = dummyWindowSize
+    , headDirection = Right
+    , headLocation = { x = 4, y = 5 }
+    , tailSegments = [ { x = 3, y = 5 } ]
+    , appleLocation = { x = 3, y = 2 }
+    , appleCountBefore = state.appleCountBefore
+    , pickedAppleCount = 0
+    , eatAppleAudio = Nothing
+    , eatAppleTimes = []
+    }
 
 
 dummyWindowSize : { width : Int, height : Int }
@@ -1155,61 +1165,18 @@ birdConversationStateCodec =
 pickApplesStateCodec : Codec PickApplesState
 pickApplesStateCodec =
     Codec.object
-        (\name gemCount appleCountBefore pickedAppleCount headDirection headLocation tailSegments appleLocation ->
-            { name = name
-            , gemCount = gemCount
-            , appleCountBefore = appleCountBefore
-            , pickedAppleCount = pickedAppleCount
-            , headDirection = headDirection
-            , headLocation = headLocation
-            , tailSegments = tailSegments
-            , appleLocation = appleLocation
-            , windowSize = dummyWindowSize
-            , eatAppleAudio = Nothing
-            , eatAppleTimes = []
-            }
+        (\name gemCount appleCountBefore pickedAppleCount ->
+            initialPickingApplesState
+                { name = name
+                , gemCount = gemCount
+                , appleCountBefore = appleCountBefore + pickedAppleCount
+                }
         )
         |> Codec.field "name" .name Codec.string
         |> Codec.field "gemCount" .gemCount Codec.int
         |> Codec.field "appleCountBefore" .appleCountBefore Codec.int
         |> Codec.field "pickedAppleCount" .pickedAppleCount Codec.int
-        |> Codec.field "headDirection" .headDirection directionCodec
-        |> Codec.field "headLocation" .headLocation pickApplesLocationCodec
-        |> Codec.field "tailSegments" .tailSegments (Codec.list pickApplesLocationCodec)
-        |> Codec.field "appleLocation" .appleLocation pickApplesLocationCodec
         |> Codec.buildObject
-
-
-pickApplesLocationCodec : Codec PickApplesLocation
-pickApplesLocationCodec =
-    Codec.object (\x y -> { x = x, y = y })
-        |> Codec.field "x" .x Codec.int
-        |> Codec.field "y" .y Codec.int
-        |> Codec.buildObject
-
-
-directionCodec : Codec SnakeDirection
-directionCodec =
-    Codec.custom
-        (\left right up down direction ->
-            case direction of
-                Left ->
-                    left
-
-                Right ->
-                    right
-
-                Up ->
-                    up
-
-                Down ->
-                    down
-        )
-        |> Codec.variant0 "Left" Left
-        |> Codec.variant0 "Right" Right
-        |> Codec.variant0 "Up" Up
-        |> Codec.variant0 "Down" Down
-        |> Codec.buildCustom
 
 
 port toJs : Json.Encode.Value -> Cmd event_
