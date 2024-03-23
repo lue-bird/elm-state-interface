@@ -626,26 +626,78 @@ pickApplesInterface state =
             Web.Svg.element "g"
                 []
                 [ Web.Svg.element "circle"
-                    [ Web.Dom.style "fill" (Color.rgb 0.9 0.1 0.05 |> Color.toCssString)
+                    [ Web.Dom.style "fill" (Color.rgb 0.8 0.1 0.03 |> Color.toCssString)
                     , Web.Dom.attribute "r" (((cellSideLength * 0.45) |> String.fromFloat) ++ "px")
                     , Web.Dom.attribute "cx" (((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
                     , Web.Dom.attribute "cy" (((cellSideLength * 0.5 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
                     ]
                     []
-                , Web.Svg.element "ellipse"
-                    [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.24) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.12) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.7 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.1 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+                , Web.Svg.element "line"
+                    [ Web.Dom.style "stroke" (Color.rgb 0.34 0.19 0.01 |> Color.toCssString)
+                    , Web.Dom.attribute "x1" ((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "y1" ((cellSideLength * 0.17 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "x2" ((cellSideLength * 0.39 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "y2" ((cellSideLength * -0.05 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "stroke-width" "11px"
+                    , Web.Dom.attribute "stroke-linecap" "round"
                     ]
                     []
-                , Web.Svg.element "ellipse"
+                , Web.Svg.element "line"
+                    [ Web.Dom.style "stroke" (Color.rgba 0.2 0.12 0 0.7 |> Color.toCssString)
+                    , Web.Dom.attribute "x1" ((cellSideLength * 0.44 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "y1" ((cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "x2" ((cellSideLength * 0.56 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "y2" ((cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
+                    , Web.Dom.attribute "stroke-width" "5px"
+                    , Web.Dom.attribute "stroke-linecap" "round"
+                    ]
+                    []
+                , let
+                    x =
+                        cellSideLength * 0.82 + toFloat state.appleLocation.x * cellSideLength
+
+                    y =
+                        cellSideLength * 0.08 + toFloat state.appleLocation.y * cellSideLength
+                  in
+                  Web.Svg.element "ellipse"
                     [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
+                    , Web.Dom.attribute "transform" ("rotate(-15, " ++ (x |> String.fromFloat) ++ ", " ++ (y |> String.fromFloat) ++ ")")
+                    , Web.Dom.attribute "rx" (((cellSideLength * 0.34) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "ry" (((cellSideLength * 0.12) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" ((x |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" ((y |> String.fromFloat) ++ "px")
+                    ]
+                    []
+                , let
+                    x =
+                        cellSideLength * 0.68 + toFloat state.appleLocation.x * cellSideLength
+
+                    y =
+                        cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
+                  in
+                  Web.Svg.element "ellipse"
+                    [ Web.Dom.style "fill" (Color.rgba 0.1 0.5 0 0.5 |> Color.toCssString)
+                    , Web.Dom.attribute "transform" ("rotate(30, " ++ (x |> String.fromFloat) ++ ", " ++ (y |> String.fromFloat) ++ ")")
                     , Web.Dom.attribute "rx" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
                     , Web.Dom.attribute "ry" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.3 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.12 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" ((x |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" ((y |> String.fromFloat) ++ "px")
+                    ]
+                    []
+                , let
+                    x =
+                        cellSideLength * 0.25 + toFloat state.appleLocation.x * cellSideLength
+
+                    y =
+                        cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
+                  in
+                  Web.Svg.element "ellipse"
+                    [ Web.Dom.style "fill" (Color.rgba 1 1 1 0.2 |> Color.toCssString)
+                    , Web.Dom.attribute "transform" ("rotate(-30, " ++ (x |> String.fromFloat) ++ ", " ++ (y |> String.fromFloat) ++ ")")
+                    , Web.Dom.attribute "rx" (((cellSideLength * 0.13) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "ry" (((cellSideLength * 0.05) |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cx" ((x |> String.fromFloat) ++ "px")
+                    , Web.Dom.attribute "cy" ((y |> String.fromFloat) ++ "px")
                     ]
                     []
                 ]
