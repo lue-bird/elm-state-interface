@@ -1,7 +1,8 @@
 port module Main exposing (main)
 
+import Angle
 import AppUrl exposing (AppUrl)
-import Color
+import Color exposing (Color)
 import Dict exposing (Dict)
 import Duration
 import Json.Decode
@@ -9,6 +10,7 @@ import Json.Encode
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Serialize
 import Set
+import Svg.LocalExtra
 import Time
 import Url
 import Web
@@ -491,7 +493,7 @@ initialPickingApplesState state =
     , windowSize = dummyWindowSize
     , headDirection = Right
     , headLocation = { x = 4, y = 5 }
-    , tailSegments = [ { x = 3, y = 5 } ]
+    , tailSegments = [ { x = 3, y = 5 }, { x = 3, y = 6 } ]
     , appleLocation = { x = 3, y = 2 }
     , appleCountBefore = state.appleCountBefore
     , pickedAppleCount = 0
@@ -571,7 +573,7 @@ pickApplesInterface state =
         _ ->
             Web.Audio.sourceLoad "eat-apple.mp3"
                 |> Web.interfaceFutureMap EatAppleAudioReceived
-    , Web.Time.periodicallyListen (Duration.milliseconds 125)
+    , Web.Time.periodicallyListen (Duration.milliseconds 110)
         |> Web.interfaceFutureMap PickApplesSimulationTick
     , [ Web.Window.sizeRequest, Web.Window.resizeListen ]
         |> Web.interfaceBatch
@@ -595,7 +597,7 @@ pickApplesInterface state =
         rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.DomNode state_
         rectangleAtCellLocation fill cellLocation =
             Web.Svg.element "rect"
-                [ Web.Dom.style "fill" (fill |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform fill
                 , Web.Dom.attribute "width" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
                 , Web.Dom.attribute "height" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
                 , Web.Dom.attribute "x" (((cellSideLength * 0.05 + toFloat cellLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
@@ -606,106 +608,311 @@ pickApplesInterface state =
         worldUi : Web.DomNode state_
         worldUi =
             Web.Svg.element "rect"
-                [ Web.Dom.style "fill" (Color.black |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform Color.black
                 , Web.Dom.attribute "width" "100%"
                 , Web.Dom.attribute "height" "100%"
                 ]
                 []
 
-        headTailUi : Web.DomNode state_
+        splitIntoSegmentsThatDoNotWrapAround : List { x : Int, y : Int } -> List (List { x : Int, y : Int })
+        splitIntoSegmentsThatDoNotWrapAround =
+            \points ->
+                case points of
+                    [] ->
+                        []
+
+                    head :: tail ->
+                        let
+                            segmented : { previousPoint : { x : Int, y : Int }, currentSegment : List { x : Int, y : Int }, finishedSegments : List (List { x : Int, y : Int }) }
+                            segmented =
+                                tail
+                                    |> List.foldl
+                                        (\point soFar ->
+                                            if
+                                                (((point.x - soFar.previousPoint.x) |> abs) >= 2)
+                                                    || (((point.y - soFar.previousPoint.y) |> abs) >= 2)
+                                            then
+                                                { previousPoint = point
+                                                , currentSegment = [ point ]
+                                                , finishedSegments = soFar.currentSegment :: soFar.finishedSegments
+                                                }
+
+                                            else
+                                                { previousPoint = point
+                                                , currentSegment = point :: soFar.currentSegment
+                                                , finishedSegments = soFar.finishedSegments
+                                                }
+                                        )
+                                        { previousPoint = head, currentSegment = [ head ], finishedSegments = [] }
+                        in
+                        segmented.currentSegment :: segmented.finishedSegments
+
+        headTailUi : Web.DomNode future_
         headTailUi =
-            Web.Svg.element "g"
-                []
-                (state.headLocation
-                    :: state.tailSegments
-                    |> List.map (rectangleAtCellLocation Color.lightGrey)
-                )
+            let
+                segments : List (List { x : Int, y : Int })
+                segments =
+                    (state.headLocation :: state.tailSegments)
+                        |> splitIntoSegmentsThatDoNotWrapAround
 
-        appleUi : Web.DomNode state_
+                legsUi : Web.DomNode future_
+                legsUi =
+                    segments
+                        |> List.concat
+                        |> listTakeEveryAndEnds 4
+                        |> List.map
+                            (\point ->
+                                [ Svg.LocalExtra.line
+                                    { start =
+                                        { x = 0.1 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.9 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    , end =
+                                        { x = 0.9 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.1 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    }
+                                    [ Svg.LocalExtra.strokeUniform (Color.rgb 0.5 0.7 0.7)
+                                    , Svg.LocalExtra.strokeWidth (cellSideLength * 0.3)
+                                    , Web.Dom.attribute "stroke-linecap" "round"
+                                    ]
+                                , Svg.LocalExtra.line
+                                    { start =
+                                        { x = 0.9 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.9 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    , end =
+                                        { x = 0.1 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.1 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    }
+                                    [ Svg.LocalExtra.strokeUniform (Color.rgb 0.5 0.7 0.7)
+                                    , Svg.LocalExtra.strokeWidth (cellSideLength * 0.3)
+                                    , Web.Dom.attribute "stroke-linecap" "round"
+                                    ]
+                                ]
+                                    |> Web.Svg.element "g" []
+                            )
+                        |> Web.Svg.element "g" []
+
+                warpAnimationUi : Web.DomNode future_
+                warpAnimationUi =
+                    case segments |> List.reverse of
+                        (lastPoint :: beforeLastPoint) :: _ ->
+                            case beforeLastPoint of
+                                _ :: _ :: _ ->
+                                    Web.Dom.text ""
+
+                                [ _ ] ->
+                                    [ Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 2.5
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.01)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 1)
+                                        ]
+                                    , Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 0.4
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.075)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.7)
+                                        ]
+                                    ]
+                                        |> Web.Svg.element "g" []
+
+                                [] ->
+                                    [ Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 3.5
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.01)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 2)
+                                        ]
+                                    , Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 1.8
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.015)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.5)
+                                        ]
+                                    , Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 0.4
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.2)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.7)
+                                        ]
+                                    ]
+                                        |> Web.Svg.element "g" []
+
+                        _ ->
+                            Web.Dom.text ""
+
+                facePoints : { x : Int, y : Int } -> Float -> List { x : Float, y : Float }
+                facePoints head size =
+                    [ { x = cellSideLength * ((head.x |> Basics.toFloat) + (1 - size) / 2)
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      }
+                    , { x = cellSideLength * ((head.x |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + ((1 - size) / 2 + size))
+                      }
+                    , { x = cellSideLength * ((head.x |> Basics.toFloat) + ((1 - size) / 2 + size))
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      }
+                    , { x = cellSideLength * ((head.x |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + (1 - size) / 2)
+                      }
+                    ]
+
+                headUi : Web.DomNode future_
+                headUi =
+                    [ Svg.LocalExtra.polygon (facePoints state.headLocation 0.8)
+                        [ Svg.LocalExtra.fillUniform (Color.rgba 0 0.5 1 0.5)
+                        ]
+                    , Svg.LocalExtra.polygon (facePoints state.headLocation 0.4)
+                        [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 1)
+                        ]
+                    ]
+                        |> Web.Svg.element "g" []
+            in
+            [ legsUi
+            , warpAnimationUi
+            , segments
+                |> List.map
+                    (\segmentPoints ->
+                        Svg.LocalExtra.polyline
+                            (segmentPoints
+                                |> List.map
+                                    (\location ->
+                                        { x = cellSideLength * 0.5 + cellSideLength * (location.x |> Basics.toFloat)
+                                        , y = cellSideLength * 0.5 + cellSideLength * (location.y |> Basics.toFloat)
+                                        }
+                                    )
+                            )
+                            [ Svg.LocalExtra.strokeUniform (Color.rgb 0.9 0.9 0.9)
+                            , Svg.LocalExtra.fillUniform colorInvisible
+                            , Web.Dom.attribute "stroke-linecap" "round"
+                            , Web.Dom.attribute "stroke-linejoin" "round"
+                            , Svg.LocalExtra.strokeWidth cellSideLength
+                            ]
+                    )
+                |> Web.Svg.element "g" []
+            , headUi
+            ]
+                |> Web.Svg.element "g" []
+
+        appleUi : Web.DomNode future_
         appleUi =
-            Web.Svg.element "g"
-                []
-                [ Web.Svg.element "circle"
-                    [ Web.Dom.style "fill" (Color.rgb 0.8 0.1 0.03 |> Color.toCssString)
-                    , Web.Dom.attribute "r" (((cellSideLength * 0.45) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.5 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
-                    ]
-                    []
-                , Web.Svg.element "line"
-                    [ Web.Dom.style "stroke" (Color.rgb 0.34 0.19 0.01 |> Color.toCssString)
-                    , Web.Dom.attribute "x1" ((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "y1" ((cellSideLength * 0.17 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "x2" ((cellSideLength * 0.39 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "y2" ((cellSideLength * -0.05 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "stroke-width" "11px"
-                    , Web.Dom.attribute "stroke-linecap" "round"
-                    ]
-                    []
-                , Web.Svg.element "line"
-                    [ Web.Dom.style "stroke" (Color.rgba 0.2 0.12 0 0.7 |> Color.toCssString)
-                    , Web.Dom.attribute "x1" ((cellSideLength * 0.44 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "y1" ((cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "x2" ((cellSideLength * 0.56 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "y2" ((cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat)
-                    , Web.Dom.attribute "stroke-width" "5px"
-                    , Web.Dom.attribute "stroke-linecap" "round"
-                    ]
-                    []
-                , let
-                    x =
-                        cellSideLength * 0.82 + toFloat state.appleLocation.x * cellSideLength
-
-                    y =
-                        cellSideLength * 0.08 + toFloat state.appleLocation.y * cellSideLength
-                  in
-                  Web.Svg.element "ellipse"
-                    [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
-                    , Web.Dom.attribute "transform" ("rotate(-15, " ++ (x |> String.fromFloat) ++ ", " ++ (y |> String.fromFloat) ++ ")")
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.34) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.12) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" ((x |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" ((y |> String.fromFloat) ++ "px")
-                    ]
-                    []
-                , let
-                    x =
-                        cellSideLength * 0.68 + toFloat state.appleLocation.x * cellSideLength
-
-                    y =
-                        cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
-                  in
-                  Web.Svg.element "ellipse"
-                    [ Web.Dom.style "fill" (Color.rgba 0.1 0.5 0 0.5 |> Color.toCssString)
-                    , Web.Dom.attribute "transform" ("rotate(30, " ++ (x |> String.fromFloat) ++ ", " ++ (y |> String.fromFloat) ++ ")")
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" ((x |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" ((y |> String.fromFloat) ++ "px")
-                    ]
-                    []
-                , let
-                    x =
-                        cellSideLength * 0.25 + toFloat state.appleLocation.x * cellSideLength
-
-                    y =
-                        cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
-                  in
-                  Web.Svg.element "ellipse"
-                    [ Web.Dom.style "fill" (Color.rgba 1 1 1 0.2 |> Color.toCssString)
-                    , Web.Dom.attribute "transform" ("rotate(-30, " ++ (x |> String.fromFloat) ++ ", " ++ (y |> String.fromFloat) ++ ")")
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.13) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.05) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" ((x |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" ((y |> String.fromFloat) ++ "px")
-                    ]
-                    []
+            [ Svg.LocalExtra.circle
+                { radius = cellSideLength * 0.45
+                , position =
+                    { x = cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.5 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgb 0.8 0.1 0.03)
                 ]
+            , Svg.LocalExtra.line
+                { start =
+                    { x = cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.17 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                , end =
+                    { x = cellSideLength * 0.39 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * -0.05 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                }
+                [ Svg.LocalExtra.strokeUniform (Color.rgb 0.34 0.19 0.01)
+                , Svg.LocalExtra.strokeWidth (cellSideLength * 0.16)
+                , Web.Dom.attribute "stroke-linecap" "round"
+                ]
+            , Svg.LocalExtra.line
+                { start =
+                    { x = cellSideLength * 0.44 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                , end =
+                    { x = cellSideLength * 0.56 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                }
+                [ Svg.LocalExtra.strokeUniform (Color.rgba 0.2 0.12 0 0.7)
+                , Svg.LocalExtra.strokeWidth (cellSideLength * 0.07)
+                , Web.Dom.attribute "stroke-linecap" "round"
+                ]
+            , let
+                position : { x : Float, y : Float }
+                position =
+                    { x = cellSideLength * 0.82 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.08 + toFloat state.appleLocation.y * cellSideLength
+                    }
+              in
+              Svg.LocalExtra.ellipse
+                { radiusX = cellSideLength * 0.34
+                , radiusY = cellSideLength * 0.12
+                , position = position
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgb 0.1 0.5 0)
+                , Svg.LocalExtra.rotated { center = position, angle = Angle.turns -0.042 }
+                ]
+            , let
+                position : { x : Float, y : Float }
+                position =
+                    { x = cellSideLength * 0.68 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
+                    }
+              in
+              Svg.LocalExtra.ellipse
+                { radiusX = cellSideLength * 0.2
+                , radiusY = cellSideLength * 0.1
+                , position = position
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgba 0.1 0.5 0 0.5)
+                , Svg.LocalExtra.rotated { center = position, angle = Angle.turns 0.083 }
+                ]
+            , let
+                position : { x : Float, y : Float }
+                position =
+                    { x = cellSideLength * 0.25 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
+                    }
+              in
+              Svg.LocalExtra.ellipse
+                { radiusX = cellSideLength * 0.13
+                , radiusY = cellSideLength * 0.05
+                , position = position
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 0.2)
+                , Svg.LocalExtra.rotated { center = position, angle = Angle.turns -0.083 }
+                ]
+            ]
+                |> Web.Svg.element "g" []
 
-        pickedAppleCountUi : Web.DomNode state_
+        pickedAppleCountUi : Web.DomNode future_
         pickedAppleCountUi =
             Web.Svg.element "text"
-                [ Web.Dom.style "fill" (Color.rgba 0.3 1 0.5 0.13 |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform (Color.rgba 0.3 1 0.5 0.13)
                 , Web.Dom.style "font-size" "30em"
                 , Web.Dom.attribute "text-anchor" "middle"
                 , Web.Dom.attribute "dominant-baseline" "middle"
@@ -720,13 +927,13 @@ pickApplesInterface state =
         controlsUi : Web.DomNode state_
         controlsUi =
             Web.Svg.element "text"
-                [ Web.Dom.style "fill" (Color.rgba 0.3 1 0.5 0.13 |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform (Color.rgb 0.3 0.7 0.5)
                 , Web.Dom.style "font-size" "3em"
                 , Web.Dom.attribute "text-anchor" "middle"
                 , Web.Dom.attribute "dominant-baseline" "middle"
                 , Web.Dom.attribute "font-weight" "bolder"
                 , Web.Dom.attribute "x" "50%"
-                , Web.Dom.attribute "y" "10%"
+                , Web.Dom.attribute "y" "8%"
                 , Web.Dom.attribute "width" "50%"
                 , Web.Dom.attribute "height" "50%"
                 ]
@@ -903,6 +1110,33 @@ pickApplesInterface state =
             )
 
 
+colorInvisible : Color
+colorInvisible =
+    Color.rgba 0 0 0 0
+
+
+listTakeEveryAndEnds : Int -> (List a -> List a)
+listTakeEveryAndEnds step =
+    \list ->
+        case list of
+            [] ->
+                []
+
+            head :: tail ->
+                tail
+                    |> List.foldr
+                        (\element soFar ->
+                            if soFar.dropCount <= 0 then
+                                { dropCount = step, result = soFar.result |> (::) element }
+
+                            else
+                                { dropCount = soFar.dropCount - 1, result = soFar.result }
+                        )
+                        { result = [], dropCount = 0 }
+                    |> .result
+                    |> (::) head
+
+
 snakeDirectionFromKeyboardKey : Dict String SnakeDirection
 snakeDirectionFromKeyboardKey =
     Dict.fromList
@@ -1066,13 +1300,15 @@ clockUi state =
         , Web.Dom.attribute "width" "60"
         , Web.Dom.attribute "height" "60"
         ]
-        [ Web.Svg.element "circle"
-            [ Web.Dom.attribute "cx" "30"
-            , Web.Dom.attribute "cy" "30"
-            , Web.Dom.attribute "r" "30"
-            , Web.Dom.attribute "fill" (Color.rgba 1 1 1 0.15 |> Color.toCssString)
+        [ Svg.LocalExtra.circle
+            { radius = 30
+            , position =
+                { x = 30
+                , y = 30
+                }
+            }
+            [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 0.15)
             ]
-            []
         , clockHandUi { width = 4, length = 15, turns = (hour |> Basics.toFloat) / 12 }
         , clockHandUi { width = 3, length = 20, turns = (minute |> Basics.toFloat) / 60 }
         , clockHandUi { width = 2, length = 22, turns = (second |> Basics.toFloat) / 60 }
@@ -1086,18 +1322,17 @@ clockHandUi config =
         clockTurns =
             config.turns - 0.25
     in
-    Web.Svg.element "line"
-        [ Web.Dom.attribute "x1" "30"
-        , Web.Dom.attribute "y1" "30"
-        , Web.Dom.attribute "x2"
-            (30 + config.length * cos (Basics.turns clockTurns) |> String.fromFloat)
-        , Web.Dom.attribute "y2"
-            (30 + config.length * sin (Basics.turns clockTurns) |> String.fromFloat)
-        , Web.Dom.attribute "stroke" "white"
-        , Web.Dom.attribute "stroke-width" (String.fromInt config.width)
+    Svg.LocalExtra.line
+        { start = { x = 30, y = 30 }
+        , end =
+            { x = 30 + config.length * cos (Basics.turns clockTurns)
+            , y = 30 + config.length * sin (Basics.turns clockTurns)
+            }
+        }
+        [ Svg.LocalExtra.strokeUniform (Color.rgb 1 1 1)
+        , Svg.LocalExtra.strokeWidth (config.width |> Basics.toFloat)
         , Web.Dom.attribute "stroke-linecap" "round"
         ]
-        []
 
 
 
