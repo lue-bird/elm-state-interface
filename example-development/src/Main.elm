@@ -1,13 +1,13 @@
 port module Main exposing (main)
 
 import AppUrl exposing (AppUrl)
-import Codec exposing (Codec)
 import Color
 import Dict exposing (Dict)
 import Duration
 import Json.Decode
 import Json.Encode
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
+import Serialize
 import Set
 import Time
 import Url
@@ -1063,14 +1063,14 @@ stateToAppUrl : InitializedState -> AppUrl
 stateToAppUrl =
     \state ->
         { path = []
-        , queryParameters = Dict.singleton "" [ state |> Codec.encodeToString 0 stateCodec ]
+        , queryParameters = Dict.singleton "" [ state |> Serialize.encodeToString stateCodec ]
         , fragment = Nothing
         }
 
 
-stateCodec : Codec InitializedState
+stateCodec : Serialize.Codec error_ InitializedState
 stateCodec =
-    Codec.custom
+    Serialize.customType
         (\startingRoomStateVariant atSignStateVariant pickApplesStateVariant showingMapWithExitVariant state ->
             case state of
                 StartingRoom startingRoomState ->
@@ -1085,11 +1085,11 @@ stateCodec =
                 ShowingMapWithExit ->
                     showingMapWithExitVariant
         )
-        |> Codec.variant1 "StartingRoom" StartingRoom startingRoomStateCodec
-        |> Codec.variant1 "AtSign" AtSign atSignStateCodec
-        |> Codec.variant1 "PickingApples" PickingApples pickApplesStateCodec
-        |> Codec.variant0 "ShowingMapWithExit" ShowingMapWithExit
-        |> Codec.buildCustom
+        |> Serialize.variant1 StartingRoom startingRoomStateCodec
+        |> Serialize.variant1 AtSign atSignStateCodec
+        |> Serialize.variant1 PickingApples pickApplesStateCodec
+        |> Serialize.variant0 ShowingMapWithExit
+        |> Serialize.finishCustomType
 
 
 appUrlToState : AppUrl -> Maybe InitializedState
@@ -1098,12 +1098,12 @@ appUrlToState =
         appUrl.queryParameters
             |> Dict.get ""
             |> Maybe.andThen List.head
-            |> Maybe.andThen (\str -> str |> Codec.decodeString stateCodec |> Result.toMaybe)
+            |> Maybe.andThen (\str -> str |> Serialize.decodeFromString stateCodec |> Result.toMaybe)
 
 
-startingRoomStateCodec : Codec StartingRoomState
+startingRoomStateCodec : Serialize.Codec error_ StartingRoomState
 startingRoomStateCodec =
-    Codec.object
+    Serialize.record
         (\name gemCount ->
             { name = name
             , gemCount = gemCount
@@ -1112,14 +1112,14 @@ startingRoomStateCodec =
             , posix = Time.millisToPosix 0
             }
         )
-        |> Codec.field "name" .name (Codec.nullable Codec.string)
-        |> Codec.field "gemCount" .gemCount Codec.int
-        |> Codec.buildObject
+        |> Serialize.field .name (Serialize.maybe Serialize.string)
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.finishRecord
 
 
-atSignStateCodec : Codec AtSignState
+atSignStateCodec : Serialize.Codec error_ AtSignState
 atSignStateCodec =
-    Codec.object
+    Serialize.record
         (\name gemCount appleCount birdConversationState ->
             { name = name
             , gemCount = gemCount
@@ -1127,16 +1127,16 @@ atSignStateCodec =
             , birdConversationState = birdConversationState
             }
         )
-        |> Codec.field "name" .name Codec.string
-        |> Codec.field "gemCount" .gemCount Codec.int
-        |> Codec.field "appleCount" .gemCount Codec.int
-        |> Codec.field "birdConversationState" .birdConversationState birdConversationStateCodec
-        |> Codec.buildObject
+        |> Serialize.field .name Serialize.string
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.field .birdConversationState birdConversationStateCodec
+        |> Serialize.finishRecord
 
 
-birdConversationStateCodec : Codec BirdConversationState
+birdConversationStateCodec : Serialize.Codec error_ BirdConversationState
 birdConversationStateCodec =
-    Codec.custom
+    Serialize.customType
         (\waitingForTalk greetingAndAskingForWhatYouWant birdTellAboutItself askedBirdForMap tooHungryToSell birdConversationState ->
             case birdConversationState of
                 WaitingForTalk ->
@@ -1154,17 +1154,17 @@ birdConversationStateCodec =
                 TooHungryToSell ->
                     tooHungryToSell
         )
-        |> Codec.variant0 "WaitingForTalk" WaitingForTalk
-        |> Codec.variant0 "GreetingAndAskingForWhatYouWant" GreetingAndAskingForWhatYouWant
-        |> Codec.variant0 "BirdTellAboutItself" BirdTellAboutItself
-        |> Codec.variant0 "AskedBirdForMap" AskedBirdForMap
-        |> Codec.variant0 "TooHungryToSell" TooHungryToSell
-        |> Codec.buildCustom
+        |> Serialize.variant0 WaitingForTalk
+        |> Serialize.variant0 GreetingAndAskingForWhatYouWant
+        |> Serialize.variant0 BirdTellAboutItself
+        |> Serialize.variant0 AskedBirdForMap
+        |> Serialize.variant0 TooHungryToSell
+        |> Serialize.finishCustomType
 
 
-pickApplesStateCodec : Codec PickApplesState
+pickApplesStateCodec : Serialize.Codec error_ PickApplesState
 pickApplesStateCodec =
-    Codec.object
+    Serialize.record
         (\name gemCount appleCountBefore pickedAppleCount ->
             initialPickingApplesState
                 { name = name
@@ -1172,11 +1172,11 @@ pickApplesStateCodec =
                 , appleCountBefore = appleCountBefore + pickedAppleCount
                 }
         )
-        |> Codec.field "name" .name Codec.string
-        |> Codec.field "gemCount" .gemCount Codec.int
-        |> Codec.field "appleCountBefore" .appleCountBefore Codec.int
-        |> Codec.field "pickedAppleCount" .pickedAppleCount Codec.int
-        |> Codec.buildObject
+        |> Serialize.field .name Serialize.string
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.field .appleCountBefore Serialize.int
+        |> Serialize.field .pickedAppleCount Serialize.int
+        |> Serialize.finishRecord
 
 
 port toJs : Json.Encode.Value -> Cmd event_
