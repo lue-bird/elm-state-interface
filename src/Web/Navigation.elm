@@ -20,7 +20,6 @@ import AppUrl exposing (AppUrl)
 import AppUrl.Local
 import Json.Decode
 import Rope
-import Url exposing (Url)
 import Web
 
 
@@ -102,20 +101,12 @@ This always results in a page load, even if the provided URL is the same as the 
 
     gotoElmWebsite : Web.Interface future_
     gotoElmWebsite =
-        Web.Navigation.load
-            -- https://elm-lang.org/
-            { protocol = Url.Https
-            , host = "elm-lang.org"
-            , port_ = Nothing
-            , path = "/"
-            , query = Nothing
-            , fragment = Nothing
-            }
+        Web.Navigation.load "https://elm-lang.org/"
 
 Replacement for [`Browser.Navigation.load`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Navigation#load)
 
 -}
-load : Url -> Web.Interface future_
+load : String -> Web.Interface future_
 load url =
     Web.NavigationLoad url
         |> Web.InterfaceWithoutFuture

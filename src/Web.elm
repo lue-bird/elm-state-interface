@@ -196,7 +196,7 @@ type InterfaceSingleWithoutFuture
     | NavigationReplaceUrl AppUrl
     | NavigationPushUrl AppUrl
     | NavigationGo Int
-    | NavigationLoad Url
+    | NavigationLoad String
     | NavigationReload
     | FileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
     | ClipboardReplaceBy String
@@ -1516,7 +1516,7 @@ interfaceSingleWithoutFutureToStructuredId =
             NavigationLoad url ->
                 StructuredId.ofList
                     [ StructuredId.ofString "NavigationLoad"
-                    , StructuredId.ofString (url |> Url.toString)
+                    , StructuredId.ofString url
                     ]
 
             NavigationReload ->
@@ -2139,7 +2139,7 @@ interfaceSingleWithoutFutureToJson =
                     ( "NavigationGo", urlSteps |> Json.Encode.int )
 
                 NavigationLoad url ->
-                    ( "NavigationLoad", url |> Url.toString |> Json.Encode.string )
+                    ( "NavigationLoad", url |> Json.Encode.string )
 
                 NavigationReload ->
                     ( "NavigationReload", Json.Encode.null )

@@ -9,6 +9,8 @@
       - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
   - `module Web.Dom`:
       - `documentEventListen` move into `Web.Window` as `documentListenTo`
+  - `module Web.Navigation`
+      - `load` argument change from `Url` to `String` for convenience
   - `module Web.Http`:
       - remove variant `Web.HttpExpectJson` in favor of explicit `Json.Decode.Error` handling in `Web.Http.expectJson`
       - remove `Web.HttpHeader` in favor of inlined types
