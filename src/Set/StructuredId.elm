@@ -1,4 +1,4 @@
-module Set.StructuredId exposing (Set, empty, firstJustMap, fold2From, fromRope)
+module Set.StructuredId exposing (Set, elementWithStructuredId, empty, firstJustMap, fold2From, fromRope)
 
 import FastDict
 import Rope exposing (Rope)
@@ -35,6 +35,14 @@ insert elementToStructuredId element =
 empty : Set element_
 empty =
     FastDict.empty
+
+
+{-| Find the element with the same [`StructureId`](StructureId-StructureId) again
+-}
+elementWithStructuredId : StructuredId -> (Set element -> Maybe element)
+elementWithStructuredId structuredId =
+    \dict ->
+        dict |> FastDict.get (structuredId |> StructuredId.toComparable)
 
 
 firstJustMap : (element -> Maybe value) -> (Set element -> Maybe value)

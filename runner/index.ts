@@ -358,7 +358,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 if (oldDomNode) {
                     switch (replacement.tag) {
                         case "Node": {
-                            parentDomNode.replaceChild(createDomNode([], replacement.value, sendToElm), oldDomNode)
+                            parentDomNode.replaceChild(createDomNode(path, replacement.value, sendToElm), oldDomNode)
                             break
                         }
                         case "Styles": case "Attributes": case "AttributesNamespaced": case "EventListens": {
@@ -493,7 +493,7 @@ function getMeta(name: string): HTMLMetaElement {
     }
 }
 
-function createDomNode(innerPath: number[], node: { tag: "Text" | "Element", value: any }, sendToElm: (v: any) => void): Element | Text {
+function createDomNode(path: number[], node: { tag: "Text" | "Element", value: any }, sendToElm: (v: any) => void): Element | Text {
     switch (node.tag) {
         case "Text": {
             return document.createTextNode(node.value)
@@ -508,10 +508,10 @@ function createDomNode(innerPath: number[], node: { tag: "Text" | "Element", val
             domElementAddAttributes(createdDomElement, node.value.attributes)
             domElementAddAttributesNamespaced(createdDomElement, node.value.attributesNamespaced)
             domElementAddStyles(createdDomElement, node.value.styles)
-            domElementAddEventListens(createdDomElement, node.value.eventListens, innerPath, sendToElm)
+            domElementAddEventListens(createdDomElement, node.value.eventListens, path, sendToElm)
             node.value.subs.forEach((sub: any, subIndex: number) => {
                 createdDomElement.appendChild(
-                    createDomNode([subIndex].concat(innerPath), sub, sendToElm)
+                    createDomNode([subIndex].concat(path), sub, sendToElm)
                 )
             })
             return createdDomElement
@@ -554,7 +554,7 @@ function domElementAddEventListens(
         domElement.addEventListener(
             eventListen.name,
             (triggeredEvent) => {
-                sendToElm({ innerPath: path, name: eventListen.name, event: triggeredEvent })
+                sendToElm({ path: path, name: eventListen.name, event: triggeredEvent })
                 switch (eventListen.defaultActionHandling) {
                     case "DefaultActionPrevent": {
                         triggeredEvent.preventDefault()

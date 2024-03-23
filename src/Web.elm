@@ -11,7 +11,7 @@ module Web exposing
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
     , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..)
-    , interfaceDiffs, interfaceAssociateFutureState, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
+    , interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program that can run in the browser
@@ -95,7 +95,7 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 
 @docs ProgramState, ProgramEvent
 @docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture
-@docs interfaceDiffs, interfaceAssociateFutureState, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
+@docs interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
 
 -}
 
@@ -1207,42 +1207,31 @@ toAddDiff =
                     |> InterfaceWithFutureDiff
 
 
-interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
-interfaceSingleToStructuredId =
-    \interfaceSingle ->
-        case interfaceSingle of
-            InterfaceWithoutFuture interfaceWithoutFuture ->
-                interfaceWithoutFuture |> interfaceSingleWithoutFutureToStructuredId
-
-            InterfaceWithFuture interfaceWithFuture ->
-                interfaceWithFuture |> interfaceSingleWithFutureToStructuredId
-
-
-interfaceSingleWithFutureToStructuredId : InterfaceSingleWithFuture future_ -> StructuredId
-interfaceSingleWithFutureToStructuredId =
-    \idInterfaceWithoutFuture ->
+interfaceSingleWithFutureIdToStructuredId : InterfaceSingleWithFutureId -> StructuredId
+interfaceSingleWithFutureIdToStructuredId =
+    \idInterfaceWithFuture ->
         StructuredId.ofVariant
-            (case idInterfaceWithoutFuture of
-                DomNodeRender _ ->
+            (case idInterfaceWithFuture of
+                IdDomNodeRender ->
                     ( "DomNodeRender", [] )
 
-                AudioSourceLoad audio ->
+                IdAudioSourceLoad sourceUrl ->
                     ( "AudioSourceLoad"
-                    , [ StructuredId.ofString audio.url
+                    , [ StructuredId.ofString sourceUrl
                       ]
                     )
 
-                SocketConnect connect ->
+                IdSocketConnect connect ->
                     ( "SocketConnect"
                     , [ StructuredId.ofString connect.address
                       ]
                     )
 
-                Request request ->
-                    request |> interfaceSingleRequestToId |> interfaceSingleRequestIdToStructuredId
+                IdRequest request ->
+                    request |> interfaceSingleRequestIdToStructuredId
 
-                Listen listenId ->
-                    listenId |> interfaceSingleListenToId |> listenIdToStructuredId
+                IdListen listenId ->
+                    listenId |> listenIdToStructuredId
             )
 
 
@@ -1427,6 +1416,37 @@ listenIdToStructuredId =
 
             IdGamepadsChangeListen ->
                 ( "GamepadsChangeListen", [] )
+
+
+interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
+interfaceSingleToStructuredId =
+    \interfaceSingle ->
+        case interfaceSingle of
+            InterfaceWithoutFuture interfaceWithoutFuture ->
+                interfaceWithoutFuture |> interfaceSingleWithoutFutureToStructuredId
+
+            InterfaceWithFuture interfaceWithFuture ->
+                interfaceWithFuture |> interfaceSingleWithFutureToId |> interfaceSingleWithFutureIdToStructuredId
+
+
+interfaceSingleWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
+interfaceSingleWithFutureToId =
+    \idInterfaceWithFuture ->
+        case idInterfaceWithFuture of
+            DomNodeRender _ ->
+                IdDomNodeRender
+
+            AudioSourceLoad audioSourceLoad ->
+                IdAudioSourceLoad audioSourceLoad.url
+
+            SocketConnect socketConnect ->
+                IdSocketConnect { address = socketConnect.address }
+
+            Request request ->
+                request |> interfaceSingleRequestToId |> IdRequest
+
+            Listen listen ->
+                listen |> interfaceSingleListenToId |> IdListen
 
 
 interfaceSingleWithoutFutureToStructuredId : InterfaceSingleWithoutFuture -> StructuredId
@@ -2205,22 +2225,68 @@ programInit appConfig =
     )
 
 
+{-| Quickly find out what [interface](#InterfaceSingleWithFuture) a given
+[diff](#InterfaceWithFutureDiff) that comes back belonged to.
+
+Use in combination with [`interfaceFutureJsonDecoder`](#interfaceFutureJsonDecoder) to feed it the event data json that comes back
+
+-}
+findInterfaceAssociatedWithDiffComingBack :
+    InterfaceWithFutureDiff
+    ->
+        (FastDict.Dict (List String) (InterfaceSingle future)
+         -> Maybe (InterfaceSingleWithFuture future)
+        )
+findInterfaceAssociatedWithDiffComingBack diff =
+    \interfaces ->
+        case interfaces |> Set.StructuredId.elementWithStructuredId (diff |> interfaceWithFutureDiffToId |> interfaceSingleWithFutureIdToStructuredId) of
+            Just (InterfaceWithFuture interfaceSingleAcceptingFuture) ->
+                interfaceSingleAcceptingFuture |> Just
+
+            Just (InterfaceWithoutFuture _) ->
+                Nothing
+
+            Nothing ->
+                Nothing
+
+
+interfaceWithFutureDiffToId : InterfaceWithFutureDiff -> InterfaceSingleWithFutureId
+interfaceWithFutureDiffToId =
+    \idInterfaceWithFuture ->
+        case idInterfaceWithFuture of
+            EditDom _ ->
+                IdDomNodeRender
+
+            AddAudioSourceLoad sourceUrl ->
+                IdAudioSourceLoad sourceUrl
+
+            AddSocketConnect socketConnect ->
+                IdSocketConnect socketConnect
+
+            AddRequest request ->
+                request |> IdRequest
+
+            AddListen listen ->
+                listen |> IdListen
+
+
 {-| The "subscriptions" part for an embedded program
 -}
 programSubscriptions : ProgramConfig state -> (ProgramState state -> Sub (ProgramEvent state))
 programSubscriptions appConfig =
     \(State state) ->
-        -- re-associate event based on current interface
         appConfig.ports.fromJs
             (\interfaceJson ->
                 case interfaceJson |> Json.Decode.decodeValue comingBackJsonDecoder of
                     Ok comingBack ->
-                        case state.interface |> interfaceAssociateFutureState comingBack of
-                            Just (Ok appEvent) ->
-                                appEvent |> AppEventToNewAppState
+                        case state.interface |> findInterfaceAssociatedWithDiffComingBack comingBack.diff of
+                            Just interfaceSingleAcceptingFuture ->
+                                case comingBack.eventData |> Json.Decode.decodeValue (interfaceSingleAcceptingFuture |> interfaceFutureJsonDecoder) of
+                                    Ok eventData ->
+                                        eventData |> AppEventToNewAppState
 
-                            Just (Err eventDataJsonDecodeError) ->
-                                eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
+                                    Err eventDataJsonDecodeError ->
+                                        eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
 
                             Nothing ->
                                 InterfaceEventIgnored
@@ -2237,155 +2303,72 @@ comingBackJsonDecoder =
         (Json.Decode.field "eventData" Json.Decode.value)
 
 
-{-| Determine the new state based on what comes back
-
-  - `Just` with `Ok` will contain the new state that was created by re-associating the old interface from the diff
-    and successfully decoding the event data into the expected event shape so it could be used to create the new state
-  - `Just` with `Err` will contain the `Json.Decode.Error` in case the event data comes in an unexpected shape
-  - `Nothing` means the new interface doesn't care anymore about this value.
-
+{-| [json `Decoder`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Decoder)
+for the transformed event data coming back
 -}
-interfaceAssociateFutureState :
-    { diff : InterfaceWithFutureDiff, eventData : Json.Decode.Value }
-    -> (FastDict.Dict (List String) (InterfaceSingle state) -> Maybe (Result Json.Decode.Error state))
-interfaceAssociateFutureState comingBack =
-    \interfaces ->
-        case
-            interfaces
-                |> Set.StructuredId.firstJustMap
-                    (\stateInterface ->
-                        case stateInterface of
-                            InterfaceWithoutFuture _ ->
-                                Nothing
-
-                            InterfaceWithFuture withFuture ->
-                                interfaceFutureJsonDecoder comingBack.diff withFuture
-                    )
-        of
-            Just eventDataDecoderToConstructedEvent ->
-                case Json.Decode.decodeValue eventDataDecoderToConstructedEvent comingBack.eventData of
-                    Ok futureState ->
-                        futureState |> Ok |> Just
-
-                    Err eventDataJsonDecodeError ->
-                        eventDataJsonDecodeError |> Err |> Just
-
-            Nothing ->
-                Nothing
-
-
-{-| [`Decoder`] for the json that contains the event data for a given [`InterfaceWithFutureDiff`](#InterfaceWithFutureDiff)
--}
-interfaceFutureJsonDecoder :
-    InterfaceWithFutureDiff
-    -> (InterfaceSingleWithFuture future -> Maybe (Json.Decode.Decoder future))
-interfaceFutureJsonDecoder interfaceAddDiff interface =
+interfaceFutureJsonDecoder : InterfaceSingleWithFuture future -> Json.Decode.Decoder future
+interfaceFutureJsonDecoder interface =
     case interface of
         DomNodeRender domElementToRender ->
-            case interfaceAddDiff of
-                EditDom domEditDiff ->
-                    (Json.Decode.map3 (\innerPath name event -> { innerPath = innerPath, name = name, event = event })
-                        (Json.Decode.field "innerPath" (Json.Decode.list Json.Decode.int))
-                        (Json.Decode.field "name" Json.Decode.string)
-                        (Json.Decode.field "event" Json.Decode.value)
-                        |> Json.Decode.andThen
-                            (\specificEvent ->
-                                case domElementToRender |> domElementAtReversePath ((specificEvent.innerPath ++ domEditDiff.path) |> List.reverse) of
+            Json.Decode.map3 (\path name event -> { path = path, name = name, event = event })
+                (Json.Decode.field "path" (Json.Decode.list Json.Decode.int))
+                (Json.Decode.field "name" Json.Decode.string)
+                (Json.Decode.field "event" Json.Decode.value)
+                |> Json.Decode.andThen
+                    (\specificEvent ->
+                        case domElementToRender |> domElementAtReversePath (specificEvent.path |> List.reverse) of
+                            Nothing ->
+                                Json.Decode.fail "origin element of event not found"
+
+                            Just (DomText _) ->
+                                Json.Decode.fail "origin element of event leads to text, not element"
+
+                            Just (DomElement foundDomElement) ->
+                                case foundDomElement.eventListens |> Dict.get specificEvent.name of
                                     Nothing ->
-                                        Json.Decode.fail "origin element of event not found"
+                                        Json.Decode.fail "received event for element without listen"
 
-                                    Just (DomText _) ->
-                                        Json.Decode.fail "origin element of event leads to text, not element"
-
-                                    Just (DomElement foundDomElement) ->
-                                        case foundDomElement.eventListens |> Dict.get specificEvent.name of
-                                            Nothing ->
-                                                Json.Decode.fail "received event for element without listen"
-
-                                            Just eventListen ->
-                                                eventListen.on specificEvent.event |> Json.Decode.succeed
-                            )
+                                    Just eventListen ->
+                                        eventListen.on specificEvent.event |> Json.Decode.succeed
                     )
-                        |> Just
-
-                _ ->
-                    Nothing
 
         AudioSourceLoad load ->
-            case interfaceAddDiff of
-                AddAudioSourceLoad loadedUrl ->
-                    if loadedUrl == load.url then
-                        Json.Decode.map load.on
-                            (Json.Decode.oneOf
-                                [ Json.Decode.map (\duration -> Ok { url = loadedUrl, duration = duration })
-                                    (Json.Decode.field "ok"
-                                        (Json.Decode.field "durationInSeconds"
-                                            (Json.Decode.map Duration.seconds Json.Decode.float)
-                                        )
-                                    )
-                                , Json.Decode.map
-                                    (\errorMessage ->
-                                        case errorMessage of
-                                            "NetworkError" ->
-                                                Err AudioSourceLoadNetworkError
-
-                                            "MediaDecodeAudioDataUnknownContentType" ->
-                                                Err AudioSourceLoadDecodeError
-
-                                            "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
-                                                Err AudioSourceLoadDecodeError
-
-                                            unknownMessage ->
-                                                Err (AudioSourceLoadUnknownError unknownMessage)
-                                    )
-                                    (Json.Decode.field "err" Json.Decode.string)
-                                ]
+            Json.Decode.map load.on
+                (Json.Decode.oneOf
+                    [ Json.Decode.map (\duration -> Ok { url = load.url, duration = duration })
+                        (Json.Decode.field "ok"
+                            (Json.Decode.field "durationInSeconds"
+                                (Json.Decode.map Duration.seconds Json.Decode.float)
                             )
-                            |> Just
+                        )
+                    , Json.Decode.map
+                        (\errorMessage ->
+                            case errorMessage of
+                                "NetworkError" ->
+                                    Err AudioSourceLoadNetworkError
 
-                    else
-                        Nothing
+                                "MediaDecodeAudioDataUnknownContentType" ->
+                                    Err AudioSourceLoadDecodeError
 
-                _ ->
-                    Nothing
+                                "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
+                                    Err AudioSourceLoadDecodeError
+
+                                unknownMessage ->
+                                    Err (AudioSourceLoadUnknownError unknownMessage)
+                        )
+                        (Json.Decode.field "err" Json.Decode.string)
+                    ]
+                )
 
         SocketConnect connect ->
-            case interfaceAddDiff of
-                AddSocketConnect addConnect ->
-                    if addConnect.address == connect.address then
-                        socketConnectionEventJsonCodec.jsonDecoder
-                            |> Json.Decode.map connect.on
-                            |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            socketConnectionEventJsonCodec.jsonDecoder
+                |> Json.Decode.map connect.on
 
         Request request ->
-            case interfaceAddDiff of
-                AddRequest addRequestId ->
-                    if (request |> interfaceSingleRequestToId) == addRequestId then
-                        request |> requestFutureJsonDecoder |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            request |> requestFutureJsonDecoder
 
         Listen listen ->
-            case interfaceAddDiff of
-                AddListen addListenId ->
-                    if (listen |> interfaceSingleListenToId) == addListenId then
-                        listen |> listenFutureJsonDecoder |> Just
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
+            listen |> listenFutureJsonDecoder
 
 
 socketConnectionEventJsonCodec : JsonCodec SocketConnectionEvent
@@ -3360,6 +3343,16 @@ type InterfaceWithoutFutureDiff
     | RemoveSocketConnect { address : String }
     | RemoveAudio { url : String, startTime : Time.Posix }
     | RemoveListen InterfaceSingleListenId
+
+
+{-| Actions that will notify elm some time in the future
+-}
+type InterfaceSingleWithFutureId
+    = IdDomNodeRender
+    | IdAudioSourceLoad String
+    | IdSocketConnect { address : String }
+    | IdRequest InterfaceSingleRequestId
+    | IdListen InterfaceSingleListenId
 
 
 {-| Actions that will notify elm some time in the future
