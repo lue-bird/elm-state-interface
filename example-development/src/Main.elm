@@ -906,14 +906,7 @@ directionToXYOffset direction =
 
 mapWithExitInterface : Web.Interface future_
 mapWithExitInterface =
-    Web.Navigation.load
-        { protocol = Url.Https
-        , host = "dark.elm.dmy.fr"
-        , port_ = Nothing
-        , path = "/packages/lue-bird/elm-state-interface/latest/"
-        , query = Nothing
-        , fragment = Nothing
-        }
+    Web.Navigation.load "https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/"
 
 
 
