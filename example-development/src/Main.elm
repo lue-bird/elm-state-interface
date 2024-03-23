@@ -173,30 +173,41 @@ startingRoomInterface =
                             |> MouseMovedTo
                     )
             ]
-            [ "You find yourself trapped in a state-interface. The old clock on the wall shows " |> Web.Dom.text
+            [ "Your gaze drifts towards a clock on the wall " |> Web.Dom.text
             , clockUi { posix = state.posix, timezone = state.timezone }
-            , ". Countless questions rush through your head:" |> Web.Dom.text
+            , " and with a shiver you realize. You're trapped in a state-interface. Countless questions rush in:" |> Web.Dom.text
             , Web.Dom.element "ul"
                 []
                 [ Web.Dom.element "li"
                     []
-                    [ "\"How did you get here?\"" |> Web.Dom.text ]
-                , Web.Dom.element "li"
-                    []
-                    [ "\"Why do I know that you're exactly at "
-                        ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
-                        ++ "?\""
-                        |> Web.Dom.text
+                    [ Web.Dom.element "q"
+                        []
+                        [ "How did you get here?" |> Web.Dom.text ]
                     ]
                 , Web.Dom.element "li"
                     []
-                    [ "\"How do I know your name " |> Web.Dom.text
-                    , textInputUi state.name |> Web.Dom.futureMap NameChanged
-                    , "?\"" |> Web.Dom.text
+                    [ Web.Dom.element "q"
+                        []
+                        [ "Why do I know that you're exactly at "
+                            ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
+                            ++ "?"
+                            |> Web.Dom.text
+                        ]
                     ]
                 , Web.Dom.element "li"
                     []
-                    [ "Why is there a tutl?" |> Web.Dom.text
+                    [ Web.Dom.element "q"
+                        []
+                        [ "How did I know your name is " |> Web.Dom.text
+                        , textInputUi state.name |> Web.Dom.futureMap NameChanged
+                        , "?" |> Web.Dom.text
+                        ]
+                    ]
+                , Web.Dom.element "li"
+                    []
+                    [ Web.Dom.element "q"
+                        []
+                        [ "Why is there a tutl?" |> Web.Dom.text ]
                     , Web.Svg.element "svg"
                         [ Web.Dom.attribute "viewBox" "0 12 96 40"
                         , Web.Dom.attribute "width" "96"
@@ -211,18 +222,33 @@ startingRoomInterface =
                         ]
                     ]
                 ]
-            , "\"Don't worry\", I say. \"I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3\"" |> Web.Dom.text
-            , Web.Dom.element "br" [] []
-            , "The voice repeats: \"Don't worry. Here,  take a couple 💎 if you want"
-                ++ (case state.name of
-                        Nothing ->
-                            ""
+            , Web.Dom.element "p"
+                []
+                [ Web.Dom.element "q"
+                    []
+                    [ "Don't worry" |> Web.Dom.text ]
+                , Web.Dom.text ", I say. "
+                , Web.Dom.element "q"
+                    []
+                    [ "I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3" |> Web.Dom.text ]
+                ]
+            , Web.Dom.element "p"
+                []
+                [ "The voice repeats: " |> Web.Dom.text
+                , Web.Dom.element "q"
+                    []
+                    [ "Don't worry. Here,  take a couple 💎 if you want"
+                        ++ (case state.name of
+                                Nothing ->
+                                    ""
 
-                        Just name ->
-                            ", " ++ name
-                   )
-                ++ ":\""
-                |> Web.Dom.text
+                                Just name ->
+                                    ", " ++ name
+                           )
+                        ++ ":"
+                        |> Web.Dom.text
+                    ]
+                ]
             , Web.Dom.element "div"
                 [ Web.Dom.style "padding-top" "30px"
                 , Web.Dom.style "padding-bottom" "30px"
@@ -347,7 +373,10 @@ atSignInterface =
         [ narrativeUiFrame []
             [ Web.Dom.element "p"
                 []
-                [ "\"And there we are, " ++ state.name ++ "!\"" |> Web.Dom.text ]
+                [ Web.Dom.element "q"
+                    []
+                    [ "And there we are, " ++ state.name ++ "!" |> Web.Dom.text ]
+                ]
             , Web.Dom.element "div"
                 [ Web.Dom.style "text-align" "center"
                 , Web.Dom.style "width" "50%"
@@ -360,16 +389,17 @@ atSignInterface =
                 [ "🎏" |> Web.Dom.text ]
             , Web.Dom.element "p"
                 []
-                [ (case state.appleCount of
+                [ case state.appleCount of
                     0 ->
-                        "\"Don't you think the bird looks a bit hungry...\""
+                        Web.Dom.element "q"
+                            []
+                            [ "Don't you think the bird looks a bit hungry..." |> Web.Dom.text ]
 
                     non0AppleCount ->
                         "You've already picked "
                             ++ (non0AppleCount |> String.fromInt)
                             ++ " 🍎s"
-                  )
-                    |> Web.Dom.text
+                            |> Web.Dom.text
                 ]
             , case state.birdConversationState of
                 WaitingForTalk ->
@@ -396,9 +426,15 @@ atSignInterface =
                 GreetingAndAskingForWhatYouWant ->
                     Web.Dom.element "div"
                         []
-                        [ "\"chirp chirp. Thanks for coming by!"
-                            ++ " I usually sell for 💎 but since your new here, a couple of 🍎s would make me happy as well :)\" "
-                            |> Web.Dom.text
+                        [ Web.Dom.element "p"
+                            []
+                            [ Web.Dom.element "q"
+                                []
+                                [ "chirp chirp. Thanks for coming by!"
+                                    ++ " I usually sell for 💎 but since your new here, a couple of 🍎s would make me happy as well :)"
+                                    |> Web.Dom.text
+                                ]
+                            ]
                         , buttonUi []
                             [ "Ask for an introduction" |> Web.Dom.text
                             ]
@@ -413,9 +449,12 @@ atSignInterface =
                 BirdTellAboutItself ->
                     Web.Dom.element "div"
                         []
-                        [ "Jo jo. I'm the map and info dealer in this village since I fly around a lot."
-                            ++ " If you want to catch me to suggest some offers I could make you, write me a "
-                            |> Web.Dom.text
+                        [ Web.Dom.element "q"
+                            []
+                            [ "Jo jo. I'm the map and info dealer in this village since I fly around a lot."
+                                ++ " If you want to catch me to suggest some offers I could make you, write me a "
+                                |> Web.Dom.text
+                            ]
                         , Web.Dom.element "a"
                             [ Web.Dom.attribute "href" "https://github.com/lue-bird/elm-state-interface/discussions/new/choose"
                             , Web.Dom.style "color" "inherit"
@@ -430,8 +469,13 @@ atSignInterface =
                 AskedBirdForMap ->
                     Web.Dom.element "div"
                         []
-                        [ "\"Hope you'll come by again!\" says the bird, looking a bit down"
-                            |> Web.Dom.text
+                        [ Web.Dom.element "p"
+                            []
+                            [ Web.Dom.element "q"
+                                []
+                                [ "Hope you'll come by again!" |> Web.Dom.text ]
+                            , " says the bird, looking a bit down" |> Web.Dom.text
+                            ]
                         , buttonUi []
                             [ "Open the map" |> Web.Dom.text
                             ]
@@ -441,8 +485,9 @@ atSignInterface =
                 TooHungryToSell ->
                     Web.Dom.element "div"
                         []
-                        [ "\"Nah, I'm hungry, I will need more of these fresh 🍎s\""
-                            |> Web.Dom.text
+                        [ Web.Dom.element "q"
+                            []
+                            [ "Nah, I'm hungry, I will need more of these fresh 🍎s" |> Web.Dom.text ]
                         , buttonUi []
                             [ "pick 🍎s" |> Web.Dom.text
                             ]
