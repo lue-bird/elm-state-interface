@@ -34,7 +34,7 @@ app =
 
 The "state" is everything your app knows internally. Here it's the counter number, starting at 0.
 
-We build the interface to the outside world (html, audio, console logs, server communication, ...) based on our current state.
+We build the interface to the outside world (html, audio, server communication, ...) based on our current state.
 In our example, this function has the type
 ```elm
 interface : Int -> Interface Int
