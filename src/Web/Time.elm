@@ -16,8 +16,7 @@ import Time
 import Web
 
 
-{-| An [`Interface`](Web#Interface) for getting the [POSIX time](https://dark.elm.dmy.fr/packages/elm/time/latest/Time#Posix)
-at the moment it's added.
+{-| An [`Interface`](Web#Interface) for getting the current [POSIX time](https://dark.elm.dmy.fr/packages/elm/time/latest/Time#Posix).
 
 Replacement for [`elm/time`'s `Time.now`](https://package.elm-lang.org/packages/elm/time/latest/Time#now).
 
@@ -45,7 +44,7 @@ zoneRequest =
 
 
 {-| Intended for package authors.
-Use `Intl.DateTimeFormat().resolvedOptions().timeZone` to try to get names like Europe/Moscow or America/Havana.
+An [`Interface`](Web#Interface) for using `Intl.DateTimeFormat().resolvedOptions().timeZone` to try to get names like Europe/Moscow or America/Havana.
 From there you can look it up in any [IANA data](https://www.iana.org/time-zones) you loaded yourself.
 
 Replacement for [`elm/time`'s `Time.getZoneName`](https://package.elm-lang.org/packages/elm/time/latest/Time#getZoneName).
