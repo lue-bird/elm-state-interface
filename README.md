@@ -174,16 +174,18 @@ app =
             Web.Dom.element "div"
                 []
                 [ Web.Dom.element "button"
-                    [ Web.Dom.listenTo "click" ]
+                    [ Web.Dom.listenTo "click"
+                        |> Web.Dom.modifierFutureMap (\_ -> PlusClicked)
+                    ]
                     [ "+" |> Web.Dom.text ]
-                    |> Web.Dom.futureMap (\_ -> PlusClicked)
                 , Web.Dom.element "div"
                     []
                     [ counter |> String.fromInt |> Web.Dom.text ]
                 , Web.Dom.element "button"
-                    [ Web.Dom.listenTo "click" ]
+                    [ Web.Dom.listenTo "click"
+                        |> Web.Dom.modifierFutureMap (\_ -> MinusClicked)
+                    ]
                     [ "-" |> Web.Dom.text ]
-                    |> Web.Dom.futureMap (\_ -> MinusClicked)
                 ]
                 |> Web.Dom.render
                 |> Web.interfaceFutureMap
