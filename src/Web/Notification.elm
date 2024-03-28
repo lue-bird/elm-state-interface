@@ -48,7 +48,7 @@ to only notify users when they're on a different page
                         |> Web.interfaceFutureMap
                             (\Web.NotificationClicked ->
                                 -- return to the game if previously in settings
-                                { state | mode = LongGameBoardMode } |> State
+                                State { state | mode = LongGameBoardMode }
                             )
 
                 ( Web.WindowHidden, Opponent ) ->
@@ -60,12 +60,12 @@ to only notify users when they're on a different page
                 LongGameBoardMode ->
                     ..listen for opponent move from server..
                         |> Web.interfaceFutureMap
-                            (\... -> { state | whoseMove = You } |> State)
+                            (\... -> State { state | whoseMove = You })
 
                 SettingsPage ->
                     ..toggle for accepting/rejecting notifications..
                         |> Web.interfaceFutureMap
-                            (\... -> { state | notificationPermissionToggle = ..opposite.. } |> State)
+                            (\... -> State { state | notificationPermissionToggle = ..opposite.. })
             ]
                 |> Web.interfaceBatch
 
