@@ -75,7 +75,7 @@ import Rope
 import Web
 
 
-{-| Ask the user to consent ti receiving notifications, if they haven't already.
+{-| Ask the user to consent to receiving notifications, if they haven't already.
 
 For security reasons, browsers require some kind of user interaction like a button click first.
 So you could for example add a toggle to send notifications and ask only for permission
