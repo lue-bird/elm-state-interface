@@ -1,7 +1,7 @@
 module Web exposing
     ( ProgramConfig, program, Program
     , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
-    , DomNode(..), DomElement, DefaultActionHandling(..)
+    , DomNode(..), DomElement, DomElementVisibilityAlignment(..), DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioProcessing(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketConnectionEvent(..), SocketId(..)
@@ -31,7 +31,7 @@ You can also [embed](#embed) a state-interface program as part of an existing ap
 
 Types used by [`Web.Dom`](Web-Dom)
 
-@docs DomNode, DomElement, DefaultActionHandling
+@docs DomNode, DomElement, DomElementVisibilityAlignment, DefaultActionHandling
 
 
 ## Audio
@@ -417,6 +417,9 @@ type alias DomElement future =
         , styles : Dict String String
         , attributes : Dict String String
         , attributesNamespaced : Dict ( String, String ) String
+        , scrollToPosition : Maybe { fromLeft : Float, fromTop : Float }
+        , scrollToShow : Maybe { x : DomElementVisibilityAlignment, y : DomElementVisibilityAlignment }
+        , scrollPositionRequest : Maybe ({ fromLeft : Float, fromTop : Float } -> future)
         , eventListens :
             Dict
                 String
@@ -425,6 +428,19 @@ type alias DomElement future =
                 }
         , subs : Array (DomNode future)
         }
+
+
+{-| What part of the [`DomElement`](Web#DomElement) should be visible
+
+  - `DomElementStart`: mostly for text to read
+  - `DomElementEnd`: mostly for text to write
+  - `DomElementCenter`: mostly for images
+
+-}
+type DomElementVisibilityAlignment
+    = DomElementStart
+    | DomElementEnd
+    | DomElementCenter
 
 
 {-| Setting for a listen [`Web.Dom.Modifier`](Web-Dom#Modifier) to keep or overwrite the browsers default action
@@ -478,6 +494,9 @@ type alias DomElementId =
         , styles : Dict String String
         , attributes : Dict String String
         , attributesNamespaced : Dict ( String, String ) String
+        , scrollToPosition : Maybe { fromLeft : Float, fromTop : Float }
+        , scrollToShow : Maybe { x : DomElementVisibilityAlignment, y : DomElementVisibilityAlignment }
+        , scrollPositionRequest : Bool
         , eventListens : Dict String DefaultActionHandling
         , subs : Array DomNodeId
         }
@@ -605,7 +624,7 @@ domNodeFutureMap futureChange =
                 DomText text
 
             DomElement domElement ->
-                domElement |> domElementMap futureChange |> DomElement
+                domElement |> domElementFutureMap futureChange |> DomElement
 
 
 interfaceWithFutureMap : (future -> mappedFuture) -> (InterfaceSingleWithFuture future -> InterfaceSingleWithFuture mappedFuture)
@@ -755,14 +774,19 @@ interfaceListenFutureMap futureChange =
                 (\event -> event |> toFuture |> futureChange) |> GamepadsChangeListen
 
 
-domElementMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
-domElementMap futureChange =
+domElementFutureMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
+domElementFutureMap futureChange =
     \domElementToMap ->
         { namespace = domElementToMap.namespace
         , tag = domElementToMap.tag
         , styles = domElementToMap.styles
         , attributes = domElementToMap.attributes
         , attributesNamespaced = domElementToMap.attributesNamespaced
+        , scrollToPosition = domElementToMap.scrollToPosition
+        , scrollToShow = domElementToMap.scrollToShow
+        , scrollPositionRequest =
+            domElementToMap.scrollPositionRequest
+                |> Maybe.map (\request position -> position |> request |> futureChange)
         , eventListens =
             domElementToMap.eventListens
                 |> Dict.map
@@ -772,7 +796,7 @@ domElementMap futureChange =
                         }
                     )
         , subs =
-            domElementToMap.subs |> Array.map (domNodeFutureMap futureChange)
+            domElementToMap.subs |> Array.map (\node -> node |> domNodeFutureMap futureChange)
         }
 
 
@@ -803,6 +827,15 @@ domElementToId =
         , styles = domElement.styles
         , attributes = domElement.attributes
         , attributesNamespaced = domElement.attributesNamespaced
+        , scrollToPosition = domElement.scrollToPosition
+        , scrollToShow = domElement.scrollToShow
+        , scrollPositionRequest =
+            case domElement.scrollPositionRequest of
+                Nothing ->
+                    False
+
+                Just _ ->
+                    True
         , eventListens =
             domElement.eventListens |> Dict.map (\_ listen -> listen.defaultActionHandling)
         , subs =
@@ -836,8 +869,7 @@ domNodeDiff path =
 
 domElementDiff :
     List Int
-    -> ( DomElement state, DomElement state )
-    -> List EditDomDiff
+    -> (( DomElement future, DomElement future ) -> List EditDomDiff)
 domElementDiff path =
     \( aElement, bElement ) ->
         if
@@ -862,6 +894,28 @@ domElementDiff path =
 
                       else
                         ReplacementDomElementAttributesNamespaced bElement.attributesNamespaced |> Just
+                    , if aElement.scrollToPosition == bElement.scrollToPosition then
+                        Nothing
+
+                      else
+                        ReplacementDomElementScrollToPosition bElement.scrollToPosition |> Just
+                    , if aElement.scrollToShow == bElement.scrollToShow then
+                        Nothing
+
+                      else
+                        ReplacementDomElementScrollToShow bElement.scrollToShow |> Just
+                    , case ( aElement.scrollPositionRequest, bElement.scrollPositionRequest ) of
+                        ( Nothing, Nothing ) ->
+                            Nothing
+
+                        ( Just _, Just _ ) ->
+                            Nothing
+
+                        ( Just _, Nothing ) ->
+                            Nothing
+
+                        ( Nothing, Just _ ) ->
+                            ReplacementDomElementScrollPositionRequest |> Just
                     , let
                         bElementEventListensId : Dict String DefaultActionHandling
                         bElementEventListensId =
@@ -2019,10 +2073,42 @@ defaultActionHandlingJsonCodec =
         )
 
 
+domElementVisibilityAlignmentsJsonDecoder : JsonCodec { y : DomElementVisibilityAlignment, x : DomElementVisibilityAlignment }
+domElementVisibilityAlignmentsJsonDecoder =
+    Json.Codec.record (\x y -> { x = x, y = y })
+        |> Json.Codec.field ( .x, "x" ) domElementVisibilityAlignmentJsonDecoder
+        |> Json.Codec.field ( .y, "y" ) domElementVisibilityAlignmentJsonDecoder
+        |> Json.Codec.recordFinish
+
+
+domElementVisibilityAlignmentJsonDecoder : JsonCodec DomElementVisibilityAlignment
+domElementVisibilityAlignmentJsonDecoder =
+    Json.Codec.enum [ DomElementStart, DomElementEnd, DomElementCenter ]
+        (\alignment ->
+            case alignment of
+                DomElementStart ->
+                    "start"
+
+                DomElementEnd ->
+                    "end"
+
+                DomElementCenter ->
+                    "center"
+        )
+
+
+domElementScrollPositionJsonCodec : JsonCodec { fromLeft : Float, fromTop : Float }
+domElementScrollPositionJsonCodec =
+    Json.Codec.record (\fromLeft fromTop -> { fromLeft = fromLeft, fromTop = fromTop })
+        |> Json.Codec.field ( .fromLeft, "fromLeft" ) Json.Codec.float
+        |> Json.Codec.field ( .fromTop, "fromTop" ) Json.Codec.float
+        |> Json.Codec.recordFinish
+
+
 replacementInEditDomDiffJsonCodec : JsonCodec ReplacementInEditDomDiff
 replacementInEditDomDiffJsonCodec =
     Json.Codec.choice
-        (\replacementDomNode replacementDomElementStyles replacementDomElementAttributes replacementDomElementAttributesNamespaced replacementDomElementEventListens replacementInEditDomDiff ->
+        (\replacementDomNode replacementDomElementStyles replacementDomElementAttributes replacementDomElementAttributesNamespaced replacementDomElementScrollToPosition replacementDomElementScrollToShow replacementDomElementScrollPositionRequest replacementDomElementEventListens replacementInEditDomDiff ->
             case replacementInEditDomDiff of
                 ReplacementDomNode id ->
                     replacementDomNode id
@@ -2036,6 +2122,15 @@ replacementInEditDomDiffJsonCodec =
                 ReplacementDomElementAttributesNamespaced attributesNamespaced ->
                     replacementDomElementAttributesNamespaced attributesNamespaced
 
+                ReplacementDomElementScrollToPosition maybePosition ->
+                    replacementDomElementScrollToPosition maybePosition
+
+                ReplacementDomElementScrollToShow alignment ->
+                    replacementDomElementScrollToShow alignment
+
+                ReplacementDomElementScrollPositionRequest ->
+                    replacementDomElementScrollPositionRequest ()
+
                 ReplacementDomElementEventListens listens ->
                     replacementDomElementEventListens listens
         )
@@ -2043,6 +2138,12 @@ replacementInEditDomDiffJsonCodec =
         |> Json.Codec.variant ( ReplacementDomElementStyles, "Styles" ) domElementStylesJsonCodec
         |> Json.Codec.variant ( ReplacementDomElementAttributes, "Attributes" ) domElementAttributesJsonCodec
         |> Json.Codec.variant ( ReplacementDomElementAttributesNamespaced, "AttributesNamespaced" ) domElementAttributesNamespacedJsonCodec
+        |> Json.Codec.variant ( ReplacementDomElementScrollToPosition, "ScrollToPosition" )
+            (Json.Codec.nullable domElementScrollPositionJsonCodec)
+        |> Json.Codec.variant ( ReplacementDomElementScrollToShow, "ScrollToShow" )
+            (Json.Codec.nullable domElementVisibilityAlignmentsJsonDecoder)
+        |> Json.Codec.variant ( \() -> ReplacementDomElementScrollPositionRequest, "ScrollPositionRequest" )
+            Json.Codec.unit
         |> Json.Codec.variant ( ReplacementDomElementEventListens, "EventListens" ) domElementEventListensJsonCodec
 
 
@@ -3308,12 +3409,15 @@ type alias GamepadButtonMap =
 domElementIdJsonCodec : JsonCodec DomElementId
 domElementIdJsonCodec =
     Json.Codec.record
-        (\namespace tag styles attributes attributesNamespaced eventListens subs ->
+        (\namespace tag styles attributes attributesNamespaced scrollToPosition scrollToShow scrollPositionRequest eventListens subs ->
             { namespace = namespace
             , tag = tag
             , styles = styles
             , attributes = attributes
             , attributesNamespaced = attributesNamespaced
+            , scrollToPosition = scrollToPosition
+            , scrollToShow = scrollToShow
+            , scrollPositionRequest = scrollPositionRequest
             , eventListens = eventListens
             , subs = subs
             }
@@ -3323,6 +3427,11 @@ domElementIdJsonCodec =
         |> Json.Codec.field ( .styles, "styles" ) domElementStylesJsonCodec
         |> Json.Codec.field ( .attributes, "attributes" ) domElementAttributesJsonCodec
         |> Json.Codec.field ( .attributesNamespaced, "attributesNamespaced" ) domElementAttributesNamespacedJsonCodec
+        |> Json.Codec.field ( .scrollToPosition, "scrollToPosition" )
+            (Json.Codec.nullable domElementScrollPositionJsonCodec)
+        |> Json.Codec.field ( .scrollToShow, "scrollToShow" )
+            (Json.Codec.nullable domElementVisibilityAlignmentsJsonDecoder)
+        |> Json.Codec.field ( .scrollPositionRequest, "scrollPositionRequest" ) Json.Codec.bool
         |> Json.Codec.field ( .eventListens, "eventListens" )
             domElementEventListensJsonCodec
         |> Json.Codec.field ( .subs, "subs" ) (Json.Codec.array domNodeIdJsonCodec)
@@ -3547,6 +3656,9 @@ type ReplacementInEditDomDiff
     | ReplacementDomElementStyles (Dict String String)
     | ReplacementDomElementAttributes (Dict String String)
     | ReplacementDomElementAttributesNamespaced (Dict ( String, String ) String)
+    | ReplacementDomElementScrollToPosition (Maybe { fromLeft : Float, fromTop : Float })
+    | ReplacementDomElementScrollToShow (Maybe { x : DomElementVisibilityAlignment, y : DomElementVisibilityAlignment })
+    | ReplacementDomElementScrollPositionRequest
     | ReplacementDomElementEventListens (Dict String DefaultActionHandling)
 
 

@@ -2,7 +2,7 @@ module Json.Codec exposing
     ( JsonCodec, map, lazy
     , RecordJsonCodecBeingBuilt, record, field, recordFinish
     , enum, ChoiceJsonCodecBeingBuilt, choice, variant
-    , unit, int, string
+    , unit, bool, int, float, string
     , nullable, list, array, dict
     )
 
@@ -15,7 +15,7 @@ similar to [miniBill/elm-codec](https://dark.elm.dmy.fr/packages/miniBill/elm-co
 
 @docs enum, ChoiceJsonCodecBeingBuilt, choice, variant
 
-@docs unit, int, string
+@docs unit, bool, int, float, string
 @docs nullable, list, array, dict
 
 -}
@@ -39,6 +39,18 @@ unit =
     }
 
 
+bool : JsonCodec Bool
+bool =
+    enum [ False, True ]
+        (\isTrue ->
+            if isTrue then
+                "True"
+
+            else
+                "false"
+        )
+
+
 string : JsonCodec String
 string =
     { toJson = Json.Encode.string, jsonDecoder = Json.Decode.string }
@@ -47,6 +59,11 @@ string =
 int : JsonCodec Int
 int =
     { toJson = Json.Encode.int, jsonDecoder = Json.Decode.int }
+
+
+float : JsonCodec Float
+float =
+    { toJson = Json.Encode.float, jsonDecoder = Json.Decode.float }
 
 
 nullable : JsonCodec value -> JsonCodec (Maybe value)

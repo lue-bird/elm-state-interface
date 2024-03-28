@@ -366,7 +366,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
 
     function editDom(
         path: number[],
-        replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "EventListens", value: any },
+        replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens", value: any },
         sendToElm: (v: any) => void
     ) {
         if (path.length === 0) {
@@ -377,7 +377,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     parentDomNode.appendChild(createDomNode([], replacement.value, sendToElm))
                     break
                 }
-                case "Styles": case "Attributes": case "AttributesNamespaced": case "EventListens": {
+                case "Styles": case "Attributes": case "AttributesNamespaced": case "ScrollToPosition": case "ScrollToShow": case "ScrollPositionRequest": case "EventListens": {
                     editDomModifiers(
                         parentDomNode.firstChild as (Element & ElementCSSInlineStyle),
                         { tag: replacement.tag, value: replacement.value },
@@ -453,9 +453,9 @@ const notifications: Record<string, Notification> = {}
 //// other helpers
 
 function editDomModifiers(
-    domNodeToEdit: Element & ElementCSSInlineStyle,
+    domElementToEdit: Element & ElementCSSInlineStyle,
     replacement: {
-        tag: "Styles" | "Attributes" | "AttributesNamespaced" | "EventListens",
+        tag: "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens",
         value: any
     },
     path: number[],
@@ -463,38 +463,54 @@ function editDomModifiers(
 ) {
     switch (replacement.tag) {
         case "Styles": {
-            domNodeToEdit.removeAttribute("style")
-            domElementAddStyles(domNodeToEdit, replacement.value)
+            domElementToEdit.removeAttribute("style")
+            domElementAddStyles(domElementToEdit, replacement.value)
             break
         }
         case "Attributes": {
-            for (const attribute of domNodeToEdit.attributes) {
+            for (const attribute of domElementToEdit.attributes) {
                 if (attribute.name !== "style" && attribute.namespaceURI === null) {
-                    domNodeToEdit.removeAttribute(attribute.name)
+                    domElementToEdit.removeAttribute(attribute.name)
                 }
             }
-            domElementAddAttributes(domNodeToEdit, replacement.value)
+            domElementAddAttributes(domElementToEdit, replacement.value)
             break
         }
         case "AttributesNamespaced": {
-            for (const attribute of domNodeToEdit.attributes) {
+            for (const attribute of domElementToEdit.attributes) {
                 if (attribute.name !== "style" && attribute.namespaceURI) {
-                    domNodeToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
+                    domElementToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
                 }
             }
-            domElementAddAttributesNamespaced(domNodeToEdit, replacement.value)
+            domElementAddAttributesNamespaced(domElementToEdit, replacement.value)
+            break
+        }
+        case "ScrollToPosition": {
+            if (replacement.value) {
+                domElementToEdit.scrollTo({ top: replacement.value.fromTop, left: replacement.value.fromLeft })
+            }
+            break
+        }
+        case "ScrollToShow": {
+            if (replacement.value) {
+                domElementToEdit.scrollIntoView({ inline: replacement.value.x, block: replacement.value.y })
+            }
+            break
+        }
+        case "ScrollPositionRequest": {
+            sendToElm({ fromLeft: domElementToEdit.scrollLeft, fromTop: domElementToEdit.scrollTop })
             break
         }
         case "EventListens": {
             domListenAbortControllers = domListenAbortControllers
                 .filter(eventListener => {
-                    if (eventListener.domElement === domNodeToEdit) {
+                    if (eventListener.domElement === domElementToEdit) {
                         eventListener.abortController.abort()
                         return false
                     }
                     return true
                 })
-            domElementAddEventListens(domNodeToEdit, replacement.value, path, sendToElm)
+            domElementAddEventListens(domElementToEdit, replacement.value, path, sendToElm)
             break
         }
     }
@@ -552,6 +568,15 @@ function createDomNode(path: number[], node: { tag: "Text" | "Element", value: a
             domElementAddAttributes(createdDomElement, node.value.attributes)
             domElementAddAttributesNamespaced(createdDomElement, node.value.attributesNamespaced)
             domElementAddStyles(createdDomElement, node.value.styles)
+            if (node.value.scrollToPosition) {
+                node.value.scrollTo({ top: node.value.scrollToPosition.fromTop, left: node.value.scrollToPosition.fromLeft })
+            }
+            if (node.value.scrollToShow) {
+                node.value.scrollIntoView({ inline: node.value.scrollToShow.x, block: node.value.scrollToShow.y })
+            }
+            if (node.value.scrollPositionRequest) {
+                sendToElm({ fromLeft: node.value.scrollLeft, fromTop: node.value.scrollTop })
+            }
             domElementAddEventListens(createdDomElement, node.value.eventListens, path, sendToElm)
             node.value.subs.forEach((sub: any, subIndex: number) => {
                 createdDomElement.appendChild(

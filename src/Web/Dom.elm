@@ -3,6 +3,7 @@ module Web.Dom exposing
     , element, elementNamespaced
     , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style
     , listenTo, listenToPreventingDefaultAction
+    , scrollToShow, scrollPositionRequest, scrollToPosition
     , modifierFutureMap, modifierBatch, modifierNone
     , futureMap, render
     )
@@ -16,6 +17,7 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 @docs element, elementNamespaced
 @docs Modifier, ModifierSingle, attribute, attributeNamespaced, style
 @docs listenTo, listenToPreventingDefaultAction
+@docs scrollToShow, scrollPositionRequest, scrollToPosition
 @docs modifierFutureMap, modifierBatch, modifierNone
 @docs futureMap, render
 
@@ -24,6 +26,7 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 import Array
 import Dict
 import Json.Decode
+import List.LocalExtra
 import Rope exposing (Rope)
 import Web exposing (DomElement, DomNode)
 
@@ -66,17 +69,22 @@ futureMap futureChange =
                 Web.DomText string
 
             Web.DomElement domElement ->
-                domElement |> elementMap futureChange |> Web.DomElement
+                domElement |> elementFutureMap futureChange |> Web.DomElement
 
 
-elementMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
-elementMap futureChange =
+elementFutureMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
+elementFutureMap futureChange =
     \domElementToMap ->
         { namespace = domElementToMap.namespace
         , tag = domElementToMap.tag
         , styles = domElementToMap.styles
         , attributes = domElementToMap.attributes
         , attributesNamespaced = domElementToMap.attributesNamespaced
+        , scrollToPosition = domElementToMap.scrollToPosition
+        , scrollToShow = domElementToMap.scrollToShow
+        , scrollPositionRequest =
+            domElementToMap.scrollPositionRequest
+                |> Maybe.map (\request position -> position |> request |> futureChange)
         , eventListens =
             domElementToMap.eventListens
                 |> Dict.map
@@ -86,7 +94,7 @@ elementMap futureChange =
                         }
                     )
         , subs =
-            domElementToMap.subs |> Array.map (futureMap futureChange)
+            domElementToMap.subs |> Array.map (\node -> node |> futureMap futureChange)
         }
 
 
@@ -106,6 +114,39 @@ elementWithMaybeNamespace maybeNamespace tag modifiers subs =
     in
     { namespace = maybeNamespace
     , tag = tag
+    , scrollToPosition =
+        modifierList
+            |> List.LocalExtra.firstJustMap
+                (\modifier ->
+                    case modifier of
+                        ScrollToPosition position ->
+                            position |> Just
+
+                        _ ->
+                            Nothing
+                )
+    , scrollToShow =
+        modifierList
+            |> List.LocalExtra.firstJustMap
+                (\modifier ->
+                    case modifier of
+                        ScrollToShow alignment ->
+                            alignment |> Just
+
+                        _ ->
+                            Nothing
+                )
+    , scrollPositionRequest =
+        modifierList
+            |> List.LocalExtra.firstJustMap
+                (\modifier ->
+                    case modifier of
+                        ScrollPositionRequest positionRequest ->
+                            positionRequest |> Just
+
+                        _ ->
+                            Nothing
+                )
     , eventListens =
         modifierList
             |> List.filterMap
@@ -251,6 +292,9 @@ Create using [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenT
 type ModifierSingle future
     = Attribute { namespace : Maybe String, key : String, value : String }
     | Style { key : String, value : String }
+    | ScrollToPosition { fromLeft : Float, fromTop : Float }
+    | ScrollToShow { x : Web.DomElementVisibilityAlignment, y : Web.DomElementVisibilityAlignment }
+    | ScrollPositionRequest ({ fromLeft : Float, fromTop : Float } -> future)
     | Listen
         { eventName : String
         , on : Json.Decode.Value -> future
@@ -338,9 +382,67 @@ modifierSingleMap futureChange =
             Style keyValue ->
                 keyValue |> Style
 
+            ScrollToPosition position ->
+                position |> ScrollToPosition
+
+            ScrollToShow alignment ->
+                alignment |> ScrollToShow
+
+            ScrollPositionRequest request ->
+                (\future -> future |> request |> futureChange) |> ScrollPositionRequest
+
             Listen listen ->
                 { eventName = listen.eventName
                 , on = \json -> listen.on json |> futureChange
                 , defaultActionHandling = listen.defaultActionHandling
                 }
                     |> Listen
+
+
+{-| Getting the current scroll position from the left and top.
+
+Use in combination with [`scrollToPosition`](#scrollToPosition)
+to implement saving and restoring scroll position even when users had navigated off an url.
+
+-}
+scrollPositionRequest : Modifier { fromLeft : Float, fromTop : Float }
+scrollPositionRequest =
+    ScrollPositionRequest identity |> Rope.singleton
+
+
+{-| Ensure a given initial scroll position in both directions.
+To move to the edge in a direction, use [`scrollToShow`](#scrollToShow) instead.
+
+Unlike [`style`](#style)s,
+this is just an initial configuration
+which can be changed by user actions.
+So adding e.g. `scrollToPosition ...`
+will scroll once the next render happens
+but will not prevent users from scrolling away.
+
+-}
+scrollToPosition :
+    { fromLeft : Float, fromTop : Float }
+    -> Modifier future_
+scrollToPosition position =
+    ScrollToPosition position |> Rope.singleton
+
+
+{-| Ensure a given initial [`DomElementVisibilityAlignment`](Web#DomElementVisibilityAlignment)
+in both directions.
+
+Unlike [`style`](#style)s,
+this is just an initial configuration
+which can be changed by user actions.
+So adding e.g. `scrollToShow { y = Web.DomElementStart, x = Web.DomElementStart }`
+will scroll to the top left once the next render happens
+but will not prevent users from scrolling away.
+
+Note: Uses [`Element.scrollIntoView`](https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView)
+
+-}
+scrollToShow :
+    { x : Web.DomElementVisibilityAlignment, y : Web.DomElementVisibilityAlignment }
+    -> Modifier future_
+scrollToShow preferredAlignment =
+    ScrollToShow preferredAlignment |> Rope.singleton
