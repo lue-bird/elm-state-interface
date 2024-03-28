@@ -60,12 +60,12 @@ to only notify users when they're on a different page
                 LongGameBoardMode ->
                     ..listen for opponent move from server..
                         |> Web.interfaceFutureMap
-                            (\... -> { state | whoseMove = You })
+                            (\... -> { state | whoseMove = You } |> State)
 
-                SettingsState ->
+                SettingsPage ->
                     ..toggle for accepting/rejecting notifications..
                         |> Web.interfaceFutureMap
-                            (\... -> { state | notificationPermissionToggle = ..opposite.. })
+                            (\... -> { state | notificationPermissionToggle = ..opposite.. } |> State)
             ]
                 |> Web.interfaceBatch
 
