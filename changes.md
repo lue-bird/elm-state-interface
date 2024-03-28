@@ -9,6 +9,7 @@
       - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
   - `module Web.Dom`:
       - `documentEventListen` move into `Web.Window` as `documentListenTo`
+      - add `scrollToShow`, `scrollPositionRequest`, `scrollToPosition`
   - `module Web.Navigation`
       - `load` argument change from `Url` to `String` for convenience
   - `module Web.Http`:
