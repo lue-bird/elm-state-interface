@@ -402,7 +402,7 @@ modifierSingleMap futureChange =
 {-| Getting the current scroll position from the left and top.
 
 Use in combination with [`scrollToPosition`](#scrollToPosition)
-to implement saving and restoring scroll position even when users had navigated off an url.
+to implement saving and restoring scroll position even when users had navigated off a URL.
 
 -}
 scrollPositionRequest : Modifier { fromLeft : Float, fromTop : Float }
