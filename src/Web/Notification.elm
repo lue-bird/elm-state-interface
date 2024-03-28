@@ -3,7 +3,7 @@ module Web.Notification exposing (askForPermission, show)
 {-| Give important notices to the user as push notifications.
 Consider this a convenience feature, not something users have to rely upon.
 Always offer users alternative methods to view messages or initiate actions
-most importantly allow users to opt out of getting more in the future.
+and allow users to opt out of getting more in the future.
 
 @docs askForPermission, show
 
