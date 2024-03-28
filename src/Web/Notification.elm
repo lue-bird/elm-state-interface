@@ -94,7 +94,7 @@ Users can in the future [respond to it by clicking it](Web#NotificationClicked).
 
 To not notify users multiple times for multiple messages of the same kind,
 choose an `id` with a description for this kind
-so that the notification with the same kind if they exist.
+so that the notification with the same kind gets silently replaced if it exists.
 
     case messagesFromOpponent of
         [] ->
