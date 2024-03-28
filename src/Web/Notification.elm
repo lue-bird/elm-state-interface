@@ -89,7 +89,7 @@ askForPermission =
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) for adding an important for the user to read.
+{-| An [`Interface`](Web#Interface) for pushing a notification to the user.
 Users can in the future [respond to it by clicking it](Web#NotificationClicked).
 
 To not notify users multiple times for multiple messages of the same kind,
