@@ -3,7 +3,7 @@ module Web.Time exposing
     , periodicallyListen
     )
 
-{-| Helpers for [`elm/time`](https://dark.elm.dmy.fr/packages/elm/time/latest/Time) primitives as part of an [`Interface`](Web#Interface)
+{-| Helpers for [`elm/time`](https://dark.elm.dmy.fr/packages/elm/time/) primitives as part of an [`Interface`](Web#Interface).
 
 @docs posixRequest, zoneRequest, zoneNameRequest
 @docs periodicallyListen
@@ -16,9 +16,10 @@ import Time
 import Web
 
 
-{-| Get the POSIX time at the moment when this interface is added.
+{-| An [`Interface`](Web#Interface) for getting the [POSIX time](https://dark.elm.dmy.fr/packages/elm/time/latest/Time#Posix)
+at the moment it's added.
 
-Replacement for `elm/time`'s [`Time.now`](https://package.elm-lang.org/packages/elm/time/latest/Time#now).
+Replacement for [`elm/time`'s `Time.now`](https://package.elm-lang.org/packages/elm/time/latest/Time#now).
 
 -}
 posixRequest : Web.Interface Time.Posix
@@ -29,9 +30,10 @@ posixRequest =
         |> Rope.singleton
 
 
-{-| Produce a `Zone` based on the current UTC offset.
+{-| An [`Interface`](Web#Interface) for getting a [`Time.Zone`](https://dark.elm.dmy.fr/packages/elm/time/latest/Time#Zone)
+based on the current UTC offset.
 
-Replacement for `elm/time`'s [`Time.here`](https://package.elm-lang.org/packages/elm/time/latest/Time#here).
+Replacement for [`elm/time`'s `Time.here`](https://package.elm-lang.org/packages/elm/time/latest/Time#here).
 
 -}
 zoneRequest : Web.Interface Time.Zone
@@ -46,7 +48,7 @@ zoneRequest =
 Use `Intl.DateTimeFormat().resolvedOptions().timeZone` to try to get names like Europe/Moscow or America/Havana.
 From there you can look it up in any [IANA data](https://www.iana.org/time-zones) you loaded yourself.
 
-Replacement for `elm/time`'s [`Time.getZoneName`](https://package.elm-lang.org/packages/elm/time/latest/Time#getZoneName).
+Replacement for [`elm/time`'s `Time.getZoneName`](https://package.elm-lang.org/packages/elm/time/latest/Time#getZoneName).
 
 -}
 zoneNameRequest : Web.Interface Time.ZoneName
