@@ -2704,7 +2704,7 @@ maybeGamepadJsonDecoder =
                                 let
                                     buttonMap : GamepadButtonMap
                                     buttonMap =
-                                        buttonMapping |> Dict.get kindId |> Maybe.withDefault gamepadStandardButtonMap
+                                        buttonMapping |> FastDict.get kindId |> Maybe.withDefault gamepadStandardButtonMap
 
                                     at : (GamepadButtonMap -> Maybe Int) -> GamepadButton
                                     at indexField =
@@ -2843,28 +2843,28 @@ to consider adding
 On many other models I didn't find good examples so I don't feel confident enough giving a mapping
 
 -}
-buttonMapping : Dict String GamepadButtonMap
+buttonMapping : FastDict.Dict String GamepadButtonMap
 buttonMapping =
-    Dict.empty
-        |> dictInsertSameValueFor
+    FastDict.empty
+        |> fastDictInsertSameValueFor
             [ "xinput", "Wireless Controller (STANDARD GAMEPAD)" ]
             gamepadStandardButtonMap
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "Xbox 360 Controller (XInput STANDARD GAMEPAD)"
             , "Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)"
             , "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)"
             , "HID-compliant game controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)"
             ]
             { gamepadStandardButtonMap | touchpad = Nothing }
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "Xbox Wireless Controller Extended Gamepad"
             , "Unknown Gamepad (Vendor: beef Product: 046d)"
             ]
             gamepadStandardButtonMap
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "054c-05c4-Wireless Controller", "Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)" ]
             gamepadStandardButtonMap
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "45e-28e-Xbox 360 Wired Controller" ]
             { primary = Just 11
             , secondary = Just 12
@@ -2887,7 +2887,7 @@ buttonMapping =
             , leftTrigger = Nothing
             , rightTrigger = Nothing
             }
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "0810-0001- USB Gamepad          ", " USB Gamepad           (Vendor: 0810 Product: 0001)" ]
             { gamepadStandardButtonMap
                 | primary = Just 2
@@ -2895,7 +2895,7 @@ buttonMapping =
                 , quaternary = Just 0
                 , touchpad = Nothing
             }
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "0810-e501-usb gamepad           ", "usb gamepad            (Vendor: 0810 Product: e501)" ]
             { gamepadStandardButtonMap
                 | primary = Just 1
@@ -2912,7 +2912,7 @@ buttonMapping =
                 , homeButton = Nothing
             }
         -- nintendo style
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "057e-2009-Pro Controller"
             , "Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)"
             , "057e-2009-Pro Wireless Gamepad"
@@ -2923,7 +2923,7 @@ buttonMapping =
                 , secondary = Just 0
                 , quaternary = Just 2
             }
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "Pro Controller Extended Gamepad" ]
             { gamepadStandardButtonMap
                 | primary = Just 1
@@ -2949,7 +2949,7 @@ buttonMapping =
         --    ]
         --
         -- playstation 3 style
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "54c-268-PLAYSTATION(R)3 Controller"
             , "PS3 GamePad (Vendor: 054c Product: 0268)"
             ]
@@ -2973,7 +2973,7 @@ buttonMapping =
             , touchpad = Nothing
             }
         -- playstation 4 style
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "54c-9cc-Wireless Controller" ]
             { primary = Just 1
             , secondary = Just 2
@@ -2995,7 +2995,7 @@ buttonMapping =
             , touchpad = Just 13
             }
         -- logi style
-        |> dictInsertSameValueFor
+        |> fastDictInsertSameValueFor
             [ "046d- c216-Logitech Dual Action"
             , "Logitech Dual Action (STANDARD GAMEPAD Vendor: 046d Product: c216)"
             ]
@@ -3020,10 +3020,10 @@ buttonMapping =
             }
 
 
-dictInsertSameValueFor : List comparableKey -> value -> (Dict comparableKey value -> Dict comparableKey value)
-dictInsertSameValueFor keyList value =
+fastDictInsertSameValueFor : List comparableKey -> value -> (FastDict.Dict comparableKey value -> FastDict.Dict comparableKey value)
+fastDictInsertSameValueFor keyList value =
     \dict ->
-        keyList |> List.foldl (\key dictSoFar -> dictSoFar |> Dict.insert key value) dict
+        keyList |> List.foldl (\key dictSoFar -> dictSoFar |> FastDict.insert key value) dict
 
 
 listAtIndex : Int -> (List a -> Maybe a)
