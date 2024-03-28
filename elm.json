@@ -21,7 +21,8 @@
         "Web.Socket",
         "Web.LocalStorage",
         "Web.GeoLocation",
-        "Web.Gamepads"
+        "Web.Gamepads",
+        "Web.Notification"
     ],
     "elm-version": "0.19.1 <= v < 20.0.0",
     "dependencies": {

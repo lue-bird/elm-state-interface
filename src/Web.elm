@@ -7,6 +7,7 @@ module Web exposing
     , SocketConnectionEvent(..), SocketId(..)
     , GeoLocation
     , Gamepad, GamepadButton(..)
+    , NotificationClicked(..)
     , WindowVisibility(..)
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
@@ -66,6 +67,13 @@ Types used by [`Web.GeoLocation`](Web-GeoLocation)
 Types used by [`Web.Gamepads`](Web-Gamepads)
 
 @docs Gamepad, GamepadButton
+
+
+## notification
+
+Types used by [`Web.Notification`](Web-Notification)
+
+@docs NotificationClicked
 
 
 ## window
@@ -204,6 +212,7 @@ type InterfaceSingleWithoutFuture
     | SocketMessage { id : SocketId, data : String }
     | SocketDisconnect SocketId
     | LocalStorageSet { key : String, value : Maybe String }
+    | NotificationAskForPermission
 
 
 {-| These are possible errors we can get when loading an audio source file.
@@ -225,8 +234,16 @@ type InterfaceSingleWithFuture future
     = DomNodeRender (DomNode future)
     | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
     | SocketConnect { address : String, on : SocketConnectionEvent -> future }
+    | NotificationShow { id : String, message : String, details : String, on : NotificationClicked -> future }
     | Request (InterfaceSingleRequest future)
     | Listen (InterfaceSingleListen future)
+
+
+{-| The user clicked a displayed notification,
+moving the focus to our page
+-}
+type NotificationClicked
+    = NotificationClicked
 
 
 {-| An indication that connection has changed
@@ -605,6 +622,14 @@ interfaceWithFutureMap futureChange =
             SocketConnect connect ->
                 { address = connect.address, on = \event -> event |> connect.on |> futureChange }
                     |> SocketConnect
+
+            NotificationShow show ->
+                { id = show.id
+                , message = show.message
+                , details = show.details
+                , on = \future -> future |> show.on |> futureChange
+                }
+                    |> NotificationShow
 
             Request request ->
                 request |> interfaceRequestFutureMap futureChange |> Request
@@ -1024,6 +1049,9 @@ toRemoveDiff =
                     LocalStorageSet _ ->
                         Nothing
 
+                    NotificationAskForPermission ->
+                        Nothing
+
             InterfaceWithFuture interfaceWithFuture ->
                 case interfaceWithFuture of
                     Request (TimePosixRequest _) ->
@@ -1062,6 +1090,9 @@ toRemoveDiff =
                     SocketConnect connect ->
                         RemoveSocketConnect { address = connect.address } |> Just
 
+                    NotificationShow show ->
+                        RemoveNotificationShow { message = show.message, details = show.details } |> Just
+
                     Request (LocalStorageRequest _) ->
                         Nothing
 
@@ -1093,6 +1124,12 @@ toMergeDiff =
                                 |> EditAudio
                                 |> InterfaceWithoutFutureDiff
                         )
+
+            ( InterfaceWithFuture (NotificationShow _), InterfaceWithFuture (NotificationShow toShow) ) ->
+                { id = toShow.id, message = toShow.message, details = toShow.details }
+                    |> EditNotification
+                    |> InterfaceWithoutFutureDiff
+                    |> List.singleton
 
             _ ->
                 []
@@ -1198,6 +1235,9 @@ toAddDiff =
                     SocketConnect connect ->
                         AddSocketConnect { address = connect.address }
 
+                    NotificationShow show ->
+                        AddNotificationShow { id = show.id, message = show.message, details = show.details }
+
                     Request request ->
                         request |> interfaceSingleRequestToId |> AddRequest
 
@@ -1224,6 +1264,12 @@ interfaceSingleWithFutureIdToStructuredId =
                 IdSocketConnect connect ->
                     ( "SocketConnect"
                     , [ StructuredId.ofString connect.address
+                      ]
+                    )
+
+                IdNotificationShow show ->
+                    ( "NotificationShow"
+                    , [ show.id |> StructuredId.ofString
                       ]
                     )
 
@@ -1442,6 +1488,9 @@ interfaceSingleWithFutureToId =
             SocketConnect socketConnect ->
                 IdSocketConnect { address = socketConnect.address }
 
+            NotificationShow show ->
+                IdNotificationShow { id = show.id }
+
             Request request ->
                 request |> interfaceSingleRequestToId |> IdRequest
 
@@ -1452,118 +1501,123 @@ interfaceSingleWithFutureToId =
 interfaceSingleWithoutFutureToStructuredId : InterfaceSingleWithoutFuture -> StructuredId
 interfaceSingleWithoutFutureToStructuredId =
     \interfaceWithoutFuture ->
-        case interfaceWithoutFuture of
-            DocumentTitleReplaceBy replacement ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "DocumentTitleReplaceBy"
-                    , StructuredId.ofString replacement
-                    ]
+        StructuredId.ofVariant
+            (case interfaceWithoutFuture of
+                DocumentTitleReplaceBy replacement ->
+                    ( "DocumentTitleReplaceBy"
+                    , [ StructuredId.ofString replacement
+                      ]
+                    )
 
-            DocumentAuthorSet new ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "DocumentAuthorSet"
-                    , StructuredId.ofString new
-                    ]
+                DocumentAuthorSet new ->
+                    ( "DocumentAuthorSet"
+                    , [ StructuredId.ofString new
+                      ]
+                    )
 
-            DocumentKeywordsSet new ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "DocumentKeywordsSet"
-                    , new |> List.map StructuredId.ofString |> StructuredId.ofList
-                    ]
+                DocumentKeywordsSet new ->
+                    ( "DocumentKeywordsSet"
+                    , [ new |> List.map StructuredId.ofString |> StructuredId.ofList
+                      ]
+                    )
 
-            DocumentDescriptionSet new ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "DocumentDescriptionSet"
-                    , StructuredId.ofString new
-                    ]
+                DocumentDescriptionSet new ->
+                    ( "DocumentDescriptionSet"
+                    , [ StructuredId.ofString new
+                      ]
+                    )
 
-            ConsoleLog string ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "ConsoleLog"
-                    , StructuredId.ofString string
-                    ]
+                ConsoleLog string ->
+                    ( "ConsoleLog"
+                    , [ StructuredId.ofString string
+                      ]
+                    )
 
-            ConsoleWarn string ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "ConsoleWarn"
-                    , StructuredId.ofString string
-                    ]
+                ConsoleWarn string ->
+                    ( "ConsoleWarn"
+                    , [ StructuredId.ofString string
+                      ]
+                    )
 
-            ConsoleError string ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "ConsoleError"
-                    , StructuredId.ofString string
-                    ]
+                ConsoleError string ->
+                    ( "ConsoleError"
+                    , [ StructuredId.ofString string
+                      ]
+                    )
 
-            NavigationReplaceUrl url ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "NavigationReplaceUrl"
-                    , StructuredId.ofString (url |> AppUrl.toString)
-                    ]
+                NavigationReplaceUrl url ->
+                    ( "NavigationReplaceUrl"
+                    , [ StructuredId.ofString (url |> AppUrl.toString)
+                      ]
+                    )
 
-            NavigationPushUrl url ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "NavigationPushUrl"
-                    , StructuredId.ofString (url |> AppUrl.toString)
-                    ]
+                NavigationPushUrl url ->
+                    ( "NavigationPushUrl"
+                    , [ StructuredId.ofString (url |> AppUrl.toString)
+                      ]
+                    )
 
-            NavigationGo urlSteps ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "NavigationGo"
-                    , urlSteps |> StructuredId.ofInt
-                    ]
+                NavigationGo urlSteps ->
+                    ( "NavigationGo"
+                    , [ urlSteps |> StructuredId.ofInt
+                      ]
+                    )
 
-            NavigationLoad url ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "NavigationLoad"
-                    , StructuredId.ofString url
-                    ]
+                NavigationLoad url ->
+                    ( "NavigationLoad"
+                    , [ StructuredId.ofString url
+                      ]
+                    )
 
-            NavigationReload ->
-                StructuredId.ofString "NavigationReload"
+                NavigationReload ->
+                    ( "NavigationReload", [] )
 
-            FileDownloadUnsignedInt8s config ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "FileDownloadUnsignedInt8s"
-                    , StructuredId.ofString config.name
-                    , StructuredId.ofString config.mimeType
-                    , config.content
-                        |> List.map (\bit -> bit |> String.fromInt |> StructuredId.ofString)
-                        |> StructuredId.ofList
-                    ]
+                FileDownloadUnsignedInt8s config ->
+                    ( "FileDownloadUnsignedInt8s"
+                    , [ StructuredId.ofString config.name
+                      , StructuredId.ofString config.mimeType
+                      , config.content
+                            |> List.map (\bit -> bit |> String.fromInt |> StructuredId.ofString)
+                            |> StructuredId.ofList
+                      ]
+                    )
 
-            ClipboardReplaceBy replacement ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "ClipboardReplaceBy"
-                    , StructuredId.ofString replacement
-                    ]
+                ClipboardReplaceBy replacement ->
+                    ( "ClipboardReplaceBy"
+                    , [ StructuredId.ofString replacement
+                      ]
+                    )
 
-            AudioPlay audio ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "AudioPlay"
-                    , audio.url |> StructuredId.ofString
-                    , audio.startTime |> StructuredId.ofTimePosix
-                    ]
+                AudioPlay audio ->
+                    ( "AudioPlay"
+                    , [ audio.url |> StructuredId.ofString
+                      , audio.startTime |> StructuredId.ofTimePosix
+                      ]
+                    )
 
-            SocketMessage message ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "SocketMessage"
-                    , message.id |> socketIdToStructuredId
-                    , message.data |> StructuredId.ofString
-                    ]
+                SocketMessage message ->
+                    ( "SocketMessage"
+                    , [ message.id |> socketIdToStructuredId
+                      , message.data |> StructuredId.ofString
+                      ]
+                    )
 
-            SocketDisconnect id ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "SocketDisconnect"
-                    , id |> socketIdToStructuredId
-                    ]
+                SocketDisconnect id ->
+                    ( "SocketDisconnect"
+                    , [ id |> socketIdToStructuredId
+                      ]
+                    )
 
-            LocalStorageSet set ->
-                StructuredId.ofList
-                    [ StructuredId.ofString "LocalStorageSet"
-                    , set.key |> StructuredId.ofString
-                    , set.value |> StructuredId.ofMaybe StructuredId.ofString
-                    ]
+                LocalStorageSet set ->
+                    ( "LocalStorageSet"
+                    , [ set.key |> StructuredId.ofString
+                      , set.value |> StructuredId.ofMaybe StructuredId.ofString
+                      ]
+                    )
+
+                NotificationAskForPermission ->
+                    ( "NotificationAskForPermission", [] )
+            )
 
 
 socketIdJsonCodec : JsonCodec SocketId
@@ -1644,7 +1698,7 @@ interfaceSingleListenIdJsonCodec =
 interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
 interfaceWithFutureDiffJsonCodec =
     Json.Codec.choice
-        (\addEditDom addAudioSourceLoad addSocketConnect addListen addRequest interfaceWithFutureDiff ->
+        (\addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addListen addRequest interfaceWithFutureDiff ->
             case interfaceWithFutureDiff of
                 EditDom editDomDiff ->
                     addEditDom editDomDiff
@@ -1654,6 +1708,9 @@ interfaceWithFutureDiffJsonCodec =
 
                 AddSocketConnect connect ->
                     addSocketConnect connect
+
+                AddNotificationShow show ->
+                    addNotificationShow show
 
                 AddListen listen ->
                     addListen listen
@@ -1673,6 +1730,13 @@ interfaceWithFutureDiffJsonCodec =
         |> Json.Codec.variant ( AddSocketConnect, "AddSocketConnect" )
             (Json.Codec.record (\address -> { address = address })
                 |> Json.Codec.field ( .address, "address" ) Json.Codec.string
+                |> Json.Codec.recordFinish
+            )
+        |> Json.Codec.variant ( AddNotificationShow, "AddNotificationShow" )
+            (Json.Codec.record (\id message details -> { id = id, message = message, details = details })
+                |> Json.Codec.field ( .id, "id" ) Json.Codec.string
+                |> Json.Codec.field ( .message, "message" ) Json.Codec.string
+                |> Json.Codec.field ( .details, "details" ) Json.Codec.string
                 |> Json.Codec.recordFinish
             )
         |> Json.Codec.variant ( AddListen, "AddListen" ) interfaceSingleListenIdJsonCodec
@@ -2081,6 +2145,15 @@ interfaceWithoutFutureDiffToJson =
                         ]
                     )
 
+                EditNotification editNotificationDiff ->
+                    ( "EditNotification"
+                    , Json.Encode.object
+                        [ ( "id", editNotificationDiff.id |> Json.Encode.string )
+                        , ( "message", editNotificationDiff.message |> Json.Encode.string )
+                        , ( "details", editNotificationDiff.details |> Json.Encode.string )
+                        ]
+                    )
+
                 RemoveDom ->
                     ( "RemoveDom", Json.Encode.null )
 
@@ -2097,6 +2170,14 @@ interfaceWithoutFutureDiffToJson =
 
                 RemoveSocketConnect connect ->
                     ( "RemoveSocketConnect", Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ] )
+
+                RemoveNotificationShow show ->
+                    ( "RemoveNotificationShow"
+                    , Json.Encode.object
+                        [ ( "message", show.message |> Json.Encode.string )
+                        , ( "details", show.details |> Json.Encode.string )
+                        ]
+                    )
 
                 RemoveListen listenId ->
                     ( "RemoveListen", listenId |> interfaceSingleListenIdJsonCodec.toJson )
@@ -2183,6 +2264,9 @@ interfaceSingleWithoutFutureToJson =
                         , ( "value", set.value |> (Json.Codec.nullable Json.Codec.string).toJson )
                         ]
                     )
+
+                NotificationAskForPermission ->
+                    ( "NotificationAskForPermission", Json.Encode.null )
             )
 
 
@@ -2256,6 +2340,9 @@ interfaceWithFutureDiffToId =
         case idInterfaceWithFuture of
             EditDom _ ->
                 IdDomNodeRender
+
+            AddNotificationShow show ->
+                IdNotificationShow { id = show.id }
 
             AddAudioSourceLoad sourceUrl ->
                 IdAudioSourceLoad sourceUrl
@@ -2364,11 +2451,21 @@ interfaceFutureJsonDecoder interface =
             socketConnectionEventJsonCodec.jsonDecoder
                 |> Json.Decode.map connect.on
 
+        NotificationShow show ->
+            notificationResponseJsonCodec.jsonDecoder
+                |> Json.Decode.map show.on
+
         Request request ->
             request |> requestFutureJsonDecoder
 
         Listen listen ->
             listen |> listenFutureJsonDecoder
+
+
+notificationResponseJsonCodec : JsonCodec NotificationClicked
+notificationResponseJsonCodec =
+    Json.Codec.enum [ NotificationClicked ]
+        (\NotificationClicked -> "Clicked")
 
 
 socketConnectionEventJsonCodec : JsonCodec SocketConnectionEvent
@@ -3342,6 +3439,8 @@ type InterfaceWithoutFutureDiff
     | RemoveDom
     | RemoveSocketConnect { address : String }
     | RemoveAudio { url : String, startTime : Time.Posix }
+    | EditNotification { id : String, message : String, details : String }
+    | RemoveNotificationShow { message : String, details : String }
     | RemoveListen InterfaceSingleListenId
 
 
@@ -3351,6 +3450,7 @@ type InterfaceSingleWithFutureId
     = IdDomNodeRender
     | IdAudioSourceLoad String
     | IdSocketConnect { address : String }
+    | IdNotificationShow { id : String }
     | IdRequest InterfaceSingleRequestId
     | IdListen InterfaceSingleListenId
 
@@ -3361,6 +3461,7 @@ type InterfaceWithFutureDiff
     = EditDom EditDomDiff
     | AddSocketConnect { address : String }
     | AddAudioSourceLoad String
+    | AddNotificationShow { id : String, message : String, details : String }
     | AddRequest InterfaceSingleRequestId
     | AddListen InterfaceSingleListenId
 

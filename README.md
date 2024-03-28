@@ -589,7 +589,7 @@ For now, some more niche interfaces like [`Browser.Dom.setViewportOf`](https://d
 ## future
 
   - 🧩 add more [example projects](https://github.com/lue-bird/elm-state-interface/tree/main/example). Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
-  - 🔋 The web API you miss the most. Maybe [notifications](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API), [MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API), [speech](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) or [sensors](https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs)?
+  - 🔋 The web API you miss the most. Maybe [MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API), [speech](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API), [sensors](https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs) or [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)?
   - 🗃️ only with help: basic `node` APIs
 
 If you have knowledge in any of these fields on the js side, have pointers or already 

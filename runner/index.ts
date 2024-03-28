@@ -6,7 +6,7 @@ export interface ElmPorts {
 }
 
 export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
-    const addInterfaceWithoutSendToElmImplementation: (tag: string) => ((config: any) => any) = tag => {
+    const addInterfaceWithoutFutureImplementation: (tag: string) => ((config: any) => any) = tag => {
         switch (tag) {
             case "DocumentTitleReplaceBy": return (config: string) => { window.document.title = config }
             case "DocumentAuthorSet": return (config: string) => { getMeta("author").content = config }
@@ -54,14 +54,38 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     warn("local storage cannot be written to: " + disallowedByUserOrQuotaExceeded)
                 }
             }
+            case "NotificationAskForPermission": return (_config: null) => {
+                askForNotificationPermissionIfNotAsked()
+            }
             default: return (_config: any) => {
                 notifyOfBug("Unknown message kind InterfaceWithoutFuture.Add." + tag + " from elm. The associated js implementation is missing")
             }
         }
     }
-    const interfaceWithoutSendToElmImplementation: (tag: string) => ((config: any) => void) = tag => {
+    const interfaceWithoutFutureImplementation: (tag: string) => ((config: any) => void) = tag => {
         switch (tag) {
             case "EditAudio": return editAudio
+            case "EditNotification": return (config: { id: string, message: string, details: string }) => {
+                const oldNotification = notifications[config.id]
+                if (oldNotification) {
+                    const newNotification = new Notification(
+                        config.message,
+                        {
+                            body: config.details,
+                            tag: config.id
+                        }
+                    )
+                    newNotification.onclick = oldNotification.onclick
+                    notifications[config.id] = newNotification
+                }
+            }
+            case "RemoveNotificationShow": return (config: { id: string, message: string, details: string }) => {
+                const notification = notifications[config.id]
+                if (notification) {
+                    notification.close()
+                    delete notifications[config.id]
+                }
+            }
             case "RemoveDom": return (_config: null) => { appConfig.domElement.replaceChildren() }
             case "RemoveHttpRequest": return (config: string) => {
                 const maybeAbortController = httpRequestAbortControllers[config]
@@ -83,7 +107,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 interfaceListenRemoveImplementation(config.tag)(config.value)
             }
             case "Add": return (config: { tag: string, value: any }) => {
-                addInterfaceWithoutSendToElmImplementation(config.tag)(config.value)
+                addInterfaceWithoutFutureImplementation(config.tag)(config.value)
             }
             default: return (_config: any) => {
                 notifyOfBug("Unknown message kind InterfaceWithoutFuture." + tag + " from elm. The associated js implementation is missing")
@@ -213,7 +237,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             }
         }
     }
-    const interfaceWithSendToElmImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
+    const interfaceWithFutureImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
         switch (tag) {
             case "EditDom": return (config, sendToElm) => {
                 editDom(config.path, config.replacement, sendToElm)
@@ -231,6 +255,24 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     sendToElm({ tag: "SocketDisconnected", value: { code: event.code, reason: event.reason } })
                     sockets[socketId] = null
                 }
+            }
+            case "AddNotificationShow": return (config: { id: string, message: string, details: string }, sendToElm) => {
+                askForNotificationPermissionIfNotAsked().then(status => {
+                    switch (status) {
+                        case "denied": break
+                        case "granted": {
+                            const newNotification = new Notification(
+                                config.message,
+                                {
+                                    body: config.details,
+                                    tag: config.id
+                                }
+                            )
+                            newNotification.onclick = _event => { sendToElm("Clicked") }
+                            notifications[config.id] = newNotification
+                        }
+                    }
+                })
             }
             case "AddListen": return (config: { tag: string, value: any }, sendToElm) => {
                 interfaceListenAddImplementation(config.tag)(config.value, sendToElm)
@@ -312,11 +354,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         }
         switch (fromElm.tag) {
             case "InterfaceWithFuture": {
-                interfaceWithSendToElmImplementation(fromElm.value.tag)(fromElm.value.value, sendToElm)
+                interfaceWithFutureImplementation(fromElm.value.tag)(fromElm.value.value, sendToElm)
                 break
             }
             case "InterfaceWithoutFuture": {
-                interfaceWithoutSendToElmImplementation(fromElm.value.tag)(fromElm.value.value)
+                interfaceWithoutFutureImplementation(fromElm.value.tag)(fromElm.value.value)
                 break
             }
         }
@@ -403,6 +445,8 @@ let audioPlaying: {
     stereoPanNode: StereoPannerNode,
     processingNodes: AudioNode[]
 }[] = []
+
+const notifications: Record<string, Notification> = {}
 
 
 
@@ -931,6 +975,23 @@ function editAudio(config: { url: string, startTime: number, replacement: { tag:
             }
         }
     })
+}
+
+function askForNotificationPermissionIfNotAsked(): Promise<"granted" | "denied"> {
+    switch (Notification.permission) {
+        case "granted": return Promise.resolve("granted")
+        case "denied": return Promise.resolve("denied")
+        case "default":
+            return Notification.requestPermission()
+                .then(permission => {
+                    switch (permission) {
+                        case "granted": return "granted"
+                        case "denied": return "denied"
+                        case "default": return "denied"
+                    }
+                })
+                .catch(_error => "denied")
+    }
 }
 
 // helpers

@@ -31,3 +31,4 @@
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
   - add `module Web.GeoLocation`
+  - add `module Web.Notification`
