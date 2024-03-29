@@ -350,14 +350,14 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     }
 
     appConfig.ports.toJs.subscribe(function (fromElm: { tag: "InterfaceWithFuture" | "InterfaceWithoutFuture", value: { tag: string, value: any } }) {
-        console.log("elm → js: ", fromElm)
+        // console.log("elm → js: ", fromElm)
         function sendToElm(eventData: void) {
             const toElm = {
                 diff: fromElm.value, // since only InterfaceWithFuture will send something back
                 eventData: eventData
             }
             appConfig.ports.fromJs.send(toElm)
-            console.log("js → elm: ", toElm)
+            // console.log("js → elm: ", toElm)
         }
         switch (fromElm.tag) {
             case "InterfaceWithFuture": {
@@ -582,7 +582,7 @@ function createDomNode(path: number[], node: { tag: "Text" | "Element", value: a
                 node.value.scrollIntoView({ inline: node.value.scrollToShow.x, block: node.value.scrollToShow.y })
             }
             if (node.value.scrollPositionRequest) {
-                sendToElm({ path: path, scrollPosition: { fromLeft: node.value.scrollLeft, fromTop: node.value.scrollTop } })
+                sendToElm({ path: path, scrollPosition: { fromLeft: createdDomElement.scrollLeft, fromTop: createdDomElement.scrollTop } })
             }
             domElementAddEventListens(createdDomElement, node.value.eventListens, path, sendToElm)
             node.value.subs.forEach((sub: any, subIndex: number) => {
