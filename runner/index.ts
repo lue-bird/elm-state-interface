@@ -79,7 +79,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     notifications[config.id] = newNotification
                 }
             }
-            case "RemoveNotificationShow": return (config: { id: string, message: string, details: string }) => {
+            case "RemoveNotificationShow": return (config: { id: string }) => {
                 const notification = notifications[config.id]
                 if (notification) {
                     notification.close()
@@ -239,6 +239,10 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     }
     const interfaceWithFutureImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
         switch (tag) {
+            case "AddDomRender": return (config, sendToElm) => {
+                appConfig.domElement.replaceChildren() // remove all subs
+                appConfig.domElement.appendChild(createDomNode([], config, sendToElm))
+            }
             case "EditDom": return (config, sendToElm) => {
                 editDom(config.path, config.replacement, sendToElm)
             }

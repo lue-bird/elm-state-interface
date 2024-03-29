@@ -1145,7 +1145,7 @@ toRemoveDiff =
                         RemoveSocketConnect { address = connect.address } |> Just
 
                     NotificationShow show ->
-                        RemoveNotificationShow { message = show.message, details = show.details } |> Just
+                        RemoveNotificationShow { id = show.id } |> Just
 
                     Request (LocalStorageRequest _) ->
                         Nothing
@@ -1277,11 +1277,8 @@ toAddDiff =
 
             InterfaceWithFuture interfaceWithFuture ->
                 (case interfaceWithFuture of
-                    DomNodeRender domElementToRender ->
-                        { path = []
-                        , replacement = domElementToRender |> domNodeToId |> ReplacementDomNode
-                        }
-                            |> EditDom
+                    DomNodeRender domNode ->
+                        domNode |> domNodeToId |> AddDomRender
 
                     AudioSourceLoad load ->
                         AddAudioSourceLoad load.url
@@ -1749,11 +1746,30 @@ interfaceSingleListenIdJsonCodec =
             Json.Codec.unit
 
 
+domNodeIdJsonCodec : JsonCodec DomNodeId
+domNodeIdJsonCodec =
+    Json.Codec.choice
+        (\domTextId domElementId domNodeId ->
+            case domNodeId of
+                DomTextId text ->
+                    domTextId text
+
+                DomElementId element ->
+                    domElementId element
+        )
+        |> Json.Codec.variant ( DomTextId, "Text" ) Json.Codec.string
+        |> Json.Codec.variant ( DomElementId, "Element" )
+            (Json.Codec.lazy (\() -> domElementIdJsonCodec))
+
+
 interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
 interfaceWithFutureDiffJsonCodec =
     Json.Codec.choice
-        (\addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addListen addRequest interfaceWithFutureDiff ->
+        (\addDomRender addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addListen addRequest interfaceWithFutureDiff ->
             case interfaceWithFutureDiff of
+                AddDomRender domNodeId ->
+                    addDomRender domNodeId
+
                 EditDom editDomDiff ->
                     addEditDom editDomDiff
 
@@ -1772,6 +1788,8 @@ interfaceWithFutureDiffJsonCodec =
                 AddRequest request ->
                     addRequest request
         )
+        |> Json.Codec.variant ( AddDomRender, "AddDomRender" )
+            domNodeIdJsonCodec
         |> Json.Codec.variant ( EditDom, "EditDom" )
             (Json.Codec.record (\path replacement -> { path = path, replacement = replacement })
                 |> Json.Codec.field ( .path, "path" ) (Json.Codec.list Json.Codec.int)
@@ -1983,22 +2001,6 @@ interfaceSingleRequestIdJsonCodec =
             )
         |> Json.Codec.variant ( \() -> IdGeoLocationRequest, "GeoLocationRequest" ) Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdGamepadsRequest, "GamepadsRequest" ) Json.Codec.unit
-
-
-domNodeIdJsonCodec : JsonCodec DomNodeId
-domNodeIdJsonCodec =
-    Json.Codec.choice
-        (\domTextId domElementId domNodeId ->
-            case domNodeId of
-                DomTextId text ->
-                    domTextId text
-
-                DomElementId element ->
-                    domElementId element
-        )
-        |> Json.Codec.variant ( DomTextId, "Text" ) Json.Codec.string
-        |> Json.Codec.variant ( DomElementId, "Element" )
-            (Json.Codec.lazy (\() -> domElementIdJsonCodec))
 
 
 domElementAttributesNamespacedJsonCodec : JsonCodec (Dict ( String, String ) String)
@@ -2275,8 +2277,7 @@ interfaceWithoutFutureDiffToJson =
                 RemoveNotificationShow show ->
                     ( "RemoveNotificationShow"
                     , Json.Encode.object
-                        [ ( "message", show.message |> Json.Encode.string )
-                        , ( "details", show.details |> Json.Encode.string )
+                        [ ( "id", show.id |> Json.Encode.string )
                         ]
                     )
 
@@ -2439,6 +2440,9 @@ interfaceWithFutureDiffToId : InterfaceWithFutureDiff -> InterfaceSingleWithFutu
 interfaceWithFutureDiffToId =
     \idInterfaceWithFuture ->
         case idInterfaceWithFuture of
+            AddDomRender _ ->
+                IdDomNodeRender
+
             EditDom _ ->
                 IdDomNodeRender
 
@@ -3549,7 +3553,7 @@ type InterfaceWithoutFutureDiff
     | RemoveSocketConnect { address : String }
     | RemoveAudio { url : String, startTime : Time.Posix }
     | EditNotification { id : String, message : String, details : String }
-    | RemoveNotificationShow { message : String, details : String }
+    | RemoveNotificationShow { id : String }
     | RemoveListen InterfaceSingleListenId
 
 
@@ -3567,7 +3571,8 @@ type InterfaceSingleWithFutureId
 {-| Actions that will notify elm some time in the future
 -}
 type InterfaceWithFutureDiff
-    = EditDom EditDomDiff
+    = AddDomRender DomNodeId
+    | EditDom EditDomDiff
     | AddSocketConnect { address : String }
     | AddAudioSourceLoad String
     | AddNotificationShow { id : String, message : String, details : String }
