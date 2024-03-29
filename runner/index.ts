@@ -339,6 +339,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     )
                 })
             }
+            case "GamepadsRequest": return (_config: null) => {
+                return Promise.resolve(window.navigator.getGamepads())
+            }
             case "WindowPreferredLanguagesRequest": return (_config: null) => {
                 return Promise.resolve(window.navigator.languages)
             }
