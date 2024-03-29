@@ -3456,8 +3456,11 @@ programUpdate appConfig =
             InterfaceDiffFailedToDecode jsonError ->
                 \state ->
                     ( state
-                    , ("lue-bird/elm-state-interface bug: interface diff failed to decode: "
-                        ++ (jsonError |> Json.Decode.errorToString)
+                    , ([ "bug: interface diff failed to decode: "
+                       , jsonError |> Json.Decode.errorToString
+                       , ". Please open an issue on github.com/lue-bird/elm-state-interface"
+                       ]
+                        |> String.concat
                       )
                         |> ConsoleError
                         |> Add
@@ -3470,8 +3473,11 @@ programUpdate appConfig =
             InterfaceEventDataFailedToDecode jsonError ->
                 \state ->
                     ( state
-                    , ("bug in lue-bird/elm-state-interface: interface event data failed to decode: "
-                        ++ (jsonError |> Json.Decode.errorToString)
+                    , ([ "bug: interface event data failed to decode: "
+                       , jsonError |> Json.Decode.errorToString
+                       , ". Please open an issue on github.com/lue-bird/elm-state-interface"
+                       ]
+                        |> String.concat
                       )
                         |> ConsoleError
                         |> Add
