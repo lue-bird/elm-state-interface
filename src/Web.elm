@@ -443,7 +443,8 @@ type DomElementVisibilityAlignment
     | DomElementCenter
 
 
-{-| Setting for a listen [`Web.Dom.Modifier`](Web-Dom#Modifier) to keep or overwrite the browsers default action
+{-| Setting for a listen [`Web.Dom.Modifier`](Web-Dom#Modifier)
+to keep or overwrite the browser's default action
 -}
 type DefaultActionHandling
     = DefaultActionPrevent
