@@ -1,4 +1,4 @@
-import * as Web from "../../runner-compiled/index.js"
+import * as Web from "../../../runner-compiled/index.js"
 import Main from "./Main.elm"
 
 const elmApp = Main.init()

@@ -2,7 +2,7 @@
 git clone https://github.com/lue-bird/elm-state-interface.git
 cd elm-state-interface
 tsc
-cd example-development
+cd example-development/showcase # or another example
 npm install
 npx vite
 ```

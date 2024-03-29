@@ -445,7 +445,7 @@ in which case you'll receive the url pushed by you.
 ## what we need to actually run it as an elm program
 
 For a minimal working setup, the [playground](https://github.com/lue-bird/elm-state-interface-hello) has everything you need.
-For a "showcase example" with a minigame etc, see [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example). You'll see that the basic setup hasn't changed.
+For example apps, see [example/](https://github.com/lue-bird/elm-state-interface/tree/main/example). You'll see that the basic setup hasn't changed.
 
 In case you want to create your own setup instead:
 

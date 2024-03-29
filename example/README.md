@@ -4,7 +4,7 @@ Mini showcase. Contains rooms with for example counter, real-time clock, snake g
 
 ```bash
 git clone https://github.com/lue-bird/elm-state-interface.git
-cd example
+cd example/showcase # or a different example
 npm install
 npx vite
 ```
