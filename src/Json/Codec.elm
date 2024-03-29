@@ -41,14 +41,7 @@ unit =
 
 bool : JsonCodec Bool
 bool =
-    enum [ False, True ]
-        (\isTrue ->
-            if isTrue then
-                "True"
-
-            else
-                "false"
-        )
+    { toJson = Json.Encode.bool, jsonDecoder = Json.Decode.bool }
 
 
 string : JsonCodec String
