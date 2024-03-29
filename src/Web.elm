@@ -2503,27 +2503,49 @@ interfaceFutureJsonDecoder : InterfaceSingleWithFuture future -> Json.Decode.Dec
 interfaceFutureJsonDecoder interface =
     case interface of
         DomNodeRender domElementToRender ->
-            Json.Decode.map3 (\path name event -> { path = path, name = name, event = event })
-                (Json.Decode.field "path" (Json.Decode.list Json.Decode.int))
-                (Json.Decode.field "name" Json.Decode.string)
-                (Json.Decode.field "event" Json.Decode.value)
-                |> Json.Decode.andThen
-                    (\specificEvent ->
-                        case domElementToRender |> domElementAtReversePath (specificEvent.path |> List.reverse) of
-                            Nothing ->
-                                Json.Decode.fail "origin element of event not found"
-
-                            Just (DomText _) ->
-                                Json.Decode.fail "origin element of event leads to text, not element"
-
-                            Just (DomElement foundDomElement) ->
-                                case foundDomElement.eventListens |> Dict.get specificEvent.name of
+            let
+                domElementAtPathJsonDecoder =
+                    Json.Decode.field "path" (Json.Decode.list Json.Decode.int)
+                        |> Json.Decode.andThen
+                            (\path ->
+                                case domElementToRender |> domElementAtReversePath (path |> List.reverse) of
                                     Nothing ->
-                                        Json.Decode.fail "received event for element without listen"
+                                        Json.Decode.fail "origin element of event not found"
 
-                                    Just eventListen ->
-                                        eventListen.on specificEvent.event |> Json.Decode.succeed
-                    )
+                                    Just (DomText _) ->
+                                        Json.Decode.fail "origin element of event leads to text, not element"
+
+                                    Just (DomElement foundDomElement) ->
+                                        foundDomElement |> Json.Decode.succeed
+                            )
+            in
+            Json.Decode.oneOf
+                [ Json.Decode.map3 (\domElementAtPath name event -> { domElementAtPath = domElementAtPath, name = name, event = event })
+                    domElementAtPathJsonDecoder
+                    (Json.Decode.field "name" Json.Decode.string)
+                    (Json.Decode.field "event" Json.Decode.value)
+                    |> Json.Decode.andThen
+                        (\specificEvent ->
+                            case specificEvent.domElementAtPath.eventListens |> Dict.get specificEvent.name of
+                                Nothing ->
+                                    Json.Decode.fail "received event for element without listen"
+
+                                Just eventListen ->
+                                    eventListen.on specificEvent.event |> Json.Decode.succeed
+                        )
+                , Json.Decode.map2 (\domElementAtPath scrollPosition -> { domElementAtPath = domElementAtPath, scrollPosition = scrollPosition })
+                    domElementAtPathJsonDecoder
+                    (Json.Decode.field "scrollPosition" domElementScrollPositionJsonCodec.jsonDecoder)
+                    |> Json.Decode.andThen
+                        (\specificEvent ->
+                            case specificEvent.domElementAtPath.scrollPositionRequest of
+                                Nothing ->
+                                    Json.Decode.fail "received scroll position for element without listen"
+
+                                Just request ->
+                                    request specificEvent.scrollPosition |> Json.Decode.succeed
+                        )
+                ]
 
         AudioSourceLoad load ->
             Json.Decode.map load.on
