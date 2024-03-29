@@ -58,7 +58,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 askForNotificationPermissionIfNotAsked()
             }
             default: return (_config: any) => {
-                notifyOfBug("Unknown message kind InterfaceWithoutFuture.Add." + tag + " from elm. The associated js implementation is missing")
+                notifyOfUnknownMessageKind("InterfaceWithoutFuture.Add." + tag)
             }
         }
     }
@@ -110,7 +110,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 addInterfaceWithoutFutureImplementation(config.tag)(config.value)
             }
             default: return (_config: any) => {
-                notifyOfBug("Unknown message kind InterfaceWithoutFuture." + tag + " from elm. The associated js implementation is missing")
+                notifyOfUnknownMessageKind("InterfaceWithoutFuture." + tag)
             }
         }
     }
@@ -190,7 +190,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 )
             }
             default: return (_config: any, _sendToElm) => {
-                notifyOfBug("Unknown message kind InterfaceWithFuture.AddListen." + tag + " from elm. The associated js implementation is missing")
+                notifyOfUnknownMessageKind("InterfaceWithFuture.AddListen." + tag)
             }
         }
     }
@@ -233,7 +233,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 }
             }
             default: return (_config: any) => {
-                notifyOfBug("Unknown message kind InterfaceWithoutFuture.RemoveListen." + tag + " from elm. The associated js implementation is missing")
+                notifyOfUnknownMessageKind("InterfaceWithoutFuture.RemoveListen." + tag)
             }
         }
     }
@@ -285,11 +285,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 interfaceRequestImplementation(config.tag)(config.value)
                     .then(sendToElm)
                     .catch((_error: null) => {
-                        notifyOfBug("Unknown message kind InterfaceWithFuture.AddRequest." + config.tag + " from elm. The associated js implementation is missing")
+                        notifyOfUnknownMessageKind("InterfaceWithFuture.AddRequest." + config.tag)
                     })
             }
             default: return (_config: any, _sendToElm) => {
-                notifyOfBug("Unknown message kind InterfaceWithFuture." + tag + " from elm. The associated js implementation is missing")
+                notifyOfUnknownMessageKind("InterfaceWithFuture." + tag)
             }
         }
     }
@@ -1027,6 +1027,9 @@ function askForNotificationPermissionIfNotAsked(): Promise<"granted" | "denied">
 
 function warn(warning: string) {
     window?.console.warn(warning + " (lue-bird/elm-state-interface)")
+}
+function notifyOfUnknownMessageKind(messageTag: string) {
+    notifyOfBug("Unknown message kind " + messageTag + " from elm. The associated js implementation is missing")
 }
 function notifyOfBug(bugDescription: string) {
     window?.console.error("bug: " + bugDescription + ". Please open an issue on github.com/lue-bird/elm-state-interface")
