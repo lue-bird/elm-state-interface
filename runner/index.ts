@@ -870,29 +870,18 @@ type AudioParameterTimeline = {
 }
 
 function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
-    const request = new XMLHttpRequest()
-    request.open("GET", url, true)
-    request.responseType = "arraybuffer"
-    request.onerror = function () {
-        sendToElm({ err: "NetworkError" })
-    }
-    request.onload = function () {
-        audioContext.decodeAudioData(
-            request.response,
-            function (buffer) {
-                audioBuffers[url] = buffer
-                sendToElm({
-                    ok: {
-                        durationInSeconds: buffer.length / buffer.sampleRate
-                    }
-                })
-            },
-            function (error) {
-                sendToElm({ err: error.message })
-            }
-        )
-    }
-    request.send()
+    fetch(url)
+        .then(data => data.arrayBuffer())
+        .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+        .then(buffer => {
+            audioBuffers[url] = buffer
+            sendToElm({
+                ok: {
+                    durationInSeconds: buffer.length / buffer.sampleRate
+                }
+            })
+        })
+        .catch(error => { sendToElm({ err: error?.message ? error.message : "NetworkError" }) })
 }
 
 function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioParameterTimeline) {
