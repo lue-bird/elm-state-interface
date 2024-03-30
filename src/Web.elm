@@ -1,7 +1,7 @@
 module Web exposing
     ( ProgramConfig, program, Program
     , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
-    , DomNode(..), DomElement, DomElementVisibilityAlignment(..), DefaultActionHandling(..)
+    , DomElementHeader, DomElementVisibilityAlignment(..), DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioProcessing(..), AudioParameterTimeline, EditAudioDiff(..)
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketConnectionEvent(..), SocketId(..)
@@ -11,8 +11,8 @@ module Web exposing
     , WindowVisibility(..)
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
-    , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..)
-    , interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), DomElementId, DomNodeId(..), HttpRequestId, HttpExpectId(..)
+    , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..), DomElementHeaderInfo, DomTextOrElementHeader(..), DomTextOrElementHeaderInfo(..)
+    , interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), HttpRequestId, HttpExpectId(..)
     )
 
 {-| A state-interface program that can run in the browser
@@ -31,7 +31,7 @@ You can also [embed](#embed) a state-interface program as part of an existing ap
 
 Types used by [`Web.Dom`](Web-Dom)
 
-@docs DomNode, DomElement, DomElementVisibilityAlignment, DefaultActionHandling
+@docs DomElementHeader, DomElementVisibilityAlignment, DefaultActionHandling
 
 
 ## Audio
@@ -102,14 +102,13 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 ## internals, safe to ignore for users
 
 @docs ProgramState, ProgramEvent
-@docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture
-@docs interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, DomElementId, DomNodeId, HttpRequestId, HttpExpectId
+@docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture, DomElementHeaderInfo, DomTextOrElementHeader, DomTextOrElementHeaderInfo
+@docs interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, HttpRequestId, HttpExpectId
 
 -}
 
 import Angle exposing (Angle)
 import AppUrl exposing (AppUrl)
-import Array exposing (Array)
 import Bytes exposing (Bytes)
 import Bytes.LocalExtra
 import Dict exposing (Dict)
@@ -231,7 +230,7 @@ type AudioSourceLoadError
 {-| An [`InterfaceSingle`](#InterfaceSingle) that will notify elm some time in the future.
 -}
 type InterfaceSingleWithFuture future
-    = DomNodeRender (DomNode future)
+    = DomNodeRender { path : List Int, node : DomTextOrElementHeader future }
     | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
     | SocketConnect { address : String, on : SocketConnectionEvent -> future }
     | NotificationShow { id : String, message : String, details : String, on : NotificationClicked -> future }
@@ -401,16 +400,17 @@ type HttpExpectId
     | IdHttpExpectWhatever
 
 
-{-| Plain text or a [`DomElement`](#DomElement) for use in an [`Interface`](#Interface).
+{-| Plain text or a [`DomElementHeader`](#DomElementHeader) for use in an [`Interface`](#Interface).
 -}
-type DomNode future
+type DomTextOrElementHeader future
     = DomText String
-    | DomElement (DomElement future)
+    | DomElementHeader (DomElementHeader future)
 
 
-{-| A tagged DOM node that can itself contain child [node](#DomNode)s
+{-| Everything about a [tagged DOM element](Web-Dom#Element)
+except potential sub-[node](Web-Dom#Node)s
 -}
-type alias DomElement future =
+type alias DomElementHeader future =
     RecordWithoutConstructorFunction
         { namespace : Maybe String
         , tag : String
@@ -426,11 +426,10 @@ type alias DomElement future =
                 { on : Json.Decode.Value -> future
                 , defaultActionHandling : DefaultActionHandling
                 }
-        , subs : Array (DomNode future)
         }
 
 
-{-| What part of the [`DomElement`](Web#DomElement) should be visible
+{-| What part of the [`Web.Dom.Element`](Web-Dom#Element) should be visible
 
   - `DomElementStart`: mostly for text to read
   - `DomElementEnd`: mostly for text to write
@@ -486,9 +485,9 @@ type InterfaceSingleListenId
     | IdGamepadsChangeListen
 
 
-{-| Safe to ignore. Identifier for a [`DomElement`](#DomElement)
+{-| Safe to ignore. [`DomElementHeader`](#DomElementHeader) without the actual receiving functions for events
 -}
-type alias DomElementId =
+type alias DomElementHeaderInfo =
     RecordWithoutConstructorFunction
         { namespace : Maybe String
         , tag : String
@@ -499,15 +498,14 @@ type alias DomElementId =
         , scrollToShow : Maybe { x : DomElementVisibilityAlignment, y : DomElementVisibilityAlignment }
         , scrollPositionRequest : Bool
         , eventListens : Dict String DefaultActionHandling
-        , subs : Array DomNodeId
         }
 
 
-{-| Safe to ignore. Identifier for a [`DomNode`](#DomNode)
+{-| Safe to ignore. [`DomTextOrElementHeader`](#DomTextOrElementHeader) without the actual receiving functions for events
 -}
-type DomNodeId
-    = DomTextId String
-    | DomElementId DomElementId
+type DomTextOrElementHeaderInfo
+    = DomTextInfo String
+    | DomElementHeaderInfo DomElementHeaderInfo
 
 
 {-| Identifier for a [`Web.Socket`](Web-Socket) that can be used to [communicate](Web-Socket#communicate)
@@ -586,7 +584,7 @@ and sometimes to nest events (like `Cmd.map/Task.map/Sub.map/...` in The Elm Arc
             ]
             |> Web.Dom.render
 
-    treeUi : ... -> Web.DomNode TreeUiEvent
+    treeUi : ... -> Web.Dom.Node TreeUiEvent
 
 In all these examples, you end up converting the narrow future representation of part of the interface
 to a broader representation for the parent interface
@@ -617,23 +615,13 @@ interfaceSingleFutureMap futureChange =
                     |> InterfaceWithFuture
 
 
-domNodeFutureMap : (future -> mappedFuture) -> (DomNode future -> DomNode mappedFuture)
-domNodeFutureMap futureChange =
-    \domElementToMap ->
-        case domElementToMap of
-            DomText text ->
-                DomText text
-
-            DomElement domElement ->
-                domElement |> domElementFutureMap futureChange |> DomElement
-
-
 interfaceWithFutureMap : (future -> mappedFuture) -> (InterfaceSingleWithFuture future -> InterfaceSingleWithFuture mappedFuture)
 interfaceWithFutureMap futureChange =
     \interface ->
         case interface of
-            DomNodeRender domElementToRender ->
-                domElementToRender |> domNodeFutureMap futureChange |> DomNodeRender
+            DomNodeRender toRender ->
+                { path = toRender.path, node = toRender.node |> domNodeFutureMap futureChange }
+                    |> DomNodeRender
 
             AudioSourceLoad load ->
                 { url = load.url, on = \event -> load.on event |> futureChange }
@@ -656,6 +644,41 @@ interfaceWithFutureMap futureChange =
 
             Listen listen ->
                 listen |> interfaceListenFutureMap futureChange |> Listen
+
+
+domNodeFutureMap : (future -> mappedFuture) -> (DomTextOrElementHeader future -> DomTextOrElementHeader mappedFuture)
+domNodeFutureMap futureChange =
+    \domElementToMap ->
+        case domElementToMap of
+            DomText text ->
+                DomText text
+
+            DomElementHeader domElement ->
+                domElement |> domElementHeaderFutureMap futureChange |> DomElementHeader
+
+
+domElementHeaderFutureMap : (future -> mappedFuture) -> (DomElementHeader future -> DomElementHeader mappedFuture)
+domElementHeaderFutureMap futureChange =
+    \domElementToMap ->
+        { namespace = domElementToMap.namespace
+        , tag = domElementToMap.tag
+        , styles = domElementToMap.styles
+        , attributes = domElementToMap.attributes
+        , attributesNamespaced = domElementToMap.attributesNamespaced
+        , scrollToPosition = domElementToMap.scrollToPosition
+        , scrollToShow = domElementToMap.scrollToShow
+        , scrollPositionRequest =
+            domElementToMap.scrollPositionRequest
+                |> Maybe.map (\request position -> position |> request |> futureChange)
+        , eventListens =
+            domElementToMap.eventListens
+                |> Dict.map
+                    (\_ listen ->
+                        { on = \event -> listen.on event |> futureChange
+                        , defaultActionHandling = listen.defaultActionHandling
+                        }
+                    )
+        }
 
 
 interfaceRequestFutureMap : (future -> mappedFuture) -> (InterfaceSingleRequest future -> InterfaceSingleRequest mappedFuture)
@@ -775,32 +798,6 @@ interfaceListenFutureMap futureChange =
                 (\event -> event |> toFuture |> futureChange) |> GamepadsChangeListen
 
 
-domElementFutureMap : (future -> mappedFuture) -> (DomElement future -> DomElement mappedFuture)
-domElementFutureMap futureChange =
-    \domElementToMap ->
-        { namespace = domElementToMap.namespace
-        , tag = domElementToMap.tag
-        , styles = domElementToMap.styles
-        , attributes = domElementToMap.attributes
-        , attributesNamespaced = domElementToMap.attributesNamespaced
-        , scrollToPosition = domElementToMap.scrollToPosition
-        , scrollToShow = domElementToMap.scrollToShow
-        , scrollPositionRequest =
-            domElementToMap.scrollPositionRequest
-                |> Maybe.map (\request position -> position |> request |> futureChange)
-        , eventListens =
-            domElementToMap.eventListens
-                |> Dict.map
-                    (\_ listen ->
-                        { on = \event -> listen.on event |> futureChange
-                        , defaultActionHandling = listen.defaultActionHandling
-                        }
-                    )
-        , subs =
-            domElementToMap.subs |> Array.map (\node -> node |> domNodeFutureMap futureChange)
-        }
-
-
 {-| Ignore the specific variants, this is just exposed so can
 for example simulate it more easily in tests, add a debugger etc.
 
@@ -818,132 +815,6 @@ type ProgramEvent appState
     | InterfaceEventDataFailedToDecode Json.Decode.Error
     | InterfaceEventIgnored
     | AppEventToNewAppState appState
-
-
-domElementToId : DomElement future_ -> DomElementId
-domElementToId =
-    \domElement ->
-        { namespace = domElement.namespace
-        , tag = domElement.tag
-        , styles = domElement.styles
-        , attributes = domElement.attributes
-        , attributesNamespaced = domElement.attributesNamespaced
-        , scrollToPosition = domElement.scrollToPosition
-        , scrollToShow = domElement.scrollToShow
-        , scrollPositionRequest =
-            case domElement.scrollPositionRequest of
-                Nothing ->
-                    False
-
-                Just _ ->
-                    True
-        , eventListens =
-            domElement.eventListens |> Dict.map (\_ listen -> listen.defaultActionHandling)
-        , subs =
-            domElement.subs |> Array.map domNodeToId
-        }
-
-
-domNodeDiff :
-    List Int
-    -> ( DomNode state, DomNode state )
-    -> List EditDomDiff
-domNodeDiff path =
-    \( aNode, bNode ) ->
-        case ( aNode, bNode ) of
-            ( DomText _, DomElement bElement ) ->
-                [ { path = path, replacement = bElement |> domElementToId |> DomElementId |> ReplacementDomNode } ]
-
-            ( DomElement _, DomText bText ) ->
-                [ { path = path, replacement = bText |> DomTextId |> ReplacementDomNode } ]
-
-            ( DomText aText, DomText bText ) ->
-                if aText == bText then
-                    []
-
-                else
-                    [ { path = path, replacement = bText |> DomTextId |> ReplacementDomNode } ]
-
-            ( DomElement aElement, DomElement bElement ) ->
-                ( aElement, bElement ) |> domElementDiff path
-
-
-domElementDiff :
-    List Int
-    -> (( DomElement future, DomElement future ) -> List EditDomDiff)
-domElementDiff path =
-    \( aElement, bElement ) ->
-        if
-            (aElement.tag == bElement.tag)
-                && ((aElement.subs |> Array.length) == (bElement.subs |> Array.length))
-        then
-            let
-                modifierDiffs : List ReplacementInEditDomDiff
-                modifierDiffs =
-                    [ if aElement.styles == bElement.styles then
-                        Nothing
-
-                      else
-                        ReplacementDomElementStyles bElement.styles |> Just
-                    , if aElement.attributes == bElement.attributes then
-                        Nothing
-
-                      else
-                        ReplacementDomElementAttributes bElement.attributes |> Just
-                    , if aElement.attributesNamespaced == bElement.attributesNamespaced then
-                        Nothing
-
-                      else
-                        ReplacementDomElementAttributesNamespaced bElement.attributesNamespaced |> Just
-                    , if aElement.scrollToPosition == bElement.scrollToPosition then
-                        Nothing
-
-                      else
-                        ReplacementDomElementScrollToPosition bElement.scrollToPosition |> Just
-                    , if aElement.scrollToShow == bElement.scrollToShow then
-                        Nothing
-
-                      else
-                        ReplacementDomElementScrollToShow bElement.scrollToShow |> Just
-                    , case ( aElement.scrollPositionRequest, bElement.scrollPositionRequest ) of
-                        ( Nothing, Nothing ) ->
-                            Nothing
-
-                        ( Just _, Just _ ) ->
-                            Nothing
-
-                        ( Just _, Nothing ) ->
-                            Nothing
-
-                        ( Nothing, Just _ ) ->
-                            ReplacementDomElementScrollPositionRequest |> Just
-                    , let
-                        bElementEventListensId : Dict String DefaultActionHandling
-                        bElementEventListensId =
-                            bElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling)
-                      in
-                      if
-                        (aElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling))
-                            == bElementEventListensId
-                      then
-                        Nothing
-
-                      else
-                        ReplacementDomElementEventListens bElementEventListensId |> Just
-                    ]
-                        |> List.filterMap identity
-            in
-            (modifierDiffs
-                |> List.map (\replacement -> { path = path, replacement = replacement })
-            )
-                ++ (List.map2 (\( subIndex, aSub ) bSub -> domNodeDiff (subIndex :: path) ( aSub, bSub ))
-                        (aElement.subs |> Array.toIndexedList)
-                        (bElement.subs |> Array.toList)
-                        |> List.concat
-                   )
-
-        else
-            [ { path = path, replacement = bElement |> domElementToId |> DomElementId |> ReplacementDomNode } ]
 
 
 {-| Determine which outgoing effects need to be executed based on the difference between old and updated interfaces
@@ -1124,8 +995,8 @@ toRemoveDiff =
                     Request (HttpRequest request) ->
                         RemoveHttpRequest (request |> httpRequestToId) |> Just
 
-                    DomNodeRender _ ->
-                        RemoveDom |> Just
+                    DomNodeRender toRender ->
+                        RemoveDom { path = toRender.path } |> Just
 
                     Request (WindowSizeRequest _) ->
                         Nothing
@@ -1166,9 +1037,14 @@ toMergeDiff =
     \oldAndNewInterfaceSingles ->
         case oldAndNewInterfaceSingles of
             ( InterfaceWithFuture (DomNodeRender domElementPreviouslyRendered), InterfaceWithFuture (DomNodeRender domElementToRender) ) ->
-                ( domElementPreviouslyRendered, domElementToRender )
-                    |> domNodeDiff []
-                    |> List.map (\diff -> diff |> EditDom |> InterfaceWithFutureDiff)
+                ( domElementPreviouslyRendered.node, domElementToRender.node )
+                    |> domTextOrElementHeaderDiff
+                    |> List.map
+                        (\diff ->
+                            { path = domElementPreviouslyRendered.path, replacement = diff }
+                                |> EditDom
+                                |> InterfaceWithFutureDiff
+                        )
 
             ( InterfaceWithoutFuture (AudioPlay previouslyPlayed), InterfaceWithoutFuture (AudioPlay toPlay) ) ->
                 ( previouslyPlayed, toPlay )
@@ -1188,6 +1064,110 @@ toMergeDiff =
 
             _ ->
                 []
+
+
+domElementHeaderToInfo : DomElementHeader future_ -> DomElementHeaderInfo
+domElementHeaderToInfo =
+    \domElement ->
+        { namespace = domElement.namespace
+        , tag = domElement.tag
+        , styles = domElement.styles
+        , attributes = domElement.attributes
+        , attributesNamespaced = domElement.attributesNamespaced
+        , scrollToPosition = domElement.scrollToPosition
+        , scrollToShow = domElement.scrollToShow
+        , scrollPositionRequest =
+            case domElement.scrollPositionRequest of
+                Nothing ->
+                    False
+
+                Just _ ->
+                    True
+        , eventListens =
+            domElement.eventListens |> Dict.map (\_ listen -> listen.defaultActionHandling)
+        }
+
+
+domTextOrElementHeaderDiff : ( DomTextOrElementHeader state, DomTextOrElementHeader state ) -> List ReplacementInEditDomDiff
+domTextOrElementHeaderDiff =
+    \( aNode, bNode ) ->
+        case ( aNode, bNode ) of
+            ( DomText _, DomElementHeader bElement ) ->
+                [ bElement |> domElementHeaderToInfo |> DomElementHeaderInfo |> ReplacementDomNode ]
+
+            ( DomElementHeader _, DomText bText ) ->
+                [ bText |> DomTextInfo |> ReplacementDomNode ]
+
+            ( DomText aText, DomText bText ) ->
+                if aText == bText then
+                    []
+
+                else
+                    [ bText |> DomTextInfo |> ReplacementDomNode ]
+
+            ( DomElementHeader aElement, DomElementHeader bElement ) ->
+                ( aElement, bElement ) |> domElementHeaderDiff
+
+
+domElementHeaderDiff : ( DomElementHeader future, DomElementHeader future ) -> List ReplacementInEditDomDiff
+domElementHeaderDiff =
+    \( aElement, bElement ) ->
+        if aElement.tag == bElement.tag then
+            [ if aElement.styles == bElement.styles then
+                Nothing
+
+              else
+                ReplacementDomElementStyles bElement.styles |> Just
+            , if aElement.attributes == bElement.attributes then
+                Nothing
+
+              else
+                ReplacementDomElementAttributes bElement.attributes |> Just
+            , if aElement.attributesNamespaced == bElement.attributesNamespaced then
+                Nothing
+
+              else
+                ReplacementDomElementAttributesNamespaced bElement.attributesNamespaced |> Just
+            , if aElement.scrollToPosition == bElement.scrollToPosition then
+                Nothing
+
+              else
+                ReplacementDomElementScrollToPosition bElement.scrollToPosition |> Just
+            , if aElement.scrollToShow == bElement.scrollToShow then
+                Nothing
+
+              else
+                ReplacementDomElementScrollToShow bElement.scrollToShow |> Just
+            , case ( aElement.scrollPositionRequest, bElement.scrollPositionRequest ) of
+                ( Nothing, Nothing ) ->
+                    Nothing
+
+                ( Just _, Just _ ) ->
+                    Nothing
+
+                ( Just _, Nothing ) ->
+                    Nothing
+
+                ( Nothing, Just _ ) ->
+                    ReplacementDomElementScrollPositionRequest |> Just
+            , let
+                bElementEventListensId : Dict String DefaultActionHandling
+                bElementEventListensId =
+                    bElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling)
+              in
+              if
+                (aElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling))
+                    == bElementEventListensId
+              then
+                Nothing
+
+              else
+                ReplacementDomElementEventListens bElementEventListensId |> Just
+            ]
+                |> List.filterMap identity
+
+        else
+            [ bElement |> domElementHeaderToInfo |> DomElementHeaderInfo |> ReplacementDomNode ]
 
 
 audioDiff : ( Audio, Audio ) -> List EditAudioDiff
@@ -1215,16 +1195,6 @@ audioDiff =
             new.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
         ]
             |> List.filterMap identity
-
-
-domNodeToId : DomNode future_ -> DomNodeId
-domNodeToId domNode =
-    case domNode of
-        DomText text ->
-            DomTextId text
-
-        DomElement element ->
-            DomElementId (element |> domElementToId)
 
 
 interfaceSingleRequestToId : InterfaceSingleRequest future_ -> InterfaceSingleRequestId
@@ -1278,8 +1248,8 @@ toAddDiff =
 
             InterfaceWithFuture interfaceWithFuture ->
                 (case interfaceWithFuture of
-                    DomNodeRender domNode ->
-                        domNode |> domNodeToId |> AddDomRender
+                    DomNodeRender domNodeAndPath ->
+                        { path = domNodeAndPath.path, replacement = domNodeAndPath.node |> domNodeToId |> ReplacementDomNode } |> EditDom
 
                     AudioSourceLoad load ->
                         AddAudioSourceLoad load.url
@@ -1299,13 +1269,25 @@ toAddDiff =
                     |> InterfaceWithFutureDiff
 
 
+domNodeToId : DomTextOrElementHeader future_ -> DomTextOrElementHeaderInfo
+domNodeToId domNode =
+    case domNode of
+        DomText text ->
+            DomTextInfo text
+
+        DomElementHeader element ->
+            DomElementHeaderInfo (element |> domElementHeaderToInfo)
+
+
 interfaceSingleWithFutureIdToStructuredId : InterfaceSingleWithFutureId -> StructuredId
 interfaceSingleWithFutureIdToStructuredId =
     \idInterfaceWithFuture ->
         StructuredId.ofVariant
             (case idInterfaceWithFuture of
-                IdDomNodeRender ->
-                    ( "DomNodeRender", [] )
+                IdDomNodeRender path ->
+                    ( "DomNodeRender"
+                    , [ path.path |> List.map StructuredId.ofInt |> StructuredId.ofList ]
+                    )
 
                 IdAudioSourceLoad sourceUrl ->
                     ( "AudioSourceLoad"
@@ -1531,8 +1513,8 @@ interfaceSingleWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSi
 interfaceSingleWithFutureToId =
     \idInterfaceWithFuture ->
         case idInterfaceWithFuture of
-            DomNodeRender _ ->
-                IdDomNodeRender
+            DomNodeRender toRender ->
+                IdDomNodeRender { path = toRender.path }
 
             AudioSourceLoad audioSourceLoad ->
                 IdAudioSourceLoad audioSourceLoad.url
@@ -1747,30 +1729,11 @@ interfaceSingleListenIdJsonCodec =
             Json.Codec.unit
 
 
-domNodeIdJsonCodec : JsonCodec DomNodeId
-domNodeIdJsonCodec =
-    Json.Codec.choice
-        (\domTextId domElementId domNodeId ->
-            case domNodeId of
-                DomTextId text ->
-                    domTextId text
-
-                DomElementId element ->
-                    domElementId element
-        )
-        |> Json.Codec.variant ( DomTextId, "Text" ) Json.Codec.string
-        |> Json.Codec.variant ( DomElementId, "Element" )
-            (Json.Codec.lazy (\() -> domElementIdJsonCodec))
-
-
 interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
 interfaceWithFutureDiffJsonCodec =
     Json.Codec.choice
-        (\addDomRender addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addListen addRequest interfaceWithFutureDiff ->
+        (\addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addListen addRequest interfaceWithFutureDiff ->
             case interfaceWithFutureDiff of
-                AddDomRender domNodeId ->
-                    addDomRender domNodeId
-
                 EditDom editDomDiff ->
                     addEditDom editDomDiff
 
@@ -1789,8 +1752,6 @@ interfaceWithFutureDiffJsonCodec =
                 AddRequest request ->
                     addRequest request
         )
-        |> Json.Codec.variant ( AddDomRender, "AddDomRender" )
-            domNodeIdJsonCodec
         |> Json.Codec.variant ( EditDom, "EditDom" )
             (Json.Codec.record (\path replacement -> { path = path, replacement = replacement })
                 |> Json.Codec.field ( .path, "path" ) (Json.Codec.list Json.Codec.int)
@@ -2150,6 +2111,52 @@ replacementInEditDomDiffJsonCodec =
         |> Json.Codec.variant ( ReplacementDomElementEventListens, "EventListens" ) domElementEventListensJsonCodec
 
 
+domNodeIdJsonCodec : JsonCodec DomTextOrElementHeaderInfo
+domNodeIdJsonCodec =
+    Json.Codec.choice
+        (\domTextId domElementId domNodeId ->
+            case domNodeId of
+                DomTextInfo text ->
+                    domTextId text
+
+                DomElementHeaderInfo element ->
+                    domElementId element
+        )
+        |> Json.Codec.variant ( DomTextInfo, "Text" ) Json.Codec.string
+        |> Json.Codec.variant ( DomElementHeaderInfo, "Element" )
+            (Json.Codec.lazy (\() -> domElementHeaderInfoJsonCodec))
+
+
+domElementHeaderInfoJsonCodec : JsonCodec DomElementHeaderInfo
+domElementHeaderInfoJsonCodec =
+    Json.Codec.record
+        (\namespace tag styles attributes attributesNamespaced scrollToPosition scrollToShow scrollPositionRequest eventListens ->
+            { namespace = namespace
+            , tag = tag
+            , styles = styles
+            , attributes = attributes
+            , attributesNamespaced = attributesNamespaced
+            , scrollToPosition = scrollToPosition
+            , scrollToShow = scrollToShow
+            , scrollPositionRequest = scrollPositionRequest
+            , eventListens = eventListens
+            }
+        )
+        |> Json.Codec.field ( .namespace, "namespace" ) (Json.Codec.nullable Json.Codec.string)
+        |> Json.Codec.field ( .tag, "tag" ) Json.Codec.string
+        |> Json.Codec.field ( .styles, "styles" ) domElementStylesJsonCodec
+        |> Json.Codec.field ( .attributes, "attributes" ) domElementAttributesJsonCodec
+        |> Json.Codec.field ( .attributesNamespaced, "attributesNamespaced" ) domElementAttributesNamespacedJsonCodec
+        |> Json.Codec.field ( .scrollToPosition, "scrollToPosition" )
+            (Json.Codec.nullable domElementScrollPositionJsonCodec)
+        |> Json.Codec.field ( .scrollToShow, "scrollToShow" )
+            (Json.Codec.nullable domElementVisibilityAlignmentsJsonDecoder)
+        |> Json.Codec.field ( .scrollPositionRequest, "scrollPositionRequest" ) Json.Codec.bool
+        |> Json.Codec.field ( .eventListens, "eventListens" )
+            domElementEventListensJsonCodec
+        |> Json.Codec.recordFinish
+
+
 tagValueToJson : ( String, Json.Encode.Value ) -> Json.Encode.Value
 tagValueToJson =
     \( tag, value ) ->
@@ -2157,6 +2164,27 @@ tagValueToJson =
             [ ( "tag", tag |> Json.Encode.string )
             , ( "value", value )
             ]
+
+
+tagValueJsonDecoder : String -> (Json.Decode.Decoder value -> Json.Decode.Decoder value)
+tagValueJsonDecoder name valueJsonDecoder =
+    Json.Decode.map2 (\() variantValue -> variantValue)
+        (Json.Decode.field "tag" (onlyStringJsonDecoder name))
+        (Json.Decode.field "value" valueJsonDecoder)
+
+
+onlyStringJsonDecoder : String -> Json.Decode.Decoder ()
+onlyStringJsonDecoder specificAllowedString =
+    Json.Decode.string
+        |> Json.Decode.andThen
+            (\str ->
+                if str == specificAllowedString then
+                    () |> Json.Decode.succeed
+
+                else
+                    ([ "expected only \"", specificAllowedString, "\"" ] |> String.concat)
+                        |> Json.Decode.fail
+            )
 
 
 interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
@@ -2258,8 +2286,10 @@ interfaceWithoutFutureDiffToJson =
                         ]
                     )
 
-                RemoveDom ->
-                    ( "RemoveDom", Json.Encode.null )
+                RemoveDom path ->
+                    ( "RemoveDom"
+                    , Json.Encode.object [ ( "path", path.path |> Json.Encode.list Json.Encode.int ) ]
+                    )
 
                 RemoveHttpRequest httpRequestId ->
                     ( "RemoveHttpRequest", httpRequestId |> httpRequestIdJsonCodec.toJson )
@@ -2441,11 +2471,8 @@ interfaceWithFutureDiffToId : InterfaceWithFutureDiff -> InterfaceSingleWithFutu
 interfaceWithFutureDiffToId =
     \idInterfaceWithFuture ->
         case idInterfaceWithFuture of
-            AddDomRender _ ->
-                IdDomNodeRender
-
-            EditDom _ ->
-                IdDomNodeRender
+            EditDom toEdit ->
+                IdDomNodeRender { path = toEdit.path }
 
             AddNotificationShow show ->
                 IdNotificationShow { id = show.id }
@@ -2502,50 +2529,40 @@ for the transformed event data coming back
 interfaceFutureJsonDecoder : InterfaceSingleWithFuture future -> Json.Decode.Decoder future
 interfaceFutureJsonDecoder interface =
     case interface of
-        DomNodeRender domElementToRender ->
-            let
-                domElementAtPathJsonDecoder =
-                    Json.Decode.field "path" (Json.Decode.list Json.Decode.int)
-                        |> Json.Decode.andThen
-                            (\path ->
-                                case domElementToRender |> domElementAtReversePath (path |> List.reverse) of
-                                    Nothing ->
-                                        Json.Decode.fail "origin element of event not found"
+        DomNodeRender toRender ->
+            case toRender.node of
+                DomText _ ->
+                    Json.Decode.fail "received event from a text node"
 
-                                    Just (DomText _) ->
-                                        Json.Decode.fail "origin element of event leads to text, not element"
-
-                                    Just (DomElement foundDomElement) ->
-                                        foundDomElement |> Json.Decode.succeed
+                DomElementHeader domElement ->
+                    Json.Decode.oneOf
+                        ([ tagValueJsonDecoder "EventListen"
+                            (Json.Decode.map2 (\name event -> { name = name, event = event })
+                                (Json.Decode.field "name" Json.Decode.string)
+                                (Json.Decode.field "event" Json.Decode.value)
                             )
-            in
-            Json.Decode.oneOf
-                [ Json.Decode.map3 (\domElementAtPath name event -> { domElementAtPath = domElementAtPath, name = name, event = event })
-                    domElementAtPathJsonDecoder
-                    (Json.Decode.field "name" Json.Decode.string)
-                    (Json.Decode.field "event" Json.Decode.value)
-                    |> Json.Decode.andThen
-                        (\specificEvent ->
-                            case specificEvent.domElementAtPath.eventListens |> Dict.get specificEvent.name of
-                                Nothing ->
-                                    Json.Decode.fail "received event for element without listen"
+                            |> Json.Decode.andThen
+                                (\specificEvent ->
+                                    case domElement.eventListens |> Dict.get specificEvent.name of
+                                        Nothing ->
+                                            Json.Decode.fail "received event of a kind that isn't listened for"
 
-                                Just eventListen ->
-                                    eventListen.on specificEvent.event |> Json.Decode.succeed
-                        )
-                , Json.Decode.map2 (\domElementAtPath scrollPosition -> { domElementAtPath = domElementAtPath, scrollPosition = scrollPosition })
-                    domElementAtPathJsonDecoder
-                    (Json.Decode.field "scrollPosition" domElementScrollPositionJsonCodec.jsonDecoder)
-                    |> Json.Decode.andThen
-                        (\specificEvent ->
-                            case specificEvent.domElementAtPath.scrollPositionRequest of
-                                Nothing ->
-                                    Json.Decode.fail "received scroll position for element without listen"
+                                        Just eventListen ->
+                                            eventListen.on specificEvent.event |> Json.Decode.succeed
+                                )
+                            |> Just
+                         , case domElement.scrollPositionRequest of
+                            Nothing ->
+                                Nothing
 
-                                Just request ->
-                                    request specificEvent.scrollPosition |> Json.Decode.succeed
+                            Just request ->
+                                tagValueJsonDecoder "ScrollPositionRequest"
+                                    domElementScrollPositionJsonCodec.jsonDecoder
+                                    |> Json.Decode.map request
+                                    |> Just
+                         ]
+                            |> List.filterMap identity
                         )
-                ]
 
         AudioSourceLoad load ->
             Json.Decode.map load.on
@@ -3309,26 +3326,6 @@ windowVisibilityCodec =
         )
 
 
-domElementAtReversePath : List Int -> (DomNode future -> Maybe (DomNode future))
-domElementAtReversePath path domNode =
-    case path of
-        [] ->
-            Just domNode
-
-        subIndex :: parentsOfSub ->
-            case domNode of
-                DomText _ ->
-                    Nothing
-
-                DomElement domElement ->
-                    case Array.get subIndex domElement.subs of
-                        Nothing ->
-                            Nothing
-
-                        Just subNodeAtIndex ->
-                            domElementAtReversePath parentsOfSub subNodeAtIndex
-
-
 {-| Controller information on button presses, thumbstick positions etc.
 
   - `primaryButton`: The most common action like "enter"/"confirm" or jump
@@ -3354,7 +3351,7 @@ domElementAtReversePath path domNode =
 
   - `upButton`, `downBottom`, `leftButton`, `rightButton`: exactly one step in a direction, usually in a (quick) menu/inventory
 
-  - \`homeButton: Usually turns the gamepad on/off, or changes the state of the game
+  - `homeButton`: Usually turns the gamepad on/off, or changes the state of the game
 
   - `touchpadButton`: Not present on most gamepads. While the touchpad is often used for controlling the mouse, it can also be used as a simple button
 
@@ -3431,38 +3428,6 @@ type alias GamepadButtonMap =
         , homeButton : Maybe Int
         , touchpad : Maybe Int
         }
-
-
-domElementIdJsonCodec : JsonCodec DomElementId
-domElementIdJsonCodec =
-    Json.Codec.record
-        (\namespace tag styles attributes attributesNamespaced scrollToPosition scrollToShow scrollPositionRequest eventListens subs ->
-            { namespace = namespace
-            , tag = tag
-            , styles = styles
-            , attributes = attributes
-            , attributesNamespaced = attributesNamespaced
-            , scrollToPosition = scrollToPosition
-            , scrollToShow = scrollToShow
-            , scrollPositionRequest = scrollPositionRequest
-            , eventListens = eventListens
-            , subs = subs
-            }
-        )
-        |> Json.Codec.field ( .namespace, "namespace" ) (Json.Codec.nullable Json.Codec.string)
-        |> Json.Codec.field ( .tag, "tag" ) Json.Codec.string
-        |> Json.Codec.field ( .styles, "styles" ) domElementStylesJsonCodec
-        |> Json.Codec.field ( .attributes, "attributes" ) domElementAttributesJsonCodec
-        |> Json.Codec.field ( .attributesNamespaced, "attributesNamespaced" ) domElementAttributesNamespacedJsonCodec
-        |> Json.Codec.field ( .scrollToPosition, "scrollToPosition" )
-            (Json.Codec.nullable domElementScrollPositionJsonCodec)
-        |> Json.Codec.field ( .scrollToShow, "scrollToShow" )
-            (Json.Codec.nullable domElementVisibilityAlignmentsJsonDecoder)
-        |> Json.Codec.field ( .scrollPositionRequest, "scrollPositionRequest" ) Json.Codec.bool
-        |> Json.Codec.field ( .eventListens, "eventListens" )
-            domElementEventListensJsonCodec
-        |> Json.Codec.field ( .subs, "subs" ) (Json.Codec.array domNodeIdJsonCodec)
-        |> Json.Codec.recordFinish
 
 
 {-| The "update" part for an embedded program
@@ -3578,7 +3543,7 @@ type InterfaceWithoutFutureDiff
     = Add InterfaceSingleWithoutFuture
     | EditAudio { url : String, startTime : Time.Posix, replacement : EditAudioDiff }
     | RemoveHttpRequest HttpRequestId
-    | RemoveDom
+    | RemoveDom { path : List Int }
     | RemoveSocketConnect { address : String }
     | RemoveAudio { url : String, startTime : Time.Posix }
     | EditNotification { id : String, message : String, details : String }
@@ -3589,7 +3554,7 @@ type InterfaceWithoutFutureDiff
 {-| Actions that will notify elm some time in the future
 -}
 type InterfaceSingleWithFutureId
-    = IdDomNodeRender
+    = IdDomNodeRender { path : List Int }
     | IdAudioSourceLoad String
     | IdSocketConnect { address : String }
     | IdNotificationShow { id : String }
@@ -3600,8 +3565,7 @@ type InterfaceSingleWithFutureId
 {-| Actions that will notify elm some time in the future
 -}
 type InterfaceWithFutureDiff
-    = AddDomRender DomNodeId
-    | EditDom EditDomDiff
+    = EditDom EditDomDiff
     | AddSocketConnect { address : String }
     | AddAudioSourceLoad String
     | AddNotificationShow { id : String, message : String, details : String }
@@ -3686,7 +3650,7 @@ type alias EditDomDiff =
 {-| What parts of a node are replaced. Either all modifiers of a certain kind or the whole node
 -}
 type ReplacementInEditDomDiff
-    = ReplacementDomNode DomNodeId
+    = ReplacementDomNode DomTextOrElementHeaderInfo
     | ReplacementDomElementStyles (Dict String String)
     | ReplacementDomElementAttributes (Dict String String)
     | ReplacementDomElementAttributesNamespaced (Dict ( String, String ) String)

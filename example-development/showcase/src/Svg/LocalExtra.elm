@@ -10,7 +10,7 @@ import Web.Svg
 line :
     { start : { x : Float, y : Float }, end : { x : Float, y : Float } }
     -> List (Web.Dom.Modifier future)
-    -> Web.DomNode future
+    -> Web.Dom.Node future
 line lineGeometry additionalModifiers =
     Web.Svg.element "line"
         ([ Web.Dom.attribute "x1" (lineGeometry.start.x |> String.fromFloat)
@@ -23,7 +23,7 @@ line lineGeometry additionalModifiers =
         []
 
 
-circle : { position : { x : Float, y : Float }, radius : Float } -> List (Web.Dom.Modifier future) -> Web.DomNode future
+circle : { position : { x : Float, y : Float }, radius : Float } -> List (Web.Dom.Modifier future) -> Web.Dom.Node future
 circle geometry additionalModifiers =
     Web.Svg.element "circle"
         ([ Web.Dom.attribute "cx" ((geometry.position.x |> String.fromFloat) ++ "px")
@@ -35,7 +35,7 @@ circle geometry additionalModifiers =
         []
 
 
-ellipse : { position : { x : Float, y : Float }, radiusX : Float, radiusY : Float } -> List (Web.Dom.Modifier future) -> Web.DomNode future
+ellipse : { position : { x : Float, y : Float }, radiusX : Float, radiusY : Float } -> List (Web.Dom.Modifier future) -> Web.Dom.Node future
 ellipse geometry additionalModifiers =
     Web.Svg.element "ellipse"
         ([ Web.Dom.attribute "cx" ((geometry.position.x |> String.fromFloat) ++ "px")
@@ -71,7 +71,7 @@ strokeUniform color =
     Web.Dom.attribute "stroke" (color |> Color.toCssString)
 
 
-polygon : List { x : Float, y : Float } -> List (Web.Dom.Modifier future) -> Web.DomNode future
+polygon : List { x : Float, y : Float } -> List (Web.Dom.Modifier future) -> Web.Dom.Node future
 polygon points_ additionalModifiers =
     Web.Svg.element "polyline"
         ([ points points_ ]
@@ -85,7 +85,7 @@ strokeWidth pixels =
     Web.Dom.attribute "stroke-width" ((pixels |> String.fromFloat) ++ "px")
 
 
-polyline : List { x : Float, y : Float } -> List (Web.Dom.Modifier future) -> Web.DomNode future
+polyline : List { x : Float, y : Float } -> List (Web.Dom.Modifier future) -> Web.Dom.Node future
 polyline points_ additionalModifiers =
     Web.Svg.element "polyline"
         ([ points points_ ]

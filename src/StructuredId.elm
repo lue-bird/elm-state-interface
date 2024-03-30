@@ -93,11 +93,11 @@ toComparableRope =
                 String.cons ' ' string |> Rope.singleton
 
             List elements ->
-                elements
-                    |> List.foldl
+                Rope.append ")"
+                    (List.foldl
                         (\el soFar ->
-                            (el |> toComparableRope)
-                                |> Rope.prependTo soFar
+                            Rope.prependTo soFar (toComparableRope el)
                         )
                         (Rope.singleton "(")
-                    |> Rope.append ")"
+                        elements
+                    )

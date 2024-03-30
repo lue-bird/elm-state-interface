@@ -86,7 +86,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     delete notifications[config.id]
                 }
             }
-            case "RemoveDom": return (_config: null) => { appConfig.domElement.replaceChildren() }
+            case "RemoveDom": return (config: { path: number[] }) => {
+                removeDom(config.path)
+            }
             case "RemoveHttpRequest": return (config: string) => {
                 const maybeAbortController = httpRequestAbortControllers[config]
                 if (maybeAbortController) {
@@ -239,11 +241,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     }
     const interfaceWithFutureImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
         switch (tag) {
-            case "AddDomRender": return (config, sendToElm) => {
-                appConfig.domElement.replaceChildren() // remove all subs
-                appConfig.domElement.appendChild(createDomNode([], config, sendToElm))
-            }
-            case "EditDom": return (config, sendToElm) => {
+            case "EditDom": return (config: { path: number[], replacement: any }, sendToElm) => {
                 editDom(config.path, config.replacement, sendToElm)
             }
             case "AddAudioSourceLoad": return audioSourceLoad
@@ -371,56 +369,76 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         }
     })
 
+    function removeDom(path: number[]): void {
+        const toRemove = domInElementAt(appConfig.domElement, 0, path)
+        if (toRemove) {
+            while (toRemove.nextSibling) {
+                toRemove.nextSibling.remove()
+            }
+            toRemove.remove()
+        }
+    }
+    function domInElementAt(parent: Element, indexInParent: number, subPath: number[]): ChildNode | null {
+        const currentDom = parent.childNodes.item(indexInParent)
+        return (subPath.length === 0) ?
+            currentDom
+            : (currentDom && (currentDom instanceof Element)) ?
+                domInElementAt(currentDom, subPath.at(0) ?? 0, subPath.toSpliced(0, 1))
+                : null
+    }
+    function domElementOrDummyInElementAt(parent: Element, indexInParent: number, subPath: number[]): ChildNode {
+        if (subPath.length === 0) {
+            return domElementSubAtIndexOrDummy(parent, indexInParent)
+        } else {
+            return domElementOrDummyInElementAt(
+                domElementSubAtIndexOrDummy(parent, indexInParent),
+                subPath.at(0) ?? 0,
+                subPath.toSpliced(0, 1)
+            )
+        }
+    }
+    function domElementSubAtIndexOrDummy(parent: Element, indexInParent: number): Element {
+        const currentDom = parent.childNodes.item(indexInParent)
+        if ((parent.childNodes.length >= indexInParent + 1) && currentDom) {
+            if (currentDom instanceof Element) {
+                return currentDom
+            } else {
+                const newDummy = document.createElement("div")
+                parent.replaceChild(newDummy, currentDom)
+                return newDummy
+            }
+        } else {
+            while (parent.childNodes.length <= indexInParent - 1) {
+                parent.appendChild(document.createElement("div"))
+            }
+            const newDummy = document.createElement("div")
+            parent.appendChild(newDummy)
+            return newDummy
+        }
+    }
+
     function editDom(
         path: number[],
         replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens", value: any },
         sendToElm: (v: any) => void
     ) {
-        if (path.length === 0) {
-            const parentDomNode = appConfig.domElement
-            switch (replacement.tag) {
-                case "Node": {
-                    parentDomNode.replaceChildren() // remove all subs
-                    parentDomNode.appendChild(createDomNode([], replacement.value, sendToElm))
-                    break
-                }
-                case "Styles": case "Attributes": case "AttributesNamespaced": case "ScrollToPosition": case "ScrollToShow": case "ScrollPositionRequest": case "EventListens": {
+        switch (replacement.tag) {
+            case "Node": {
+                const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, path)
+                const newDomNode = createDomNode(replacement.value, oldDomNodeToEdit.childNodes, sendToElm)
+                oldDomNodeToEdit.parentElement?.replaceChild(newDomNode, oldDomNodeToEdit)
+                break
+            }
+            case "Styles": case "Attributes": case "AttributesNamespaced": case "ScrollToPosition": case "ScrollToShow": case "ScrollPositionRequest": case "EventListens": {
+                const oldDomNodeToEdit = domInElementAt(appConfig.domElement, 0, path)
+                if (oldDomNodeToEdit && (oldDomNodeToEdit instanceof Element)) {
                     editDomModifiers(
-                        parentDomNode.firstChild as (Element & ElementCSSInlineStyle),
+                        oldDomNodeToEdit as (Element & ElementCSSInlineStyle),
                         { tag: replacement.tag, value: replacement.value },
-                        path,
                         sendToElm
                     )
-                    break
                 }
-            }
-        } else {
-            let parentDomNode = appConfig.domElement.firstChild
-            if (parentDomNode) {
-                path.slice(1, path.length).reverse().forEach(subIndex => {
-                    const subNode = parentDomNode?.childNodes[subIndex]
-                    if (subNode) {
-                        parentDomNode = subNode
-                    }
-                })
-                const oldDomNode: ChildNode | undefined = parentDomNode.childNodes[path[0] ?? 0]
-                if (oldDomNode) {
-                    switch (replacement.tag) {
-                        case "Node": {
-                            parentDomNode.replaceChild(createDomNode(path, replacement.value, sendToElm), oldDomNode)
-                            break
-                        }
-                        case "Styles": case "Attributes": case "AttributesNamespaced": case "EventListens": {
-                            editDomModifiers(
-                                oldDomNode as (Element & ElementCSSInlineStyle),
-                                { tag: replacement.tag, value: replacement.value },
-                                path,
-                                sendToElm
-                            )
-                            break
-                        }
-                    }
-                }
+                break
             }
         }
     }
@@ -465,7 +483,6 @@ function editDomModifiers(
         tag: "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens",
         value: any
     },
-    path: number[],
     sendToElm: (v: any) => void
 ) {
     switch (replacement.tag) {
@@ -505,7 +522,7 @@ function editDomModifiers(
             break
         }
         case "ScrollPositionRequest": {
-            sendToElm({ fromLeft: domElementToEdit.scrollLeft, fromTop: domElementToEdit.scrollTop })
+            domElementAddScrollPositionRequest(domElementToEdit, sendToElm)
             break
         }
         case "EventListens": {
@@ -517,7 +534,7 @@ function editDomModifiers(
                     }
                     return true
                 })
-            domElementAddEventListens(domElementToEdit, replacement.value, path, sendToElm)
+            domElementAddEventListens(domElementToEdit, replacement.value, sendToElm)
             break
         }
     }
@@ -560,13 +577,13 @@ function getMeta(name: string): HTMLMetaElement {
     }
 }
 
-function createDomNode(path: number[], node: { tag: "Text" | "Element", value: any }, sendToElm: (v: any) => void): Element | Text {
+function createDomNode(node: { tag: "Text" | "Element", value: any }, subs: NodeListOf<ChildNode>, sendToElm: (v: any) => void): Element | Text {
     switch (node.tag) {
         case "Text": {
             return document.createTextNode(node.value)
         }
         case "Element": {
-            const createdDomElement: (Element & ElementCSSInlineStyle) =
+            const createdDomElement: HTMLElement =
                 node.value.namespace ?
                     document.createElementNS(node.value.namespace, noScript(node.value.tag))
                     :
@@ -582,21 +599,28 @@ function createDomNode(path: number[], node: { tag: "Text" | "Element", value: a
                 node.value.scrollIntoView({ inline: node.value.scrollToShow.x, block: node.value.scrollToShow.y })
             }
             if (node.value.scrollPositionRequest) {
-                sendToElm({ path: path, scrollPosition: { fromLeft: createdDomElement.scrollLeft, fromTop: createdDomElement.scrollTop } })
+                domElementAddScrollPositionRequest(createdDomElement, sendToElm)
             }
-            domElementAddEventListens(createdDomElement, node.value.eventListens, path, sendToElm)
-            node.value.subs.forEach((sub: any, subIndex: number) => {
-                createdDomElement.appendChild(
-                    createDomNode([subIndex].concat(path), sub, sendToElm)
-                )
-            })
+            domElementAddEventListens(createdDomElement, node.value.eventListens, sendToElm)
+            createdDomElement.append(...subs)
             return createdDomElement
         }
     }
 }
+function domElementAddScrollPositionRequest(domElement: Element, sendToElm: (v: any) => void) {
+    // guarantee it has painted drawn at least once
+    window.requestAnimationFrame(_timestamp => {
+        window.requestAnimationFrame(_timestamp => {
+            sendToElm({
+                tag: "ScrollPositionRequest",
+                value: { fromLeft: domElement.scrollLeft, fromTop: domElement.scrollTop }
+            })
+        })
+    })
+}
 function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles: { key: string, value: string }[]) {
     styles.forEach(styleSingle => {
-        domElement.style.setProperty(styleSingle.key, styleSingle.value)
+        domElement?.style.setProperty(styleSingle.key, styleSingle.value)
     })
 }
 function domElementAddAttributes(domElement: Element, attributes: { key: string, value: string }[]) {
@@ -623,14 +647,14 @@ function domElementAddAttributesNamespaced(domElement: Element, attributesNamesp
 function domElementAddEventListens(
     domElement: Element,
     eventListens: { name: string, defaultActionHandling: "DefaultActionPrevent" | "DefaultActionExecute" }[],
-    path: number[], sendToElm: (v: any) => void
+    sendToElm: (v: any) => void
 ) {
     eventListens.forEach(eventListen => {
         const abortController: AbortController = new AbortController()
         domElement.addEventListener(
             eventListen.name,
             (triggeredEvent) => {
-                sendToElm({ path: path, name: eventListen.name, event: triggeredEvent })
+                sendToElm({ tag: "EventListen", value: { name: eventListen.name, event: triggeredEvent } })
                 switch (eventListen.defaultActionHandling) {
                     case "DefaultActionPrevent": {
                         triggeredEvent.preventDefault()

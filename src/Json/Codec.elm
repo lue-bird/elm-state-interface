@@ -3,7 +3,7 @@ module Json.Codec exposing
     , RecordJsonCodecBeingBuilt, record, field, recordFinish
     , enum, ChoiceJsonCodecBeingBuilt, choice, variant
     , unit, bool, int, float, string
-    , nullable, list, array, dict
+    , nullable, list, dict
     )
 
 {-| Simple decoder-encoder pair for json
@@ -16,11 +16,10 @@ similar to [miniBill/elm-codec](https://dark.elm.dmy.fr/packages/miniBill/elm-co
 @docs enum, ChoiceJsonCodecBeingBuilt, choice, variant
 
 @docs unit, bool, int, float, string
-@docs nullable, list, array, dict
+@docs nullable, list, dict
 
 -}
 
-import Array exposing (Array)
 import Dict exposing (Dict)
 import Json.Decode
 import Json.Encode
@@ -78,11 +77,6 @@ list elementJsonCodec =
     { toJson = \narrowList -> narrowList |> Json.Encode.list elementJsonCodec.toJson
     , jsonDecoder = Json.Decode.list elementJsonCodec.jsonDecoder
     }
-
-
-array : JsonCodec element -> JsonCodec (Array element)
-array elementJsonCodec =
-    map Array.fromList Array.toList (list elementJsonCodec)
 
 
 dict : JsonCodec { key : comparableKey, value : value } -> JsonCodec (Dict comparableKey value)

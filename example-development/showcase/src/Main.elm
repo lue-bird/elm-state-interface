@@ -639,7 +639,7 @@ pickApplesInterface state =
                     (gamepads |> Dict.foldr (\_ gamepad _ -> gamepad |> Just) Nothing)
             )
     , let
-        rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.DomNode state_
+        rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.Dom.Node state_
         rectangleAtCellLocation fill cellLocation =
             Web.Svg.element "rect"
                 [ Svg.LocalExtra.fillUniform fill
@@ -650,7 +650,7 @@ pickApplesInterface state =
                 ]
                 []
 
-        worldUi : Web.DomNode state_
+        worldUi : Web.Dom.Node state_
         worldUi =
             Web.Svg.element "rect"
                 [ Svg.LocalExtra.fillUniform Color.black
@@ -692,7 +692,7 @@ pickApplesInterface state =
                         in
                         segmented.currentSegment :: segmented.finishedSegments
 
-        headTailUi : Web.DomNode future_
+        headTailUi : Web.Dom.Node future_
         headTailUi =
             let
                 segments : List (List { x : Int, y : Int })
@@ -700,7 +700,7 @@ pickApplesInterface state =
                     (state.headLocation :: state.tailSegments)
                         |> splitIntoSegmentsThatDoNotWrapAround
 
-                legsUi : Web.DomNode future_
+                legsUi : Web.Dom.Node future_
                 legsUi =
                     segments
                         |> List.concat
@@ -740,7 +740,7 @@ pickApplesInterface state =
                             )
                         |> Web.Svg.element "g" []
 
-                warpAnimationUi : Web.DomNode future_
+                warpAnimationUi : Web.Dom.Node future_
                 warpAnimationUi =
                     case segments |> List.reverse of
                         (lastPoint :: beforeLastPoint) :: _ ->
@@ -830,7 +830,7 @@ pickApplesInterface state =
                       }
                     ]
 
-                headUi : Web.DomNode future_
+                headUi : Web.Dom.Node future_
                 headUi =
                     [ Svg.LocalExtra.polygon (facePoints state.headLocation 0.8)
                         [ Svg.LocalExtra.fillUniform (Color.rgba 0 0.5 1 0.5)
@@ -867,7 +867,7 @@ pickApplesInterface state =
             ]
                 |> Web.Svg.element "g" []
 
-        appleUi : Web.DomNode future_
+        appleUi : Web.Dom.Node future_
         appleUi =
             [ Svg.LocalExtra.circle
                 { radius = cellSideLength * 0.45
@@ -954,7 +954,7 @@ pickApplesInterface state =
             ]
                 |> Web.Svg.element "g" []
 
-        pickedAppleCountUi : Web.DomNode future_
+        pickedAppleCountUi : Web.Dom.Node future_
         pickedAppleCountUi =
             Web.Svg.element "text"
                 [ Svg.LocalExtra.fillUniform (Color.rgba 0.3 1 0.5 0.13)
@@ -969,7 +969,7 @@ pickApplesInterface state =
                 ]
                 [ state.pickedAppleCount |> String.fromInt |> Web.Dom.text ]
 
-        controlsUi : Web.DomNode state_
+        controlsUi : Web.Dom.Node state_
         controlsUi =
             Web.Svg.element "text"
                 [ Svg.LocalExtra.fillUniform (Color.rgb 0.3 0.7 0.5)
@@ -1244,7 +1244,7 @@ mapWithExitInterface =
 -- Ui
 
 
-uiFrame : List (Web.Dom.Modifier state) -> List (Web.DomNode state) -> Web.DomNode state
+uiFrame : List (Web.Dom.Modifier state) -> List (Web.Dom.Node state) -> Web.Dom.Node state
 uiFrame modifiers subs =
     Web.Dom.element "div"
         ([ Web.Dom.style "font-size" "2em"
@@ -1263,7 +1263,7 @@ uiFrame modifiers subs =
         subs
 
 
-narrativeUiFrame : List (Web.Dom.Modifier state_) -> List (Web.DomNode state_) -> Web.DomNode state_
+narrativeUiFrame : List (Web.Dom.Modifier state_) -> List (Web.Dom.Node state_) -> Web.Dom.Node state_
 narrativeUiFrame modifiers subs =
     uiFrame
         modifiers
@@ -1275,7 +1275,7 @@ narrativeUiFrame modifiers subs =
         ]
 
 
-buttonUi : List (Web.Dom.Modifier ()) -> List (Web.DomNode ()) -> Web.DomNode ()
+buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
 buttonUi modifiers subs =
     Web.Dom.element "button"
         ([ Web.Dom.listenTo "click"
@@ -1296,7 +1296,7 @@ buttonUi modifiers subs =
         subs
 
 
-textInputUi : Maybe String -> Web.DomNode (Result Json.Decode.Error String)
+textInputUi : Maybe String -> Web.Dom.Node (Result Json.Decode.Error String)
 textInputUi currentInputValue =
     Web.Dom.element "input"
         [ Web.Dom.attribute "type" "text"
@@ -1325,7 +1325,7 @@ textInputUi currentInputValue =
         []
 
 
-clockUi : { posix : Time.Posix, timezone : Time.Zone } -> Web.DomNode state_
+clockUi : { posix : Time.Posix, timezone : Time.Zone } -> Web.Dom.Node state_
 clockUi state =
     let
         hour : Int
@@ -1360,7 +1360,7 @@ clockUi state =
         ]
 
 
-clockHandUi : { width : Int, length : Float, turns : Float } -> Web.DomNode state_
+clockHandUi : { width : Int, length : Float, turns : Float } -> Web.Dom.Node state_
 clockHandUi config =
     let
         clockTurns : Float
