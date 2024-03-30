@@ -89,8 +89,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "RemoveDom": return (config: { path: number[] }) => {
                 removeDom(config.path)
             }
-            case "RemoveHttpRequest": return (config: string) => {
-                const maybeAbortController = httpRequestAbortControllers[config]
+            case "RemoveHttpRequest": return (config: { url: string }) => {
+                const maybeAbortController = httpRequestAbortControllers[config.url]
                 if (maybeAbortController) {
                     maybeAbortController.abort()
                 }
@@ -276,6 +276,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     }
                 })
             }
+            case "AddHttpRequest": return (config: HttpRequest) => {
+                const abortController = new AbortController()
+                httpRequestAbortControllers[config.url] = abortController
+                return httpFetch(config, abortController)
+            }
             case "AddListen": return (config: { tag: string, value: any }, sendToElm) => {
                 interfaceListenAddImplementation(config.tag)(config.value, sendToElm)
             }
@@ -308,11 +313,6 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             }
             case "RandomUnsignedInt32sRequest": return (config: number) => {
                 return Promise.resolve(crypto.getRandomValues(new Uint32Array(config)))
-            }
-            case "HttpRequest": return (config: HttpRequest) => {
-                const abortController = new AbortController()
-                httpRequestAbortControllers[config.url] = abortController
-                return httpFetch(config, abortController)
             }
             case "WindowSizeRequest": return (_config: null) => {
                 return Promise.resolve({ width: window.innerWidth, height: window.innerHeight })

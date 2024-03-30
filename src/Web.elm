@@ -12,7 +12,7 @@ module Web exposing
     , programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..)
     , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..), DomElementHeaderInfo, DomTextOrElementHeader(..), DomTextOrElementHeaderInfo(..)
-    , interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), HttpRequestId, HttpExpectId(..)
+    , interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), HttpExpectInfo(..), HttpRequestInfo
     )
 
 {-| A state-interface program that can run in the browser
@@ -103,7 +103,7 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 
 @docs ProgramState, ProgramEvent
 @docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture, DomElementHeaderInfo, DomTextOrElementHeader, DomTextOrElementHeaderInfo
-@docs interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, HttpRequestId, HttpExpectId
+@docs interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, HttpExpectInfo, HttpRequestInfo
 
 -}
 
@@ -234,6 +234,7 @@ type InterfaceSingleWithFuture future
     | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
     | SocketConnect { address : String, on : SocketConnectionEvent -> future }
     | NotificationShow { id : String, message : String, details : String, on : NotificationClicked -> future }
+    | HttpRequest (HttpRequest future)
     | Request (InterfaceSingleRequest future)
     | Listen (InterfaceSingleListen future)
 
@@ -259,7 +260,7 @@ type SocketConnectionEvent
     | SocketDisconnected { code : Int, reason : String }
 
 
-{-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will elm only once in the future.
+{-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will come back only once in the future.
 -}
 type InterfaceSingleRequest future
     = TimePosixRequest (Time.Posix -> future)
@@ -269,7 +270,6 @@ type InterfaceSingleRequest future
     | WindowSizeRequest ({ width : Int, height : Int } -> future)
     | WindowPreferredLanguagesRequest (List String -> future)
     | NavigationUrlRequest (AppUrl -> future)
-    | HttpRequest (HttpRequest future)
     | ClipboardRequest (String -> future)
     | LocalStorageRequest { key : String, on : Maybe String -> future }
     | GeoLocationRequest (GeoLocation -> future)
@@ -379,22 +379,22 @@ type HttpBody
     | HttpBodyUnsignedInt8s { mimeType : String, content : List Int }
 
 
-{-| Safe to ignore. Identifier for an [`HttpRequest`](#HttpRequest)
+{-| Safe to ignore. [`HttpRequest`](#HttpRequest) without the actual receiving function
 -}
-type alias HttpRequestId =
+type alias HttpRequestInfo =
     RecordWithoutConstructorFunction
         { url : String
         , method : String
         , headers : List { name : String, value : String }
         , body : HttpBody
-        , expect : HttpExpectId
+        , expect : HttpExpectInfo
         , timeout : Maybe Int
         }
 
 
-{-| Safe to ignore. Identifier for an [`HttpExpect`](#HttpExpect)
+{-| Safe to ignore. [`HttpExpect`](#HttpExpect) without the actual receiving function
 -}
-type HttpExpectId
+type HttpExpectInfo
     = IdHttpExpectString
     | IdHttpExpectBytes
     | IdHttpExpectWhatever
@@ -461,7 +461,6 @@ type InterfaceSingleRequestId
     | IdWindowSizeRequest
     | IdWindowPreferredLanguagesRequest
     | IdNavigationUrlRequest
-    | IdHttpRequest HttpRequestId
     | IdClipboardRequest
     | IdLocalStorageRequest { key : String }
     | IdGeoLocationRequest
@@ -639,6 +638,9 @@ interfaceWithFutureMap futureChange =
                 }
                     |> NotificationShow
 
+            HttpRequest httpRequest ->
+                httpRequest |> httpRequestFutureMap futureChange |> HttpRequest
+
             Request request ->
                 request |> interfaceRequestFutureMap futureChange |> Request
 
@@ -689,11 +691,6 @@ interfaceRequestFutureMap futureChange =
                 { key = request.key, on = \event -> event |> request.on |> futureChange }
                     |> LocalStorageRequest
 
-            HttpRequest httpRequest ->
-                httpRequest
-                    |> httpRequestMap futureChange
-                    |> HttpRequest
-
             WindowSizeRequest toFuture ->
                 (\event -> toFuture event |> futureChange) |> WindowSizeRequest
 
@@ -731,8 +728,8 @@ interfaceRequestFutureMap futureChange =
                 (\event -> event |> toFuture |> futureChange) |> GamepadsRequest
 
 
-httpRequestMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
-httpRequestMap futureChange =
+httpRequestFutureMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
+httpRequestFutureMap futureChange =
     \httpRequest ->
         { url = httpRequest.url
         , method = httpRequest.method
@@ -889,32 +886,6 @@ interfaceSingleListenToId =
                 IdGamepadsChangeListen
 
 
-httpRequestToId : HttpRequest future_ -> HttpRequestId
-httpRequestToId =
-    \httpRequest ->
-        { url = httpRequest.url
-        , method = httpRequest.method |> String.toUpper
-        , headers = httpRequest.headers
-        , body = httpRequest.body
-        , expect = httpRequest.expect |> httpExpectToId
-        , timeout = httpRequest.timeout
-        }
-
-
-httpExpectToId : HttpExpect future_ -> HttpExpectId
-httpExpectToId =
-    \httpExpect ->
-        case httpExpect of
-            HttpExpectWhatever _ ->
-                IdHttpExpectWhatever
-
-            HttpExpectString _ ->
-                IdHttpExpectString
-
-            HttpExpectBytes _ ->
-                IdHttpExpectBytes
-
-
 toRemoveDiff : InterfaceSingle future_ -> Maybe InterfaceWithoutFutureDiff
 toRemoveDiff =
     \onlyOld ->
@@ -992,8 +963,8 @@ toRemoveDiff =
                     Request (RandomUnsignedInt32sRequest _) ->
                         Nothing
 
-                    Request (HttpRequest request) ->
-                        RemoveHttpRequest (request |> httpRequestToId) |> Just
+                    HttpRequest request ->
+                        RemoveHttpRequest { url = request.url } |> Just
 
                     DomNodeRender toRender ->
                         RemoveDom { path = toRender.path } |> Just
@@ -1213,9 +1184,6 @@ interfaceSingleRequestToId =
             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
                 IdRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count
 
-            HttpRequest httpRequest ->
-                httpRequest |> httpRequestToId |> IdHttpRequest
-
             WindowSizeRequest _ ->
                 IdWindowSizeRequest
 
@@ -1260,6 +1228,9 @@ toAddDiff =
                     NotificationShow show ->
                         AddNotificationShow { id = show.id, message = show.message, details = show.details }
 
+                    HttpRequest httpRequest ->
+                        AddHttpRequest (httpRequest |> httpRequestToId)
+
                     Request request ->
                         request |> interfaceSingleRequestToId |> AddRequest
 
@@ -1267,6 +1238,32 @@ toAddDiff =
                         listen |> interfaceSingleListenToId |> AddListen
                 )
                     |> InterfaceWithFutureDiff
+
+
+httpRequestToId : HttpRequest future_ -> HttpRequestInfo
+httpRequestToId =
+    \httpRequest ->
+        { url = httpRequest.url
+        , method = httpRequest.method |> String.toUpper
+        , headers = httpRequest.headers
+        , body = httpRequest.body
+        , expect = httpRequest.expect |> httpExpectToId
+        , timeout = httpRequest.timeout
+        }
+
+
+httpExpectToId : HttpExpect future_ -> HttpExpectInfo
+httpExpectToId =
+    \httpExpect ->
+        case httpExpect of
+            HttpExpectWhatever _ ->
+                IdHttpExpectWhatever
+
+            HttpExpectString _ ->
+                IdHttpExpectString
+
+            HttpExpectBytes _ ->
+                IdHttpExpectBytes
 
 
 domNodeToId : DomTextOrElementHeader future_ -> DomTextOrElementHeaderInfo
@@ -1307,6 +1304,12 @@ interfaceSingleWithFutureIdToStructuredId =
                       ]
                     )
 
+                IdHttpRequest request ->
+                    ( "HttpRequest"
+                    , [ request.url |> StructuredId.ofString
+                      ]
+                    )
+
                 IdRequest request ->
                     request |> interfaceSingleRequestIdToStructuredId
 
@@ -1340,12 +1343,6 @@ interfaceSingleRequestIdToStructuredId =
                   ]
                 )
 
-            IdHttpRequest request ->
-                ( "HttpRequest"
-                , [ request |> httpRequestIdToStructuredId
-                  ]
-                )
-
             IdWindowSizeRequest ->
                 ( "WindowSizeRequest", [] )
 
@@ -1363,80 +1360,6 @@ interfaceSingleRequestIdToStructuredId =
 
             IdGamepadsRequest ->
                 ( "GamepadsRequest", [] )
-
-
-httpRequestIdToStructuredId : HttpRequestId -> StructuredId
-httpRequestIdToStructuredId =
-    \httpRequestId ->
-        StructuredId.ofList
-            [ httpRequestId.url |> StructuredId.ofString
-            , httpRequestId.method |> StructuredId.ofString
-            , httpRequestId.headers |> List.map httpHeaderToStructuredId |> StructuredId.ofList
-            , httpRequestId.body |> httpBodyToStructuredId
-            , httpRequestId.expect |> httpExpectIdToStructuredId
-            , httpRequestId.timeout |> StructuredId.ofMaybe StructuredId.ofInt
-            ]
-
-
-httpHeaderToStructuredId : { name : String, value : String } -> StructuredId
-httpHeaderToStructuredId =
-    \httpHeader ->
-        StructuredId.ofList
-            [ httpHeader.name |> StructuredId.ofString
-            , httpHeader.value |> StructuredId.ofString
-            ]
-
-
-httpBodyToStructuredId : HttpBody -> StructuredId
-httpBodyToStructuredId =
-    \httpBody ->
-        case httpBody of
-            HttpBodyEmpty ->
-                "HttpBodyEmpty" |> StructuredId.ofString
-
-            HttpBodyString stringBody ->
-                StructuredId.ofList
-                    [ "HttpBodyString" |> StructuredId.ofString
-                    , stringBody |> httpStringBodyToStructuredId
-                    ]
-
-            HttpBodyUnsignedInt8s stringBody ->
-                StructuredId.ofList
-                    [ "HttpBodyBytes" |> StructuredId.ofString
-                    , stringBody |> httpBytesBodyToStructuredId
-                    ]
-
-
-httpBytesBodyToStructuredId : { mimeType : String, content : List Int } -> StructuredId
-httpBytesBodyToStructuredId =
-    \httpStringBody ->
-        StructuredId.ofList
-            [ httpStringBody.mimeType |> StructuredId.ofString
-            , httpStringBody.content |> List.map StructuredId.ofInt |> StructuredId.ofList
-            ]
-
-
-httpStringBodyToStructuredId : { mimeType : String, content : String } -> StructuredId
-httpStringBodyToStructuredId =
-    \httpStringBody ->
-        StructuredId.ofList
-            [ httpStringBody.mimeType |> StructuredId.ofString
-            , httpStringBody.content |> StructuredId.ofString
-            ]
-
-
-httpExpectIdToStructuredId : HttpExpectId -> StructuredId
-httpExpectIdToStructuredId =
-    \httpExpectId ->
-        case httpExpectId of
-            IdHttpExpectString ->
-                "HttpExpectString" |> StructuredId.ofString
-
-            IdHttpExpectBytes ->
-                "HttpExpectBytes" |> StructuredId.ofString
-
-            IdHttpExpectWhatever ->
-                "HttpExpectWhatever" |> StructuredId.ofString
 
 
 socketIdToStructuredId : SocketId -> StructuredId
@@ -1524,6 +1447,9 @@ interfaceSingleWithFutureToId =
 
             NotificationShow show ->
                 IdNotificationShow { id = show.id }
+
+            HttpRequest httpRequest ->
+                { url = httpRequest.url } |> IdHttpRequest
 
             Request request ->
                 request |> interfaceSingleRequestToId |> IdRequest
@@ -1732,7 +1658,7 @@ interfaceSingleListenIdJsonCodec =
 interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
 interfaceWithFutureDiffJsonCodec =
     Json.Codec.choice
-        (\addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addListen addRequest interfaceWithFutureDiff ->
+        (\addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addHttpRequest addListen addRequest interfaceWithFutureDiff ->
             case interfaceWithFutureDiff of
                 EditDom editDomDiff ->
                     addEditDom editDomDiff
@@ -1745,6 +1671,9 @@ interfaceWithFutureDiffJsonCodec =
 
                 AddNotificationShow show ->
                     addNotificationShow show
+
+                AddHttpRequest httpRequestInfo ->
+                    addHttpRequest httpRequestInfo
 
                 AddListen listen ->
                     addListen listen
@@ -1773,12 +1702,13 @@ interfaceWithFutureDiffJsonCodec =
                 |> Json.Codec.field ( .details, "details" ) Json.Codec.string
                 |> Json.Codec.recordFinish
             )
+        |> Json.Codec.variant ( AddHttpRequest, "AddHttpRequest" ) httpRequestInfoJsonCodec
         |> Json.Codec.variant ( AddListen, "AddListen" ) interfaceSingleListenIdJsonCodec
         |> Json.Codec.variant ( AddRequest, "AddRequest" ) interfaceSingleRequestIdJsonCodec
 
 
-httpRequestIdJsonCodec : JsonCodec HttpRequestId
-httpRequestIdJsonCodec =
+httpRequestInfoJsonCodec : JsonCodec HttpRequestInfo
+httpRequestInfoJsonCodec =
     { toJson =
         \httpRequestId ->
             Json.Encode.object
@@ -1885,7 +1815,7 @@ httpTimeoutJsonCodec =
     Json.Codec.nullable Json.Codec.int
 
 
-httpExpectIdJsonCodec : JsonCodec HttpExpectId
+httpExpectIdJsonCodec : JsonCodec HttpExpectInfo
 httpExpectIdJsonCodec =
     Json.Codec.enum [ IdHttpExpectString, IdHttpExpectBytes, IdHttpExpectWhatever ]
         (\httpExpectId ->
@@ -1904,7 +1834,7 @@ httpExpectIdJsonCodec =
 interfaceSingleRequestIdJsonCodec : JsonCodec InterfaceSingleRequestId
 interfaceSingleRequestIdJsonCodec =
     Json.Codec.choice
-        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest httpRequest windowSizeRequest idWindowPreferredLanguagesRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest gamepadsRequest interfaceSingleRequestId ->
+        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest windowSizeRequest idWindowPreferredLanguagesRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest gamepadsRequest interfaceSingleRequestId ->
             case interfaceSingleRequestId of
                 IdTimePosixRequest ->
                     timePosixRequest ()
@@ -1917,9 +1847,6 @@ interfaceSingleRequestIdJsonCodec =
 
                 IdRandomUnsignedInt32sRequest count ->
                     randomUnsignedInt32sRequest count
-
-                IdHttpRequest httpRequestId ->
-                    httpRequest httpRequestId
 
                 IdWindowSizeRequest ->
                     windowSizeRequest ()
@@ -1947,8 +1874,6 @@ interfaceSingleRequestIdJsonCodec =
         |> Json.Codec.variant ( \() -> IdTimezoneNameRequest, "TimezoneNameRequest" ) Json.Codec.unit
         |> Json.Codec.variant ( IdRandomUnsignedInt32sRequest, "RandomUnsignedInt32sRequest" )
             Json.Codec.int
-        |> Json.Codec.variant ( IdHttpRequest, "HttpRequest" )
-            httpRequestIdJsonCodec
         |> Json.Codec.variant ( \() -> IdWindowSizeRequest, "WindowSizeRequest" )
             Json.Codec.unit
         |> Json.Codec.variant ( \() -> IdWindowPreferredLanguagesRequest, "WindowPreferredLanguagesRequest" )
@@ -2166,27 +2091,6 @@ tagValueToJson =
             ]
 
 
-tagValueJsonDecoder : String -> (Json.Decode.Decoder value -> Json.Decode.Decoder value)
-tagValueJsonDecoder name valueJsonDecoder =
-    Json.Decode.map2 (\() variantValue -> variantValue)
-        (Json.Decode.field "tag" (onlyStringJsonDecoder name))
-        (Json.Decode.field "value" valueJsonDecoder)
-
-
-onlyStringJsonDecoder : String -> Json.Decode.Decoder ()
-onlyStringJsonDecoder specificAllowedString =
-    Json.Decode.string
-        |> Json.Decode.andThen
-            (\str ->
-                if str == specificAllowedString then
-                    () |> Json.Decode.succeed
-
-                else
-                    ([ "expected only \"", specificAllowedString, "\"" ] |> String.concat)
-                        |> Json.Decode.fail
-            )
-
-
 interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
 interfaceDiffToJson =
     \interfaceDiff ->
@@ -2292,7 +2196,9 @@ interfaceWithoutFutureDiffToJson =
                     )
 
                 RemoveHttpRequest httpRequestId ->
-                    ( "RemoveHttpRequest", httpRequestId |> httpRequestIdJsonCodec.toJson )
+                    ( "RemoveHttpRequest"
+                    , Json.Encode.object [ ( "url", httpRequestId.url |> Json.Encode.string ) ]
+                    )
 
                 RemoveAudio audioId ->
                     ( "RemoveAudio"
@@ -2483,6 +2389,9 @@ interfaceWithFutureDiffToId =
             AddSocketConnect socketConnect ->
                 IdSocketConnect socketConnect
 
+            AddHttpRequest httpRequestInfo ->
+                IdHttpRequest { url = httpRequestInfo.url }
+
             AddRequest request ->
                 request |> IdRequest
 
@@ -2600,11 +2509,39 @@ interfaceFutureJsonDecoder interface =
             notificationResponseJsonCodec.jsonDecoder
                 |> Json.Decode.map show.on
 
+        HttpRequest httpRequest ->
+            Json.Decode.oneOf
+                [ Json.Decode.field "ok" (httpExpectJsonDecoder httpRequest.expect)
+                , Json.Decode.field "err" (httpErrorJsonDecoder httpRequest)
+                    |> Json.Decode.map (httpExpectOnError httpRequest.expect)
+                ]
+
         Request request ->
             request |> requestFutureJsonDecoder
 
         Listen listen ->
             listen |> listenFutureJsonDecoder
+
+
+tagValueJsonDecoder : String -> (Json.Decode.Decoder value -> Json.Decode.Decoder value)
+tagValueJsonDecoder name valueJsonDecoder =
+    Json.Decode.map2 (\() variantValue -> variantValue)
+        (Json.Decode.field "tag" (onlyStringJsonDecoder name))
+        (Json.Decode.field "value" valueJsonDecoder)
+
+
+onlyStringJsonDecoder : String -> Json.Decode.Decoder ()
+onlyStringJsonDecoder specificAllowedString =
+    Json.Decode.string
+        |> Json.Decode.andThen
+            (\str ->
+                if str == specificAllowedString then
+                    () |> Json.Decode.succeed
+
+                else
+                    ([ "expected only \"", specificAllowedString, "\"" ] |> String.concat)
+                        |> Json.Decode.fail
+            )
 
 
 notificationResponseJsonCodec : JsonCodec NotificationClicked
@@ -3092,13 +3029,6 @@ requestFutureJsonDecoder =
                 Json.Decode.nullable Json.Decode.string
                     |> Json.Decode.map request.on
 
-            HttpRequest httpRequest ->
-                Json.Decode.oneOf
-                    [ Json.Decode.field "ok" (httpExpectJsonDecoder httpRequest.expect)
-                    , Json.Decode.field "err" (httpErrorJsonDecoder httpRequest)
-                        |> Json.Decode.map (httpExpectOnError httpRequest.expect)
-                    ]
-
             WindowSizeRequest toFuture ->
                 Json.Decode.map2 (\width height -> toFuture { width = width, height = height })
                     (Json.Decode.field "width" Json.Decode.int)
@@ -3542,7 +3472,7 @@ type InterfaceDiff
 type InterfaceWithoutFutureDiff
     = Add InterfaceSingleWithoutFuture
     | EditAudio { url : String, startTime : Time.Posix, replacement : EditAudioDiff }
-    | RemoveHttpRequest HttpRequestId
+    | RemoveHttpRequest { url : String }
     | RemoveDom { path : List Int }
     | RemoveSocketConnect { address : String }
     | RemoveAudio { url : String, startTime : Time.Posix }
@@ -3558,6 +3488,7 @@ type InterfaceSingleWithFutureId
     | IdAudioSourceLoad String
     | IdSocketConnect { address : String }
     | IdNotificationShow { id : String }
+    | IdHttpRequest { url : String }
     | IdRequest InterfaceSingleRequestId
     | IdListen InterfaceSingleListenId
 
@@ -3569,6 +3500,7 @@ type InterfaceWithFutureDiff
     | AddSocketConnect { address : String }
     | AddAudioSourceLoad String
     | AddNotificationShow { id : String, message : String, details : String }
+    | AddHttpRequest HttpRequestInfo
     | AddRequest InterfaceSingleRequestId
     | AddListen InterfaceSingleListenId
 
