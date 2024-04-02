@@ -136,6 +136,7 @@ import FastDict
 import Json.Decode
 import Json.Encode
 import Length exposing (Length)
+import List.LocalExtra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Set exposing (Set)
@@ -2174,17 +2175,15 @@ gamepadsJsonDecoder =
     Json.Decode.map
         (\maybeGamepads ->
             maybeGamepads
-                |> List.indexedMap (\index maybeGamepad -> { index = index, maybeGamepad = maybeGamepad })
-                |> List.foldl
-                    (\element soFar ->
-                        case element.maybeGamepad of
+                |> List.LocalExtra.foldUpIndexedFrom Dict.empty
+                    (\index maybeGamepad soFar ->
+                        case maybeGamepad of
                             Nothing ->
                                 soFar
 
                             Just gamepad ->
-                                soFar |> Dict.insert element.index gamepad
+                                soFar |> Dict.insert index gamepad
                     )
-                    Dict.empty
         )
         (Json.Decode.list maybeGamepadJsonDecoder)
 
