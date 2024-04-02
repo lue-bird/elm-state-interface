@@ -170,7 +170,8 @@ type alias ProgramConfig state =
 {-| Incoming and outgoing effects.
 To create one, use the helpers in [`Web.Time`](Web-Time), [`Web.Dom`](Web-Dom), [`Web.Http`](Web-Http) etc.
 
-To combine multiple, use [`Web.interfaceBatch`](#interfaceBatch) and [`Web.interfaceNone`](#interfaceNone)
+To combine multiple, use [`Web.interfaceBatch`](#interfaceBatch) and [`Web.interfaceNone`](#interfaceNone).
+To change the value that comes back in the future, use [`Web.interfaceFutureMap`](Web#interfaceFutureMap)
 
 -}
 type alias Interface future =
