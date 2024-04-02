@@ -18,9 +18,6 @@ which makes it possible to use as a key in a `Dict`
 
 ## use
 
-You shouldn't use below helpers directly unless you want to build a library.
-Instead, use [`Set.StructuredId`](Set-StructuredId)
-
 @docs toListOfString, toString
 
 -}
