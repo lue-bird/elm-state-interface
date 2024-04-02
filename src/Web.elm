@@ -894,37 +894,33 @@ interfacesDiff :
     -> List { id : String, diff : InterfaceSingleDiff }
 interfacesDiff =
     \interfaces ->
-        ( interfaces.old, interfaces.updated )
-            |> Set.StructuredId.fold2From []
-                (\id _ soFar ->
-                    { id = id, diff = Remove } :: soFar
+        FastDict.merge
+            (\id _ soFar ->
+                { id = id, diff = Remove } :: soFar
+            )
+            (\id old updated soFar ->
+                ({ old = old, updated = updated }
+                    |> interfaceSingleEdits
+                    |> List.map (\edit -> { id = id, diff = edit |> Edit })
                 )
-                (\id ( old, updated ) soFar ->
-                    ({ old = old, updated = updated }
-                        |> interfaceSingleEdits
-                        |> List.map (\edit -> { id = id, diff = edit |> Edit })
-                    )
-                        ++ soFar
-                )
-                (\id onlyNew soFar ->
-                    { id = id
-                    , diff = onlyNew |> interfaceSingleFutureMap (\_ -> ()) |> Add
-                    }
-                        :: soFar
-                )
+                    ++ soFar
+            )
+            (\id onlyNew soFar ->
+                { id = id
+                , diff = onlyNew |> interfaceSingleFutureMap (\_ -> ()) |> Add
+                }
+                    :: soFar
+            )
+            interfaces.old
+            interfaces.updated
+            []
 
 
 interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
 interfaceSingleToStructuredId =
     \interfaceSingle ->
-        interfaceSingle |> interfaceSingleIdToStructuredId
-
-
-interfaceSingleIdToStructuredId : InterfaceSingle future_ -> StructuredId
-interfaceSingleIdToStructuredId =
-    \interfaceSingleId ->
         StructuredId.ofVariant
-            (case interfaceSingleId of
+            (case interfaceSingle of
                 DocumentTitleReplaceBy title ->
                     ( "DocumentTitleReplaceBy", [ title |> StructuredId.ofString ] )
 
@@ -1742,22 +1738,44 @@ audioToJson audio =
 programInit : ProgramConfig state -> ( ProgramState state, Cmd (ProgramEvent state) )
 programInit appConfig =
     let
-        initialInterface : Set.StructuredId.Set (InterfaceSingle state)
+        initialInterface : FastDict.Dict String (InterfaceSingle state)
         initialInterface =
             appConfig.initialState
                 |> appConfig.interface
-                |> Set.StructuredId.fromRope interfaceSingleToStructuredId
+                |> interfacesFromRope
     in
     ( State
         { interface = initialInterface
         , appState = appConfig.initialState
         }
-    , { old = Set.StructuredId.empty, updated = initialInterface }
+    , { old = FastDict.empty, updated = initialInterface }
         |> interfacesDiff
         |> List.map (\diff -> appConfig.ports.toJs (diff |> toJsToJson))
         |> Cmd.batch
         |> Cmd.map never
     )
+
+
+interfacesFromRope : Rope element -> FastDict.Dict String element
+interfacesFromRope =
+    \rope ->
+        rope
+            |> Rope.foldl
+                (\interfaceSingle soFar ->
+                    soFar |> insertInterface interfaceSingle
+                )
+                FastDict.empty
+
+
+insertInterface :
+    element
+    -> (FastDict.Dict String element -> FastDict.Dict String element)
+insertInterface element =
+    \dict ->
+        dict
+            |> FastDict.insert
+                (element |> interfaceSingleToStructuredId |> StructuredId.toString)
+                element
 
 
 {-| The "subscriptions" part for an embedded program
@@ -1772,7 +1790,7 @@ programSubscriptions appConfig =
                         (Json.Decode.field "id" Json.Decode.string
                             |> Json.Decode.andThen
                                 (\originalInterfaceId ->
-                                    case state.interface |> Set.StructuredId.elementWithStructuredIdAsString originalInterfaceId of
+                                    case state.interface |> FastDict.get originalInterfaceId of
                                         Just interfaceSingleAcceptingFuture ->
                                             case interfaceSingleAcceptingFuture |> interfaceSingleFutureJsonDecoder of
                                                 Just eventDataDecoder ->
@@ -2822,11 +2840,9 @@ programUpdate appConfig =
             JsEventEnabledConstructionOfNewAppState updatedAppState ->
                 \(State oldState) ->
                     let
-                        updatedInterface : Set.StructuredId.Set (InterfaceSingle state)
+                        updatedInterface : FastDict.Dict String (InterfaceSingle state)
                         updatedInterface =
-                            updatedAppState
-                                |> appConfig.interface
-                                |> Set.StructuredId.fromRope interfaceSingleToStructuredId
+                            updatedAppState |> appConfig.interface |> interfacesFromRope
                     in
                     ( State { interface = updatedInterface, appState = updatedAppState }
                     , { old = oldState.interface, updated = updatedInterface }
