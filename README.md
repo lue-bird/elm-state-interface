@@ -586,15 +586,16 @@ Instead, the goal of this package is to publish more browser APIs like gamepads 
 
 There should be feature-parity with elm's exposed browser APIs ([tell me](https://github.com/lue-bird/elm-state-interface/issues/new) if I've missed some!) plus a couple of APIs that elm's exposed browser APIs don't offer, including websockets, localstorage, audio, clipboard.
 
-For now, some more niche interfaces like [`Browser.Dom.setViewportOf`](https://dark.elm.dmy.fr/packages/elm/browser/latest/Browser-Dom#setViewportOf) and [`WebGL.Texture.loadWith`](https://dark.elm.dmy.fr/packages/elm-explorations/webgl/latest/WebGL-Texture#loadWith) are left out.
+For now, some more niche interfaces like [`WebGL.Texture.loadWith`](https://dark.elm.dmy.fr/packages/elm-explorations/webgl/latest/WebGL-Texture#loadWith) are left out.
 
 ## future
 
-  - 🧩 add more [example projects](https://github.com/lue-bird/elm-state-interface/tree/main/example). Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
-  - 🔋 The web API you miss the most. Maybe [MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API), [speech](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API), [sensors](https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs) or [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)?
-  - 🗃️ only with help: basic `node` APIs
+  - ⛵ add more [example projects](https://github.com/lue-bird/elm-state-interface/tree/main/example). Would you like to see something specific? Or maybe you're motivated to make one yourself 👀
+  - 📐 `Web.Dom.element "div" ...` etc are a bit clumsy. Sadly, most ui packages out there only convert to a type inaccessible to `state-interface`, making them incompatible. Though a port of them would be awesome, a good first step may be creating a package for generating the html/svg/... elements, inspired by [`Orasund/elm-html-style`](https://dark.elm.dmy.fr/packages/Orasund/elm-html-style/latest/)
+  - 🔋 add the web APIs you miss the most. Maybe [MIDI](https://developer.mozilla.org/en-US/docs/Web/API/Web_MIDI_API), [speech](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API), [sensors](https://developer.mozilla.org/en-US/docs/Web/API/Sensor_APIs) or [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)?
+  - 🗃️ add basic `node` or `deno` APIs (only with help!)
 
-If you have knowledge in any of these fields on the js side, have pointers or already 
+If you have knowledge in these fields on the js side, have pointers or already 
 a basic implementation using ports, [come by](https://github.com/lue-bird/elm-state-interface/discussions/new/choose)!
 
 Note: The package is very much not designed to be easily extensible.
