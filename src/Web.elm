@@ -1,5 +1,5 @@
 module Web exposing
-    ( ProgramConfig, program, Program
+    ( program, Program
     , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
     , DomElementHeader, DomElementVisibilityAlignment(..), DefaultActionHandling(..)
     , Audio, AudioSource, AudioSourceLoadError(..), AudioProcessing(..), AudioParameterTimeline
@@ -9,14 +9,14 @@ module Web exposing
     , Gamepad, GamepadButton(..)
     , NotificationClicked(..)
     , WindowVisibility(..)
-    , programInit, programUpdate, programSubscriptions
+    , ProgramConfig, programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..), InterfaceSingle(..), DomTextOrElementHeader(..)
     , interfaceSingleEdits, InterfaceSingleEdit(..), AudioEdit(..), DomEdit(..)
     )
 
 {-| A state-interface program that can run in the browser
 
-@docs ProgramConfig, program, Program
+@docs program, Program
 
 You can also [embed](#embed) a state-interface program as part of an existing app that uses The Elm Architecture
 
@@ -90,7 +90,7 @@ Types used by [`Web.Window`](Web-Window)
 
 If you just want to replace a part of your elm app with this architecture. Make sure to wire in all 3:
 
-@docs programInit, programUpdate, programSubscriptions
+@docs ProgramConfig, programInit, programUpdate, programSubscriptions
 
 Under the hood, [`Web.program`](Web#program) is then defined as just
 
@@ -139,7 +139,6 @@ import Length exposing (Length)
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Set exposing (Set)
-import Set.StructuredId
 import Speed exposing (Speed)
 import StructuredId exposing (StructuredId)
 import Time
@@ -155,18 +154,7 @@ type ProgramState appState
         }
 
 
-{-| What's needed to create a state-interface program.
-
-  - the state is everything the program knows (what The Elm Architecture calls model)
-
-  - The [`Interface`](#Interface) is the face to the outside world and can be created using the helpers in [`Web.Dom`](Web-Dom), [`Web.Time`](Web-Time), [`Web.Http`](Web-Http) etc.
-
-  - connections to and from js
-
-        port toJs : Json.Encode.Value -> Cmd event_
-
-        port fromJs : (Json.Encode.Value -> event) -> Sub event
-
+{-| What's needed to create a state-interface [`program`](#program).
 -}
 type alias ProgramConfig state =
     RecordWithoutConstructorFunction
@@ -916,214 +904,6 @@ interfacesDiff =
             []
 
 
-interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
-interfaceSingleToStructuredId =
-    \interfaceSingle ->
-        StructuredId.ofVariant
-            (case interfaceSingle of
-                DocumentTitleReplaceBy title ->
-                    ( "DocumentTitleReplaceBy", [ title |> StructuredId.ofString ] )
-
-                DocumentAuthorSet author ->
-                    ( "DocumentAuthorSet", [ author |> StructuredId.ofString ] )
-
-                DocumentKeywordsSet keywords ->
-                    ( "DocumentKeywordsSet", [ keywords |> StructuredId.ofList StructuredId.ofString ] )
-
-                DocumentDescriptionSet description ->
-                    ( "DocumentDescriptionSet", [ description |> StructuredId.ofString ] )
-
-                ConsoleLog message ->
-                    ( "ConsoleLog", [ message |> StructuredId.ofString ] )
-
-                ConsoleWarn message ->
-                    ( "ConsoleWarn", [ message |> StructuredId.ofString ] )
-
-                ConsoleError message ->
-                    ( "ConsoleError", [ message |> StructuredId.ofString ] )
-
-                NavigationReplaceUrl appUrl ->
-                    ( "NavigationReplaceUrl", [ appUrl |> appUrlToStructuredId ] )
-
-                NavigationPushUrl appUrl ->
-                    ( "NavigationPushUrl", [ appUrl |> appUrlToStructuredId ] )
-
-                NavigationGo urlSteps ->
-                    ( "NavigationGo", [ urlSteps |> StructuredId.ofInt ] )
-
-                NavigationLoad url ->
-                    ( "NavigationLoad", [ url |> StructuredId.ofString ] )
-
-                NavigationReload ->
-                    ( "NavigationReload", [] )
-
-                FileDownloadUnsignedInt8s config ->
-                    ( "FileDownloadUnsignedInt8s"
-                    , [ config.name |> StructuredId.ofString
-                      , config.mimeType |> StructuredId.ofString
-                      , config.content |> StructuredId.ofList StructuredId.ofInt
-                      ]
-                    )
-
-                ClipboardReplaceBy replacement ->
-                    ( "ClipboardReplaceBy", [ replacement |> StructuredId.ofString ] )
-
-                AudioPlay audio ->
-                    ( "AudioPlay"
-                    , [ audio.url |> StructuredId.ofString
-                      , audio.startTime |> StructuredId.ofTimePosix
-                      ]
-                    )
-
-                SocketMessage message ->
-                    ( "SocketMessage"
-                    , [ message.id |> socketIdToStructuredId
-                      , message.data |> StructuredId.ofString
-                      ]
-                    )
-
-                SocketDisconnect id ->
-                    ( "SocketDisconnect", [ id |> socketIdToStructuredId ] )
-
-                LocalStorageSet set ->
-                    ( "LocalStorageSet"
-                    , [ set.key |> StructuredId.ofString
-                      , set.value |> StructuredId.ofMaybe StructuredId.ofString
-                      ]
-                    )
-
-                NotificationAskForPermission ->
-                    ( "NotificationAskForPermission", [] )
-
-                DomNodeRender path ->
-                    ( "DomNodeRender"
-                    , [ path.path |> StructuredId.ofList StructuredId.ofInt ]
-                    )
-
-                AudioSourceLoad load ->
-                    ( "AudioSourceLoad"
-                    , [ load.url |> StructuredId.ofString
-                      ]
-                    )
-
-                SocketConnect connect ->
-                    ( "SocketConnect"
-                    , [ StructuredId.ofString connect.address
-                      ]
-                    )
-
-                NotificationShow show ->
-                    ( "NotificationShow"
-                    , [ show.id |> StructuredId.ofString
-                      ]
-                    )
-
-                HttpRequest request ->
-                    ( "HttpRequest"
-                    , [ request.url |> StructuredId.ofString
-                      ]
-                    )
-
-                TimePosixRequest _ ->
-                    ( "TimePosixRequest", [] )
-
-                TimezoneOffsetRequest _ ->
-                    ( "TimezoneOffsetRequest", [] )
-
-                TimezoneNameRequest _ ->
-                    ( "TimezoneNameRequest", [] )
-
-                RandomUnsignedInt32sRequest request ->
-                    ( "RandomUnsignedInt32sRequest"
-                    , [ request.count |> StructuredId.ofInt
-                      ]
-                    )
-
-                LocalStorageRequest request ->
-                    ( "LocalStorageRequest"
-                    , [ request.key |> StructuredId.ofString
-                      ]
-                    )
-
-                WindowSizeRequest _ ->
-                    ( "WindowSizeRequest", [] )
-
-                WindowPreferredLanguagesRequest _ ->
-                    ( "WindowPreferredLanguagesRequest", [] )
-
-                NavigationUrlRequest _ ->
-                    ( "NavigationUrlRequest", [] )
-
-                ClipboardRequest _ ->
-                    ( "ClipboardRequest", [] )
-
-                GeoLocationRequest _ ->
-                    ( "GeoLocationRequest", [] )
-
-                GamepadsRequest _ ->
-                    ( "GamepadsRequest", [] )
-
-                WindowEventListen listen ->
-                    ( "WindowEventListen"
-                    , [ listen.eventName |> StructuredId.ofString
-                      ]
-                    )
-
-                WindowVisibilityChangeListen _ ->
-                    ( "WindowVisibilityChangeListen", [] )
-
-                WindowAnimationFrameListen _ ->
-                    ( "WindowAnimationFrameListen", [] )
-
-                WindowPreferredLanguagesChangeListen _ ->
-                    ( "WindowPreferredLanguagesChangeListen", [] )
-
-                DocumentEventListen listen ->
-                    ( "DocumentEventListen"
-                    , [ listen.eventName |> StructuredId.ofString
-                      ]
-                    )
-
-                TimePeriodicallyListen listen ->
-                    ( "TimePeriodicallyListen"
-                    , [ listen.intervalDurationMilliSeconds |> StructuredId.ofInt
-                      ]
-                    )
-
-                SocketMessageListen listen ->
-                    ( "SocketMessageListen"
-                    , [ listen.id |> socketIdToStructuredId
-                      ]
-                    )
-
-                LocalStorageRemoveOnADifferentTabListen listen ->
-                    ( "LocalStorageRemoveOnADifferentTabListen"
-                    , [ listen.key |> StructuredId.ofString ]
-                    )
-
-                LocalStorageSetOnADifferentTabListen listen ->
-                    ( "LocalStorageSetOnADifferentTabListen"
-                    , [ listen.key |> StructuredId.ofString ]
-                    )
-
-                GeoLocationChangeListen _ ->
-                    ( "GeoLocationChangeListen", [] )
-
-                GamepadsChangeListen _ ->
-                    ( "GamepadsChangeListen", [] )
-            )
-
-
-socketIdToStructuredId : SocketId -> StructuredId
-socketIdToStructuredId =
-    \(SocketId raw) -> raw |> StructuredId.ofInt
-
-
-appUrlToStructuredId : AppUrl -> StructuredId
-appUrlToStructuredId =
-    \appUrl -> appUrl |> AppUrl.toString |> StructuredId.ofString
-
-
 toJsToJson : { id : String, diff : InterfaceSingleDiff } -> Json.Encode.Value
 toJsToJson =
     \toJs ->
@@ -1733,6 +1513,236 @@ audioToJson audio =
         ]
 
 
+interfacesFromRope : Rope (InterfaceSingle future) -> FastDict.Dict String (InterfaceSingle future)
+interfacesFromRope =
+    \rope ->
+        rope
+            |> Rope.foldl
+                (\interfaceSingle soFar ->
+                    soFar |> insertInterface interfaceSingle
+                )
+                FastDict.empty
+
+
+interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
+interfaceSingleToStructuredId =
+    \interfaceSingle ->
+        StructuredId.ofVariant
+            (case interfaceSingle of
+                DocumentTitleReplaceBy title ->
+                    ( "DocumentTitleReplaceBy", [ title |> StructuredId.ofString ] )
+
+                DocumentAuthorSet author ->
+                    ( "DocumentAuthorSet", [ author |> StructuredId.ofString ] )
+
+                DocumentKeywordsSet keywords ->
+                    ( "DocumentKeywordsSet", [ keywords |> StructuredId.ofList StructuredId.ofString ] )
+
+                DocumentDescriptionSet description ->
+                    ( "DocumentDescriptionSet", [ description |> StructuredId.ofString ] )
+
+                ConsoleLog message ->
+                    ( "ConsoleLog", [ message |> StructuredId.ofString ] )
+
+                ConsoleWarn message ->
+                    ( "ConsoleWarn", [ message |> StructuredId.ofString ] )
+
+                ConsoleError message ->
+                    ( "ConsoleError", [ message |> StructuredId.ofString ] )
+
+                NavigationReplaceUrl appUrl ->
+                    ( "NavigationReplaceUrl", [ appUrl |> appUrlToStructuredId ] )
+
+                NavigationPushUrl appUrl ->
+                    ( "NavigationPushUrl", [ appUrl |> appUrlToStructuredId ] )
+
+                NavigationGo urlSteps ->
+                    ( "NavigationGo", [ urlSteps |> StructuredId.ofInt ] )
+
+                NavigationLoad url ->
+                    ( "NavigationLoad", [ url |> StructuredId.ofString ] )
+
+                NavigationReload ->
+                    ( "NavigationReload", [] )
+
+                FileDownloadUnsignedInt8s config ->
+                    ( "FileDownloadUnsignedInt8s"
+                    , [ config.name |> StructuredId.ofString
+                      , config.mimeType |> StructuredId.ofString
+                      , config.content |> StructuredId.ofList StructuredId.ofInt
+                      ]
+                    )
+
+                ClipboardReplaceBy replacement ->
+                    ( "ClipboardReplaceBy", [ replacement |> StructuredId.ofString ] )
+
+                AudioPlay audio ->
+                    ( "AudioPlay"
+                    , [ audio.url |> StructuredId.ofString
+                      , audio.startTime |> StructuredId.ofTimePosix
+                      ]
+                    )
+
+                SocketMessage message ->
+                    ( "SocketMessage"
+                    , [ message.id |> socketIdToStructuredId
+                      , message.data |> StructuredId.ofString
+                      ]
+                    )
+
+                SocketDisconnect id ->
+                    ( "SocketDisconnect", [ id |> socketIdToStructuredId ] )
+
+                LocalStorageSet set ->
+                    ( "LocalStorageSet"
+                    , [ set.key |> StructuredId.ofString
+                      , set.value |> StructuredId.ofMaybe StructuredId.ofString
+                      ]
+                    )
+
+                NotificationAskForPermission ->
+                    ( "NotificationAskForPermission", [] )
+
+                DomNodeRender path ->
+                    ( "DomNodeRender"
+                    , [ path.path |> StructuredId.ofList StructuredId.ofInt ]
+                    )
+
+                AudioSourceLoad load ->
+                    ( "AudioSourceLoad"
+                    , [ load.url |> StructuredId.ofString
+                      ]
+                    )
+
+                SocketConnect connect ->
+                    ( "SocketConnect"
+                    , [ StructuredId.ofString connect.address
+                      ]
+                    )
+
+                NotificationShow show ->
+                    ( "NotificationShow"
+                    , [ show.id |> StructuredId.ofString
+                      ]
+                    )
+
+                HttpRequest request ->
+                    ( "HttpRequest"
+                    , [ request.url |> StructuredId.ofString
+                      ]
+                    )
+
+                TimePosixRequest _ ->
+                    ( "TimePosixRequest", [] )
+
+                TimezoneOffsetRequest _ ->
+                    ( "TimezoneOffsetRequest", [] )
+
+                TimezoneNameRequest _ ->
+                    ( "TimezoneNameRequest", [] )
+
+                RandomUnsignedInt32sRequest request ->
+                    ( "RandomUnsignedInt32sRequest"
+                    , [ request.count |> StructuredId.ofInt
+                      ]
+                    )
+
+                LocalStorageRequest request ->
+                    ( "LocalStorageRequest"
+                    , [ request.key |> StructuredId.ofString
+                      ]
+                    )
+
+                WindowSizeRequest _ ->
+                    ( "WindowSizeRequest", [] )
+
+                WindowPreferredLanguagesRequest _ ->
+                    ( "WindowPreferredLanguagesRequest", [] )
+
+                NavigationUrlRequest _ ->
+                    ( "NavigationUrlRequest", [] )
+
+                ClipboardRequest _ ->
+                    ( "ClipboardRequest", [] )
+
+                GeoLocationRequest _ ->
+                    ( "GeoLocationRequest", [] )
+
+                GamepadsRequest _ ->
+                    ( "GamepadsRequest", [] )
+
+                WindowEventListen listen ->
+                    ( "WindowEventListen"
+                    , [ listen.eventName |> StructuredId.ofString
+                      ]
+                    )
+
+                WindowVisibilityChangeListen _ ->
+                    ( "WindowVisibilityChangeListen", [] )
+
+                WindowAnimationFrameListen _ ->
+                    ( "WindowAnimationFrameListen", [] )
+
+                WindowPreferredLanguagesChangeListen _ ->
+                    ( "WindowPreferredLanguagesChangeListen", [] )
+
+                DocumentEventListen listen ->
+                    ( "DocumentEventListen"
+                    , [ listen.eventName |> StructuredId.ofString
+                      ]
+                    )
+
+                TimePeriodicallyListen listen ->
+                    ( "TimePeriodicallyListen"
+                    , [ listen.intervalDurationMilliSeconds |> StructuredId.ofInt
+                      ]
+                    )
+
+                SocketMessageListen listen ->
+                    ( "SocketMessageListen"
+                    , [ listen.id |> socketIdToStructuredId
+                      ]
+                    )
+
+                LocalStorageRemoveOnADifferentTabListen listen ->
+                    ( "LocalStorageRemoveOnADifferentTabListen"
+                    , [ listen.key |> StructuredId.ofString ]
+                    )
+
+                LocalStorageSetOnADifferentTabListen listen ->
+                    ( "LocalStorageSetOnADifferentTabListen"
+                    , [ listen.key |> StructuredId.ofString ]
+                    )
+
+                GeoLocationChangeListen _ ->
+                    ( "GeoLocationChangeListen", [] )
+
+                GamepadsChangeListen _ ->
+                    ( "GamepadsChangeListen", [] )
+            )
+
+
+socketIdToStructuredId : SocketId -> StructuredId
+socketIdToStructuredId =
+    \(SocketId raw) -> raw |> StructuredId.ofInt
+
+
+appUrlToStructuredId : AppUrl -> StructuredId
+appUrlToStructuredId =
+    \appUrl -> appUrl |> AppUrl.toString |> StructuredId.ofString
+
+
+insertInterface :
+    InterfaceSingle future
+    -> (FastDict.Dict String (InterfaceSingle future) -> FastDict.Dict String (InterfaceSingle future))
+insertInterface element =
+    \dict ->
+        dict
+            |> FastDict.insert
+                (element |> interfaceSingleToStructuredId |> StructuredId.toString)
+                element
+
+
 {-| The "init" part for an embedded program
 -}
 programInit : ProgramConfig state -> ( ProgramState state, Cmd (ProgramEvent state) )
@@ -1754,28 +1764,6 @@ programInit appConfig =
         |> Cmd.batch
         |> Cmd.map never
     )
-
-
-interfacesFromRope : Rope element -> FastDict.Dict String element
-interfacesFromRope =
-    \rope ->
-        rope
-            |> Rope.foldl
-                (\interfaceSingle soFar ->
-                    soFar |> insertInterface interfaceSingle
-                )
-                FastDict.empty
-
-
-insertInterface :
-    element
-    -> (FastDict.Dict String element -> FastDict.Dict String element)
-insertInterface element =
-    \dict ->
-        dict
-            |> FastDict.insert
-                (element |> interfaceSingleToStructuredId |> StructuredId.toString)
-                element
 
 
 {-| The "subscriptions" part for an embedded program
@@ -2989,9 +2977,31 @@ type DomEdit
 
 
 {-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
-with a given [`Web.ProgramConfig`](#ProgramConfig).
+with
+
+  - The state is everything the program knows (what The Elm Architecture calls model).
+    And it always starts with a given `initialState`
+
+  - The [`Interface`](#Interface) is the face to the outside world
+    and can be created using the helpers in [`Web.Dom`](Web-Dom), [`Web.Time`](Web-Time), [`Web.Http`](Web-Http) etc.
+    The given `interface` function constructs these interfaces based on the current state
+
+  - Connections to and from js
+
+        port toJs : Json.Encode.Value -> Cmd event_
+
+        port fromJs : (Json.Encode.Value -> event) -> Sub event
+
 -}
-program : ProgramConfig state -> Program state
+program :
+    { initialState : state
+    , interface : state -> Interface state
+    , ports :
+        { toJs : Json.Encode.Value -> Cmd Never
+        , fromJs : (Json.Encode.Value -> ProgramEvent state) -> Sub (ProgramEvent state)
+        }
+    }
+    -> Program state
 program appConfig =
     Platform.worker
         { init = \() -> programInit appConfig
