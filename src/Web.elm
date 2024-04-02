@@ -154,7 +154,7 @@ type ProgramState appState
         }
 
 
-{-| What's needed to create a state-interface [`program`](#program).
+{-| What's needed to create a state-interface [`program`](#program)
 -}
 type alias ProgramConfig state =
     RecordWithoutConstructorFunction
