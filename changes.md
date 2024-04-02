@@ -1,9 +1,5 @@
 # change log
 
-# TODO
-
-  - redesign Web.Storage to automatically remove items if not part of the interface
-
 ## 2.0.0
 
   - rename ...map to ...futureMap
