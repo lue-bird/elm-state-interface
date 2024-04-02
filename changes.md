@@ -2,8 +2,6 @@
 
 # TODO
 
-  - look at all `Map` references in runner and either switch to `string`-indexed or switch to array.
-    `List String -> String = List.map (replace "\\" "\\\\" >> replace "," "\\,") |> join ","`
   - redesign Web.Storage to automatically remove items if not part of the interface
 
 ## 2.0.0
