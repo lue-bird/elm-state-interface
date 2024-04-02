@@ -2,7 +2,7 @@ module StructuredId exposing
     ( StructuredId(..)
     , ofInt, ofTimePosix, ofString
     , ofVariant, ofMaybe, ofList
-    , toListOfString, toString
+    , toString
     )
 
 {-| Assigning each unique value one "structured id"
@@ -18,7 +18,7 @@ which makes it possible to use as a key in a `Dict`
 
 ## use
 
-@docs toListOfString, toString
+@docs toString
 
 -}
 
@@ -76,6 +76,12 @@ ofList elementMap =
         structuredIds |> List.map elementMap |> List
 
 
+toString : StructuredId -> String
+toString =
+    \structuredId ->
+        structuredId |> toListOfString |> listOfStringToString
+
+
 toListOfString : StructuredId -> List String
 toListOfString =
     \structuredId ->
@@ -98,12 +104,6 @@ toRopeOfString =
                         (Rope.singleton "[")
                         elements
                     )
-
-
-toString : StructuredId -> String
-toString =
-    \structuredId ->
-        structuredId |> toListOfString |> listOfStringToString
 
 
 listOfStringToString : List String -> String

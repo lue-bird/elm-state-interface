@@ -10,14 +10,6 @@ tests : Test
 tests =
     Test.describe "StructuredId"
         [ Test.fuzz (Fuzz.pair treeFuzz treeFuzz)
-            "== equivalent to on toListOfString =="
-            (\( tree0, tree1 ) ->
-                (tree0 |> exampleTreeToStructuredId |> StructuredId.toListOfString)
-                    == (tree1 |> exampleTreeToStructuredId |> StructuredId.toListOfString)
-                    |> Expect.equal
-                        (tree0 == tree1)
-            )
-        , Test.fuzz (Fuzz.pair treeFuzz treeFuzz)
             "== equivalent to on toString =="
             (\( tree0, tree1 ) ->
                 (tree0 |> exampleTreeToStructuredId |> StructuredId.toString)
