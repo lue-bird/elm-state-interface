@@ -2,7 +2,7 @@ module Web exposing
     ( ProgramConfig, program, Program
     , Interface, interfaceBatch, interfaceNone, interfaceFutureMap
     , DomElementHeader, DomElementVisibilityAlignment(..), DefaultActionHandling(..)
-    , Audio, AudioSource, AudioSourceLoadError(..), AudioProcessing(..), AudioParameterTimeline, EditAudioDiff(..)
+    , Audio, AudioSource, AudioSourceLoadError(..), AudioProcessing(..), AudioParameterTimeline
     , HttpRequest, HttpBody(..), HttpExpect(..), HttpError(..), HttpMetadata
     , SocketConnectionEvent(..), SocketId(..)
     , GeoLocation
@@ -10,9 +10,8 @@ module Web exposing
     , NotificationClicked(..)
     , WindowVisibility(..)
     , programInit, programUpdate, programSubscriptions
-    , ProgramState(..), ProgramEvent(..)
-    , InterfaceSingle(..), InterfaceSingleWithFuture(..), InterfaceSingleRequest(..), InterfaceSingleListen(..), InterfaceSingleWithoutFuture(..), DomElementHeaderInfo, DomTextOrElementHeader(..), DomTextOrElementHeaderInfo(..)
-    , interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff(..), InterfaceWithFutureDiff(..), InterfaceWithoutFutureDiff(..), EditDomDiff, ReplacementInEditDomDiff(..), InterfaceSingleRequestId(..), InterfaceSingleListenId(..), HttpExpectInfo(..), HttpRequestInfo
+    , ProgramState(..), ProgramEvent(..), InterfaceSingle(..), DomTextOrElementHeader(..)
+    , interfaceSingleEdits, InterfaceSingleEdit(..), AudioEdit(..), DomEdit(..)
     )
 
 {-| A state-interface program that can run in the browser
@@ -22,9 +21,13 @@ module Web exposing
 You can also [embed](#embed) a state-interface program as part of an existing app that uses The Elm Architecture
 
 
-# interfaces
+# interface
 
 @docs Interface, interfaceBatch, interfaceNone, interfaceFutureMap
+
+That's it. Everything else below is types used in the other modules
+like [`Web.Time`](Web-Time), [`Web.Dom`](Web-Dom), [`Web.Http`](Web-Http) etc.
+Leave them be and look at those modules :)
 
 
 ## DOM
@@ -38,7 +41,7 @@ Types used by [`Web.Dom`](Web-Dom)
 
 Types used by [`Web.Audio`](Web-Audio)
 
-@docs Audio, AudioSource, AudioSourceLoadError, AudioProcessing, AudioParameterTimeline, EditAudioDiff
+@docs Audio, AudioSource, AudioSourceLoadError, AudioProcessing, AudioParameterTimeline
 
 
 ## HTTP
@@ -101,9 +104,25 @@ Under the hood, [`Web.program`](Web#program) is then defined as just
 
 ## internals, safe to ignore for users
 
-@docs ProgramState, ProgramEvent
-@docs InterfaceSingle, InterfaceSingleWithFuture, InterfaceSingleRequest, InterfaceSingleListen, InterfaceSingleWithoutFuture, DomElementHeaderInfo, DomTextOrElementHeader, DomTextOrElementHeaderInfo
-@docs interfaceDiffs, findInterfaceAssociatedWithDiffComingBack, interfaceFutureJsonDecoder, InterfaceDiff, InterfaceWithFutureDiff, InterfaceWithoutFutureDiff, EditDomDiff, ReplacementInEditDomDiff, InterfaceSingleRequestId, InterfaceSingleListenId, HttpExpectInfo, HttpRequestInfo
+Exposed so can for example simulate it more easily in tests, add a debugger etc.
+
+@docs ProgramState, ProgramEvent, InterfaceSingle, DomTextOrElementHeader
+
+To simulate diffing of interfaces, use
+
+    FastDict.merge
+        (\id toAdd -> ..add toAdd..)
+        (\id old updated -> ..edit (interfaceSingleEdits { old, updated })..)
+        (id toRemove -> ..remove toRemove..)
+        updatedInterfaces
+        oldInterfaces
+        ..what you fold into..
+
+see [`FastDict.merge`](https://dark.elm.dmy.fr/packages/miniBill/elm-fast-dict/latest/FastDict#merge)
+
+@docs interfaceSingleEdits, InterfaceSingleEdit, AudioEdit, DomEdit
+
+If you need more things like json encoders/decoders, [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new)
 
 -}
 
@@ -114,11 +133,9 @@ import Bytes.LocalExtra
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import FastDict
-import Json.Codec exposing (JsonCodec)
 import Json.Decode
 import Json.Encode
 import Length exposing (Length)
-import List.LocalExtra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Set exposing (Set)
@@ -129,21 +146,11 @@ import Time
 import Url exposing (Url)
 
 
-{-| Ignore the specific fields, this is just exposed so can
-for example simulate it more easily in tests, add a debugger etc.
-
-A [`Web.program`](#program) would have this type
-
-    main : Platform.Program () (Web.State YourState) (Web.Event YourState)
-    main =
-        Web.toProgram ...
-
-In practice, please use [`Web.Program YourState`](#Program)
-
+{-| The "model" in a [`Web.program`](#program)
 -}
 type ProgramState appState
     = State
-        { interface : FastDict.Dict (List String) (InterfaceSingle appState)
+        { interface : FastDict.Dict String (InterfaceSingle appState)
         , appState : appState
         }
 
@@ -183,20 +190,14 @@ type alias Interface future =
 
 
 {-| A "non-batched" [`Interface`](#Interface).
-To create one, use the helpers in `Web.Time`, `.Dom`, `.Http` etc.
+To create one, use the helpers in [`Web.Time`](Web-Time), [`Web.Dom`](Web-Dom), [`Web.Http`](Web-Http) etc.
 -}
 type InterfaceSingle future
-    = InterfaceWithFuture (InterfaceSingleWithFuture future)
-    | InterfaceWithoutFuture InterfaceSingleWithoutFuture
-
-
-{-| An [`InterfaceSingle`](#InterfaceSingle) that will never notify elm
--}
-type InterfaceSingleWithoutFuture
     = DocumentTitleReplaceBy String
     | DocumentAuthorSet String
     | DocumentKeywordsSet (List String)
     | DocumentDescriptionSet String
+    | DocumentEventListen { eventName : String, on : Json.Decode.Decoder future }
     | ConsoleLog String
     | ConsoleWarn String
     | ConsoleError String
@@ -205,13 +206,42 @@ type InterfaceSingleWithoutFuture
     | NavigationGo Int
     | NavigationLoad String
     | NavigationReload
+    | NavigationUrlRequest (AppUrl -> future)
     | FileDownloadUnsignedInt8s { mimeType : String, name : String, content : List Int }
     | ClipboardReplaceBy String
+    | ClipboardRequest (String -> future)
+    | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
     | AudioPlay Audio
+    | DomNodeRender { path : List Int, node : DomTextOrElementHeader future }
+    | NotificationAskForPermission
+    | NotificationShow { id : String, message : String, details : String, on : NotificationClicked -> future }
+    | HttpRequest (HttpRequest future)
+    | TimePosixRequest (Time.Posix -> future)
+    | TimezoneOffsetRequest (Int -> future)
+    | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
+    | TimezoneNameRequest (Time.ZoneName -> future)
+    | RandomUnsignedInt32sRequest { count : Int, on : List Int -> future }
+    | WindowSizeRequest ({ width : Int, height : Int } -> future)
+    | WindowPreferredLanguagesRequest (List String -> future)
+    | WindowEventListen { eventName : String, on : Json.Decode.Decoder future }
+    | WindowVisibilityChangeListen (WindowVisibility -> future)
+    | WindowAnimationFrameListen (Time.Posix -> future)
+    | WindowPreferredLanguagesChangeListen (List String -> future)
+    | SocketConnect { address : String, on : SocketConnectionEvent -> future }
     | SocketMessage { id : SocketId, data : String }
     | SocketDisconnect SocketId
+    | SocketMessageListen { id : SocketId, on : String -> future }
     | LocalStorageSet { key : String, value : Maybe String }
-    | NotificationAskForPermission
+    | LocalStorageRequest { key : String, on : Maybe String -> future }
+    | LocalStorageRemoveOnADifferentTabListen { key : String, on : AppUrl -> future }
+    | LocalStorageSetOnADifferentTabListen
+        { key : String
+        , on : { appUrl : AppUrl, oldValue : Maybe String, newValue : String } -> future
+        }
+    | GeoLocationRequest (GeoLocation -> future)
+    | GeoLocationChangeListen (GeoLocation -> future)
+    | GamepadsRequest (Dict Int Gamepad -> future)
+    | GamepadsChangeListen (Dict Int Gamepad -> future)
 
 
 {-| These are possible errors we can get when loading an audio source file.
@@ -225,18 +255,6 @@ type AudioSourceLoadError
     = AudioSourceLoadDecodeError
     | AudioSourceLoadNetworkError
     | AudioSourceLoadUnknownError String
-
-
-{-| An [`InterfaceSingle`](#InterfaceSingle) that will notify elm some time in the future.
--}
-type InterfaceSingleWithFuture future
-    = DomNodeRender { path : List Int, node : DomTextOrElementHeader future }
-    | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
-    | SocketConnect { address : String, on : SocketConnectionEvent -> future }
-    | NotificationShow { id : String, message : String, details : String, on : NotificationClicked -> future }
-    | HttpRequest (HttpRequest future)
-    | Request (InterfaceSingleRequest future)
-    | Listen (InterfaceSingleListen future)
 
 
 {-| The user clicked a displayed notification,
@@ -260,22 +278,6 @@ type SocketConnectionEvent
     | SocketDisconnected { code : Int, reason : String }
 
 
-{-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will come back only once in the future.
--}
-type InterfaceSingleRequest future
-    = TimePosixRequest (Time.Posix -> future)
-    | TimezoneOffsetRequest (Int -> future)
-    | TimezoneNameRequest (Time.ZoneName -> future)
-    | RandomUnsignedInt32sRequest { count : Int, on : List Int -> future }
-    | WindowSizeRequest ({ width : Int, height : Int } -> future)
-    | WindowPreferredLanguagesRequest (List String -> future)
-    | NavigationUrlRequest (AppUrl -> future)
-    | ClipboardRequest (String -> future)
-    | LocalStorageRequest { key : String, on : Maybe String -> future }
-    | GeoLocationRequest (GeoLocation -> future)
-    | GamepadsRequest (Dict Int Gamepad -> future)
-
-
 {-| Position and (if available) altitude of the device on Earth, as well as the accuracy with which these properties are calculated.
 The geographic position information is provided in terms of World Geodetic System coordinates (WGS84).
 
@@ -297,25 +299,6 @@ type alias GeoLocation =
         , headingWith0AsTrueNorthAndIncreasingClockwise : Maybe Angle
         , speed : Maybe Speed
         }
-
-
-{-| An [`InterfaceSingleWithFuture`](#InterfaceSingleWithFuture) that will possibly notify elm multiple times in the future.
--}
-type InterfaceSingleListen future
-    = WindowEventListen { eventName : String, on : Json.Decode.Decoder future }
-    | WindowVisibilityChangeListen (WindowVisibility -> future)
-    | WindowAnimationFrameListen (Time.Posix -> future)
-    | WindowPreferredLanguagesChangeListen (List String -> future)
-    | DocumentEventListen { eventName : String, on : Json.Decode.Decoder future }
-    | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
-    | SocketMessageListen { id : SocketId, on : String -> future }
-    | LocalStorageRemoveOnADifferentTabListen { key : String, on : AppUrl -> future }
-    | LocalStorageSetOnADifferentTabListen
-        { key : String
-        , on : { appUrl : AppUrl, oldValue : Maybe String, newValue : String } -> future
-        }
-    | GeoLocationChangeListen (GeoLocation -> future)
-    | GamepadsChangeListen (Dict Int Gamepad -> future)
 
 
 {-| The visibility to the user
@@ -379,27 +362,6 @@ type HttpBody
     | HttpBodyUnsignedInt8s { mimeType : String, content : List Int }
 
 
-{-| Safe to ignore. [`HttpRequest`](#HttpRequest) without the actual receiving function
--}
-type alias HttpRequestInfo =
-    RecordWithoutConstructorFunction
-        { url : String
-        , method : String
-        , headers : List { name : String, value : String }
-        , body : HttpBody
-        , expect : HttpExpectInfo
-        , timeout : Maybe Int
-        }
-
-
-{-| Safe to ignore. [`HttpExpect`](#HttpExpect) without the actual receiving function
--}
-type HttpExpectInfo
-    = IdHttpExpectString
-    | IdHttpExpectBytes
-    | IdHttpExpectWhatever
-
-
 {-| Plain text or a [`DomElementHeader`](#DomElementHeader) for use in an [`Interface`](#Interface).
 -}
 type DomTextOrElementHeader future
@@ -450,70 +412,13 @@ type DefaultActionHandling
     | DefaultActionExecute
 
 
-{-| Safe to ignore. Possible identifier for an interface single that can send back values to elm
-only once in the future
--}
-type InterfaceSingleRequestId
-    = IdTimePosixRequest
-    | IdTimezoneOffsetRequest
-    | IdTimezoneNameRequest
-    | IdRandomUnsignedInt32sRequest Int
-    | IdWindowSizeRequest
-    | IdWindowPreferredLanguagesRequest
-    | IdNavigationUrlRequest
-    | IdClipboardRequest
-    | IdLocalStorageRequest { key : String }
-    | IdGeoLocationRequest
-    | IdGamepadsRequest
-
-
-{-| Safe to ignore. Possible identifier for an interface single that can send back values to elm
-at multiple times in the future
--}
-type InterfaceSingleListenId
-    = IdWindowEventListen String
-    | IdWindowVisibilityChangeListen
-    | IdWindowAnimationFrameListen
-    | IdWindowPreferredLanguagesChangeListen
-    | IdDocumentEventListen String
-    | IdTimePeriodicallyListen { milliSeconds : Int }
-    | IdSocketMessageListen SocketId
-    | IdLocalStorageRemoveOnADifferentTabListen { key : String }
-    | IdLocalStorageSetOnADifferentTabListen { key : String }
-    | IdGeoLocationChangeListen
-    | IdGamepadsChangeListen
-
-
-{-| Safe to ignore. [`DomElementHeader`](#DomElementHeader) without the actual receiving functions for events
--}
-type alias DomElementHeaderInfo =
-    RecordWithoutConstructorFunction
-        { namespace : Maybe String
-        , tag : String
-        , styles : Dict String String
-        , attributes : Dict String String
-        , attributesNamespaced : Dict ( String, String ) String
-        , scrollToPosition : Maybe { fromLeft : Float, fromTop : Float }
-        , scrollToShow : Maybe { x : DomElementVisibilityAlignment, y : DomElementVisibilityAlignment }
-        , scrollPositionRequest : Bool
-        , eventListens : Dict String DefaultActionHandling
-        }
-
-
-{-| Safe to ignore. [`DomTextOrElementHeader`](#DomTextOrElementHeader) without the actual receiving functions for events
--}
-type DomTextOrElementHeaderInfo
-    = DomTextInfo String
-    | DomElementHeaderInfo DomElementHeaderInfo
-
-
 {-| Identifier for a [`Web.Socket`](Web-Socket) that can be used to [communicate](Web-Socket#communicate)
 -}
 type SocketId
     = SocketId Int
 
 
-{-| Combine multiple [`Interface`](#Interface)s into one.
+{-| Combine multiple [`Interface`](#Interface)s into one
 -}
 interfaceBatch : List (Interface future) -> Interface future
 interfaceBatch =
@@ -535,6 +440,228 @@ and
 interfaceNone : Interface future_
 interfaceNone =
     Rope.empty
+
+
+interfaceSingleFutureMap : (future -> mappedFuture) -> (InterfaceSingle future -> InterfaceSingle mappedFuture)
+interfaceSingleFutureMap futureChange =
+    \interface ->
+        case interface of
+            DocumentTitleReplaceBy title ->
+                DocumentTitleReplaceBy title
+
+            DocumentAuthorSet author ->
+                DocumentAuthorSet author
+
+            DocumentKeywordsSet keywords ->
+                DocumentKeywordsSet keywords
+
+            DocumentDescriptionSet description ->
+                DocumentDescriptionSet description
+
+            ConsoleLog message ->
+                ConsoleLog message
+
+            ConsoleWarn message ->
+                ConsoleWarn message
+
+            ConsoleError message ->
+                ConsoleError message
+
+            NavigationReplaceUrl appUrl ->
+                NavigationReplaceUrl appUrl
+
+            NavigationPushUrl appUrl ->
+                NavigationPushUrl appUrl
+
+            NavigationGo urlStepCount ->
+                NavigationGo urlStepCount
+
+            NavigationLoad url ->
+                NavigationLoad url
+
+            NavigationReload ->
+                NavigationReload
+
+            FileDownloadUnsignedInt8s download ->
+                FileDownloadUnsignedInt8s download
+
+            ClipboardReplaceBy clipboard ->
+                ClipboardReplaceBy clipboard
+
+            AudioPlay audio ->
+                AudioPlay audio
+
+            SocketMessage socketMessage ->
+                SocketMessage socketMessage
+
+            SocketDisconnect id ->
+                SocketDisconnect id
+
+            LocalStorageSet localStorageItem ->
+                LocalStorageSet localStorageItem
+
+            NotificationAskForPermission ->
+                NotificationAskForPermission
+
+            DomNodeRender toRender ->
+                { path = toRender.path, node = toRender.node |> domNodeFutureMap futureChange }
+                    |> DomNodeRender
+
+            AudioSourceLoad load ->
+                { url = load.url, on = \event -> load.on event |> futureChange }
+                    |> AudioSourceLoad
+
+            SocketConnect connect ->
+                { address = connect.address, on = \event -> event |> connect.on |> futureChange }
+                    |> SocketConnect
+
+            NotificationShow show ->
+                { id = show.id
+                , message = show.message
+                , details = show.details
+                , on = \future -> future |> show.on |> futureChange
+                }
+                    |> NotificationShow
+
+            HttpRequest httpRequest ->
+                httpRequest |> httpRequestFutureMap futureChange |> HttpRequest
+
+            LocalStorageRequest request ->
+                { key = request.key, on = \event -> event |> request.on |> futureChange }
+                    |> LocalStorageRequest
+
+            WindowSizeRequest toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowSizeRequest
+
+            WindowPreferredLanguagesRequest toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowPreferredLanguagesRequest
+
+            NavigationUrlRequest toFuture ->
+                (\event -> toFuture event |> futureChange) |> NavigationUrlRequest
+
+            ClipboardRequest toFuture ->
+                (\event -> toFuture event |> futureChange) |> ClipboardRequest
+
+            TimePosixRequest requestTimeNow ->
+                (\event -> requestTimeNow event |> futureChange)
+                    |> TimePosixRequest
+
+            TimezoneOffsetRequest requestTimezone ->
+                (\event -> requestTimezone event |> futureChange)
+                    |> TimezoneOffsetRequest
+
+            TimezoneNameRequest requestTimezoneName ->
+                (\event -> requestTimezoneName event |> futureChange)
+                    |> TimezoneNameRequest
+
+            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
+                { count = randomUnsignedInt32sRequest.count
+                , on = \ints -> randomUnsignedInt32sRequest.on ints |> futureChange
+                }
+                    |> RandomUnsignedInt32sRequest
+
+            GeoLocationRequest toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GeoLocationRequest
+
+            GamepadsRequest toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GamepadsRequest
+
+            WindowEventListen listen ->
+                { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
+                    |> WindowEventListen
+
+            WindowVisibilityChangeListen toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowVisibilityChangeListen
+
+            WindowAnimationFrameListen toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowAnimationFrameListen
+
+            WindowPreferredLanguagesChangeListen toFuture ->
+                (\event -> toFuture event |> futureChange) |> WindowPreferredLanguagesChangeListen
+
+            TimePeriodicallyListen timePeriodicallyListen ->
+                { intervalDurationMilliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds
+                , on = \posix -> timePeriodicallyListen.on posix |> futureChange
+                }
+                    |> TimePeriodicallyListen
+
+            DocumentEventListen listen ->
+                { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
+                    |> DocumentEventListen
+
+            SocketMessageListen messageListen ->
+                { id = messageListen.id, on = \event -> event |> messageListen.on |> futureChange }
+                    |> SocketMessageListen
+
+            LocalStorageRemoveOnADifferentTabListen listen ->
+                { key = listen.key, on = \event -> event |> listen.on |> futureChange }
+                    |> LocalStorageRemoveOnADifferentTabListen
+
+            LocalStorageSetOnADifferentTabListen listen ->
+                { key = listen.key, on = \event -> event |> listen.on |> futureChange }
+                    |> LocalStorageSetOnADifferentTabListen
+
+            GeoLocationChangeListen toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GeoLocationChangeListen
+
+            GamepadsChangeListen toFuture ->
+                (\event -> event |> toFuture |> futureChange) |> GamepadsChangeListen
+
+
+domElementHeaderFutureMap : (future -> mappedFuture) -> (DomElementHeader future -> DomElementHeader mappedFuture)
+domElementHeaderFutureMap futureChange =
+    \domElementToMap ->
+        { namespace = domElementToMap.namespace
+        , tag = domElementToMap.tag
+        , styles = domElementToMap.styles
+        , attributes = domElementToMap.attributes
+        , attributesNamespaced = domElementToMap.attributesNamespaced
+        , scrollToPosition = domElementToMap.scrollToPosition
+        , scrollToShow = domElementToMap.scrollToShow
+        , scrollPositionRequest =
+            domElementToMap.scrollPositionRequest
+                |> Maybe.map (\request position -> position |> request |> futureChange)
+        , eventListens =
+            domElementToMap.eventListens
+                |> Dict.map
+                    (\_ listen ->
+                        { on = \event -> listen.on event |> futureChange
+                        , defaultActionHandling = listen.defaultActionHandling
+                        }
+                    )
+        }
+
+
+domNodeFutureMap : (future -> mappedFuture) -> (DomTextOrElementHeader future -> DomTextOrElementHeader mappedFuture)
+domNodeFutureMap futureChange =
+    \domElementToMap ->
+        case domElementToMap of
+            DomText text ->
+                DomText text
+
+            DomElementHeader domElement ->
+                domElement |> domElementHeaderFutureMap futureChange |> DomElementHeader
+
+
+httpRequestFutureMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
+httpRequestFutureMap futureChange =
+    \httpRequest ->
+        { url = httpRequest.url
+        , method = httpRequest.method
+        , headers = httpRequest.headers
+        , body = httpRequest.body
+        , timeout = httpRequest.timeout
+        , expect =
+            case httpRequest.expect of
+                HttpExpectWhatever expectWhatever ->
+                    (\unit -> expectWhatever unit |> futureChange) |> HttpExpectWhatever
+
+                HttpExpectString expectString ->
+                    (\string -> expectString string |> futureChange) |> HttpExpectString
+
+                HttpExpectBytes expectBytes ->
+                    (\bytes -> expectBytes bytes |> futureChange) |> HttpExpectBytes
+        }
 
 
 {-| Take what the [`Interface`](#Interface) can come back with and return a different future value.
@@ -593,494 +720,78 @@ interfaceFutureMap : (future -> mappedFuture) -> (Interface future -> Interface 
 interfaceFutureMap futureChange =
     \interface ->
         interface
-            |> Rope.toList
-            |> List.map
+            |> Rope.map
                 (\interfaceSingle ->
                     interfaceSingle |> interfaceSingleFutureMap futureChange
                 )
-            |> Rope.fromList
 
 
-interfaceSingleFutureMap : (future -> mappedFuture) -> (InterfaceSingle future -> InterfaceSingle mappedFuture)
-interfaceSingleFutureMap futureChange =
-    \interface ->
-        case interface of
-            InterfaceWithoutFuture interfaceWithoutFuture ->
-                interfaceWithoutFuture |> InterfaceWithoutFuture
-
-            InterfaceWithFuture interfaceWithFuture ->
-                interfaceWithFuture
-                    |> interfaceWithFutureMap futureChange
-                    |> InterfaceWithFuture
-
-
-interfaceWithFutureMap : (future -> mappedFuture) -> (InterfaceSingleWithFuture future -> InterfaceSingleWithFuture mappedFuture)
-interfaceWithFutureMap futureChange =
-    \interface ->
-        case interface of
-            DomNodeRender toRender ->
-                { path = toRender.path, node = toRender.node |> domNodeFutureMap futureChange }
-                    |> DomNodeRender
-
-            AudioSourceLoad load ->
-                { url = load.url, on = \event -> load.on event |> futureChange }
-                    |> AudioSourceLoad
-
-            SocketConnect connect ->
-                { address = connect.address, on = \event -> event |> connect.on |> futureChange }
-                    |> SocketConnect
-
-            NotificationShow show ->
-                { id = show.id
-                , message = show.message
-                , details = show.details
-                , on = \future -> future |> show.on |> futureChange
-                }
-                    |> NotificationShow
-
-            HttpRequest httpRequest ->
-                httpRequest |> httpRequestFutureMap futureChange |> HttpRequest
-
-            Request request ->
-                request |> interfaceRequestFutureMap futureChange |> Request
-
-            Listen listen ->
-                listen |> interfaceListenFutureMap futureChange |> Listen
-
-
-domNodeFutureMap : (future -> mappedFuture) -> (DomTextOrElementHeader future -> DomTextOrElementHeader mappedFuture)
-domNodeFutureMap futureChange =
-    \domElementToMap ->
-        case domElementToMap of
-            DomText text ->
-                DomText text
-
-            DomElementHeader domElement ->
-                domElement |> domElementHeaderFutureMap futureChange |> DomElementHeader
-
-
-domElementHeaderFutureMap : (future -> mappedFuture) -> (DomElementHeader future -> DomElementHeader mappedFuture)
-domElementHeaderFutureMap futureChange =
-    \domElementToMap ->
-        { namespace = domElementToMap.namespace
-        , tag = domElementToMap.tag
-        , styles = domElementToMap.styles
-        , attributes = domElementToMap.attributes
-        , attributesNamespaced = domElementToMap.attributesNamespaced
-        , scrollToPosition = domElementToMap.scrollToPosition
-        , scrollToShow = domElementToMap.scrollToShow
-        , scrollPositionRequest =
-            domElementToMap.scrollPositionRequest
-                |> Maybe.map (\request position -> position |> request |> futureChange)
-        , eventListens =
-            domElementToMap.eventListens
-                |> Dict.map
-                    (\_ listen ->
-                        { on = \event -> listen.on event |> futureChange
-                        , defaultActionHandling = listen.defaultActionHandling
-                        }
-                    )
-        }
-
-
-interfaceRequestFutureMap : (future -> mappedFuture) -> (InterfaceSingleRequest future -> InterfaceSingleRequest mappedFuture)
-interfaceRequestFutureMap futureChange =
-    \interfaceSingleRequest ->
-        case interfaceSingleRequest of
-            LocalStorageRequest request ->
-                { key = request.key, on = \event -> event |> request.on |> futureChange }
-                    |> LocalStorageRequest
-
-            WindowSizeRequest toFuture ->
-                (\event -> toFuture event |> futureChange) |> WindowSizeRequest
-
-            WindowPreferredLanguagesRequest toFuture ->
-                (\event -> toFuture event |> futureChange) |> WindowPreferredLanguagesRequest
-
-            NavigationUrlRequest toFuture ->
-                (\event -> toFuture event |> futureChange) |> NavigationUrlRequest
-
-            ClipboardRequest toFuture ->
-                (\event -> toFuture event |> futureChange) |> ClipboardRequest
-
-            TimePosixRequest requestTimeNow ->
-                (\event -> requestTimeNow event |> futureChange)
-                    |> TimePosixRequest
-
-            TimezoneOffsetRequest requestTimezone ->
-                (\event -> requestTimezone event |> futureChange)
-                    |> TimezoneOffsetRequest
-
-            TimezoneNameRequest requestTimezoneName ->
-                (\event -> requestTimezoneName event |> futureChange)
-                    |> TimezoneNameRequest
-
-            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
-                { count = randomUnsignedInt32sRequest.count
-                , on = \ints -> randomUnsignedInt32sRequest.on ints |> futureChange
-                }
-                    |> RandomUnsignedInt32sRequest
-
-            GeoLocationRequest toFuture ->
-                (\event -> event |> toFuture |> futureChange) |> GeoLocationRequest
-
-            GamepadsRequest toFuture ->
-                (\event -> event |> toFuture |> futureChange) |> GamepadsRequest
-
-
-httpRequestFutureMap : (future -> mappedFuture) -> (HttpRequest future -> HttpRequest mappedFuture)
-httpRequestFutureMap futureChange =
-    \httpRequest ->
-        { url = httpRequest.url
-        , method = httpRequest.method
-        , headers = httpRequest.headers
-        , body = httpRequest.body
-        , timeout = httpRequest.timeout
-        , expect =
-            case httpRequest.expect of
-                HttpExpectWhatever expectWhatever ->
-                    (\unit -> expectWhatever unit |> futureChange) |> HttpExpectWhatever
-
-                HttpExpectString expectString ->
-                    (\string -> expectString string |> futureChange) |> HttpExpectString
-
-                HttpExpectBytes expectBytes ->
-                    (\bytes -> expectBytes bytes |> futureChange) |> HttpExpectBytes
-        }
-
-
-interfaceListenFutureMap : (future -> mappedFuture) -> (InterfaceSingleListen future -> InterfaceSingleListen mappedFuture)
-interfaceListenFutureMap futureChange =
-    \interfaceSingleListen ->
-        case interfaceSingleListen of
-            WindowEventListen listen ->
-                { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
-                    |> WindowEventListen
-
-            WindowVisibilityChangeListen toFuture ->
-                (\event -> toFuture event |> futureChange) |> WindowVisibilityChangeListen
-
-            WindowAnimationFrameListen toFuture ->
-                (\event -> toFuture event |> futureChange) |> WindowAnimationFrameListen
-
-            WindowPreferredLanguagesChangeListen toFuture ->
-                (\event -> toFuture event |> futureChange) |> WindowPreferredLanguagesChangeListen
-
-            TimePeriodicallyListen timePeriodicallyListen ->
-                { intervalDurationMilliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds
-                , on = \posix -> timePeriodicallyListen.on posix |> futureChange
-                }
-                    |> TimePeriodicallyListen
-
-            DocumentEventListen listen ->
-                { eventName = listen.eventName, on = listen.on |> Json.Decode.map futureChange }
-                    |> DocumentEventListen
-
-            SocketMessageListen messageListen ->
-                { id = messageListen.id, on = \event -> event |> messageListen.on |> futureChange }
-                    |> SocketMessageListen
-
-            LocalStorageRemoveOnADifferentTabListen listen ->
-                { key = listen.key, on = \event -> event |> listen.on |> futureChange }
-                    |> LocalStorageRemoveOnADifferentTabListen
-
-            LocalStorageSetOnADifferentTabListen listen ->
-                { key = listen.key, on = \event -> event |> listen.on |> futureChange }
-                    |> LocalStorageSetOnADifferentTabListen
-
-            GeoLocationChangeListen toFuture ->
-                (\event -> event |> toFuture |> futureChange) |> GeoLocationChangeListen
-
-            GamepadsChangeListen toFuture ->
-                (\event -> event |> toFuture |> futureChange) |> GamepadsChangeListen
-
-
-{-| Ignore the specific variants, this is just exposed so can
-for example simulate it more easily in tests, add a debugger etc.
-
-A [`Web.program`](#program) would have this type
-
-    main : Platform.Program () (Web.State YourState) (Web.Event YourState)
-    main =
-        Web.toProgram ...
-
-In practice, please use [`Web.Program YourState`](#Program)
-
+{-| The "msg" in a [`Web.program`](#program)
 -}
 type ProgramEvent appState
-    = InterfaceDiffFailedToDecode Json.Decode.Error
-    | InterfaceEventDataFailedToDecode Json.Decode.Error
-    | InterfaceEventIgnored
-    | AppEventToNewAppState appState
+    = JsEventFailedToDecode Json.Decode.Error
+    | JsEventEnabledConstructionOfNewAppState appState
 
 
-{-| Determine which outgoing effects need to be executed based on the difference between old and updated interfaces
-
-To for example determine the initial effects, use
-
-    { old = Set.StructuredId.empty, updated = initialInterface }
-        |> interfaceDiffs
-
+{-| What [`InterfaceSingleEdit`](#InterfaceSingleEdit)s are needed to sync up
 -}
-interfaceDiffs :
-    { old : FastDict.Dict (List String) (InterfaceSingle future)
-    , updated : FastDict.Dict (List String) (InterfaceSingle future)
-    }
-    -> List InterfaceDiff
-interfaceDiffs =
+interfaceSingleEdits :
+    { old : InterfaceSingle future, updated : InterfaceSingle future }
+    -> List InterfaceSingleEdit
+interfaceSingleEdits =
     \interfaces ->
-        ( interfaces.old, interfaces.updated )
-            |> Set.StructuredId.fold2From []
-                (\onlyOld soFar ->
-                    case toRemoveDiff onlyOld of
-                        Nothing ->
-                            soFar
-
-                        Just removeDiff ->
-                            (removeDiff |> InterfaceWithoutFutureDiff) :: soFar
-                )
-                (\oldAndNew soFar ->
-                    (oldAndNew |> toMergeDiff) ++ soFar
-                )
-                (\onlyNew soFar ->
-                    toAddDiff onlyNew :: soFar
-                )
-
-
-interfaceSingleListenToId : InterfaceSingleListen future_ -> InterfaceSingleListenId
-interfaceSingleListenToId =
-    \interfaceSingleListen ->
-        case interfaceSingleListen of
-            TimePeriodicallyListen timePeriodicallyListen ->
-                IdTimePeriodicallyListen
-                    { milliSeconds = timePeriodicallyListen.intervalDurationMilliSeconds }
-
-            SocketMessageListen messageListen ->
-                IdSocketMessageListen messageListen.id
-
-            LocalStorageRemoveOnADifferentTabListen listen ->
-                IdLocalStorageRemoveOnADifferentTabListen { key = listen.key }
-
-            LocalStorageSetOnADifferentTabListen listen ->
-                IdLocalStorageSetOnADifferentTabListen { key = listen.key }
-
-            WindowEventListen listen ->
-                IdWindowEventListen listen.eventName
-
-            WindowVisibilityChangeListen _ ->
-                IdWindowVisibilityChangeListen
-
-            WindowAnimationFrameListen _ ->
-                IdWindowAnimationFrameListen
-
-            WindowPreferredLanguagesChangeListen _ ->
-                IdWindowPreferredLanguagesChangeListen
-
-            DocumentEventListen listen ->
-                IdDocumentEventListen listen.eventName
-
-            GeoLocationChangeListen _ ->
-                IdGeoLocationChangeListen
-
-            GamepadsChangeListen _ ->
-                IdGamepadsChangeListen
-
-
-toRemoveDiff : InterfaceSingle future_ -> Maybe InterfaceWithoutFutureDiff
-toRemoveDiff =
-    \onlyOld ->
-        case onlyOld of
-            InterfaceWithoutFuture removedInterfaceWithoutFuture ->
-                case removedInterfaceWithoutFuture of
-                    AudioPlay audio ->
-                        RemoveAudio { url = audio.url, startTime = audio.startTime } |> Just
-
-                    DocumentTitleReplaceBy _ ->
-                        Nothing
-
-                    DocumentAuthorSet _ ->
-                        Nothing
-
-                    DocumentKeywordsSet _ ->
-                        Nothing
-
-                    DocumentDescriptionSet _ ->
-                        Nothing
-
-                    ConsoleLog _ ->
-                        Nothing
-
-                    ConsoleWarn _ ->
-                        Nothing
-
-                    ConsoleError _ ->
-                        Nothing
-
-                    NavigationReplaceUrl _ ->
-                        Nothing
-
-                    NavigationPushUrl _ ->
-                        Nothing
-
-                    NavigationGo _ ->
-                        Nothing
-
-                    NavigationLoad _ ->
-                        Nothing
-
-                    NavigationReload ->
-                        Nothing
-
-                    FileDownloadUnsignedInt8s _ ->
-                        Nothing
-
-                    ClipboardReplaceBy _ ->
-                        Nothing
-
-                    SocketMessage _ ->
-                        Nothing
-
-                    SocketDisconnect _ ->
-                        Nothing
-
-                    LocalStorageSet _ ->
-                        Nothing
-
-                    NotificationAskForPermission ->
-                        Nothing
-
-            InterfaceWithFuture interfaceWithFuture ->
-                case interfaceWithFuture of
-                    Request (TimePosixRequest _) ->
-                        Nothing
-
-                    Request (TimezoneOffsetRequest _) ->
-                        Nothing
-
-                    Request (TimezoneNameRequest _) ->
-                        Nothing
-
-                    Request (RandomUnsignedInt32sRequest _) ->
-                        Nothing
-
-                    HttpRequest request ->
-                        RemoveHttpRequest { url = request.url } |> Just
-
-                    DomNodeRender toRender ->
-                        RemoveDom { path = toRender.path } |> Just
-
-                    Request (WindowSizeRequest _) ->
-                        Nothing
-
-                    Request (WindowPreferredLanguagesRequest _) ->
-                        Nothing
-
-                    Request (NavigationUrlRequest _) ->
-                        Nothing
-
-                    Request (ClipboardRequest _) ->
-                        Nothing
-
-                    AudioSourceLoad _ ->
-                        Nothing
-
-                    SocketConnect connect ->
-                        RemoveSocketConnect { address = connect.address } |> Just
-
-                    NotificationShow show ->
-                        RemoveNotificationShow { id = show.id } |> Just
-
-                    Request (LocalStorageRequest _) ->
-                        Nothing
-
-                    Request (GeoLocationRequest _) ->
-                        Nothing
-
-                    Request (GamepadsRequest _) ->
-                        Nothing
-
-                    Listen listen ->
-                        listen |> interfaceSingleListenToId |> RemoveListen |> Just
-
-
-toMergeDiff : ( InterfaceSingle future, InterfaceSingle future ) -> List InterfaceDiff
-toMergeDiff =
-    \oldAndNewInterfaceSingles ->
-        case oldAndNewInterfaceSingles of
-            ( InterfaceWithFuture (DomNodeRender domElementPreviouslyRendered), InterfaceWithFuture (DomNodeRender domElementToRender) ) ->
-                ( domElementPreviouslyRendered.node, domElementToRender.node )
+        case ( interfaces.old, interfaces.updated ) of
+            ( DomNodeRender domElementPreviouslyRendered, DomNodeRender domElementToRender ) ->
+                { old = domElementPreviouslyRendered.node, updated = domElementToRender.node }
                     |> domTextOrElementHeaderDiff
                     |> List.map
                         (\diff ->
                             { path = domElementPreviouslyRendered.path, replacement = diff }
                                 |> EditDom
-                                |> InterfaceWithFutureDiff
                         )
 
-            ( InterfaceWithoutFuture (AudioPlay previouslyPlayed), InterfaceWithoutFuture (AudioPlay toPlay) ) ->
+            ( AudioPlay previouslyPlayed, AudioPlay toPlay ) ->
                 ( previouslyPlayed, toPlay )
                     |> audioDiff
                     |> List.map
                         (\diff ->
                             { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
                                 |> EditAudio
-                                |> InterfaceWithoutFutureDiff
                         )
 
-            ( InterfaceWithFuture (NotificationShow _), InterfaceWithFuture (NotificationShow toShow) ) ->
+            ( NotificationShow _, NotificationShow toShow ) ->
                 { id = toShow.id, message = toShow.message, details = toShow.details }
                     |> EditNotification
-                    |> InterfaceWithoutFutureDiff
                     |> List.singleton
 
             _ ->
                 []
 
 
-domElementHeaderToInfo : DomElementHeader future_ -> DomElementHeaderInfo
-domElementHeaderToInfo =
-    \domElement ->
-        { namespace = domElement.namespace
-        , tag = domElement.tag
-        , styles = domElement.styles
-        , attributes = domElement.attributes
-        , attributesNamespaced = domElement.attributesNamespaced
-        , scrollToPosition = domElement.scrollToPosition
-        , scrollToShow = domElement.scrollToShow
-        , scrollPositionRequest =
-            case domElement.scrollPositionRequest of
-                Nothing ->
-                    False
-
-                Just _ ->
-                    True
-        , eventListens =
-            domElement.eventListens |> Dict.map (\_ listen -> listen.defaultActionHandling)
-        }
-
-
-domTextOrElementHeaderDiff : ( DomTextOrElementHeader state, DomTextOrElementHeader state ) -> List ReplacementInEditDomDiff
+domTextOrElementHeaderDiff :
+    { old : DomTextOrElementHeader state, updated : DomTextOrElementHeader state }
+    -> List DomEdit
 domTextOrElementHeaderDiff =
-    \( aNode, bNode ) ->
-        case ( aNode, bNode ) of
+    \nodes ->
+        case ( nodes.old, nodes.updated ) of
             ( DomText _, DomElementHeader bElement ) ->
-                [ bElement |> domElementHeaderToInfo |> DomElementHeaderInfo |> ReplacementDomNode ]
+                [ bElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
 
             ( DomElementHeader _, DomText bText ) ->
-                [ bText |> DomTextInfo |> ReplacementDomNode ]
+                [ bText |> DomText |> ReplacementDomNode ]
 
             ( DomText aText, DomText bText ) ->
                 if aText == bText then
                     []
 
                 else
-                    [ bText |> DomTextInfo |> ReplacementDomNode ]
+                    [ bText |> DomText |> ReplacementDomNode ]
 
             ( DomElementHeader aElement, DomElementHeader bElement ) ->
                 ( aElement, bElement ) |> domElementHeaderDiff
 
 
-domElementHeaderDiff : ( DomElementHeader future, DomElementHeader future ) -> List ReplacementInEditDomDiff
+domElementHeaderDiff : ( DomElementHeader future, DomElementHeader future ) -> List DomEdit
 domElementHeaderDiff =
     \( aElement, bElement ) ->
         if aElement.tag == bElement.tag then
@@ -1138,10 +849,10 @@ domElementHeaderDiff =
                 |> List.filterMap identity
 
         else
-            [ bElement |> domElementHeaderToInfo |> DomElementHeaderInfo |> ReplacementDomNode ]
+            [ bElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
 
 
-audioDiff : ( Audio, Audio ) -> List EditAudioDiff
+audioDiff : ( Audio, Audio ) -> List AudioEdit
 audioDiff =
     \( previous, new ) ->
         [ if previous.volume == new.volume then
@@ -1168,385 +879,98 @@ audioDiff =
             |> List.filterMap identity
 
 
-interfaceSingleRequestToId : InterfaceSingleRequest future_ -> InterfaceSingleRequestId
-interfaceSingleRequestToId =
-    \interfaceSingleRequest ->
-        case interfaceSingleRequest of
-            TimePosixRequest _ ->
-                IdTimePosixRequest
+{-| Determine which outgoing effects need to be executed based on the difference between old and updated interfaces
 
-            TimezoneOffsetRequest _ ->
-                IdTimezoneOffsetRequest
+To for example determine the initial effects, use
 
-            TimezoneNameRequest _ ->
-                IdTimezoneNameRequest
+    { old = FastDict.empty, updated = initialInterface }
+        |> interfacesDiff
 
-            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
-                IdRandomUnsignedInt32sRequest randomUnsignedInt32sRequest.count
-
-            WindowSizeRequest _ ->
-                IdWindowSizeRequest
-
-            WindowPreferredLanguagesRequest _ ->
-                IdWindowPreferredLanguagesRequest
-
-            NavigationUrlRequest _ ->
-                IdNavigationUrlRequest
-
-            ClipboardRequest _ ->
-                IdClipboardRequest
-
-            LocalStorageRequest request ->
-                IdLocalStorageRequest { key = request.key }
-
-            GeoLocationRequest _ ->
-                IdGeoLocationRequest
-
-            GamepadsRequest _ ->
-                IdGamepadsRequest
-
-
-toAddDiff : InterfaceSingle future_ -> InterfaceDiff
-toAddDiff =
-    \onlyNew ->
-        case onlyNew of
-            InterfaceWithoutFuture interfaceWithoutFuture ->
-                Add interfaceWithoutFuture
-                    |> InterfaceWithoutFutureDiff
-
-            InterfaceWithFuture interfaceWithFuture ->
-                (case interfaceWithFuture of
-                    DomNodeRender domNodeAndPath ->
-                        { path = domNodeAndPath.path, replacement = domNodeAndPath.node |> domNodeToId |> ReplacementDomNode } |> EditDom
-
-                    AudioSourceLoad load ->
-                        AddAudioSourceLoad load.url
-
-                    SocketConnect connect ->
-                        AddSocketConnect { address = connect.address }
-
-                    NotificationShow show ->
-                        AddNotificationShow { id = show.id, message = show.message, details = show.details }
-
-                    HttpRequest httpRequest ->
-                        AddHttpRequest (httpRequest |> httpRequestToId)
-
-                    Request request ->
-                        request |> interfaceSingleRequestToId |> AddRequest
-
-                    Listen listen ->
-                        listen |> interfaceSingleListenToId |> AddListen
+-}
+interfacesDiff :
+    { old : FastDict.Dict String (InterfaceSingle future)
+    , updated : FastDict.Dict String (InterfaceSingle future)
+    }
+    -> List { id : String, diff : InterfaceSingleDiff }
+interfacesDiff =
+    \interfaces ->
+        ( interfaces.old, interfaces.updated )
+            |> Set.StructuredId.fold2From []
+                (\id _ soFar ->
+                    { id = id, diff = Remove } :: soFar
                 )
-                    |> InterfaceWithFutureDiff
-
-
-httpRequestToId : HttpRequest future_ -> HttpRequestInfo
-httpRequestToId =
-    \httpRequest ->
-        { url = httpRequest.url
-        , method = httpRequest.method |> String.toUpper
-        , headers = httpRequest.headers
-        , body = httpRequest.body
-        , expect = httpRequest.expect |> httpExpectToId
-        , timeout = httpRequest.timeout
-        }
-
-
-httpExpectToId : HttpExpect future_ -> HttpExpectInfo
-httpExpectToId =
-    \httpExpect ->
-        case httpExpect of
-            HttpExpectWhatever _ ->
-                IdHttpExpectWhatever
-
-            HttpExpectString _ ->
-                IdHttpExpectString
-
-            HttpExpectBytes _ ->
-                IdHttpExpectBytes
-
-
-domNodeToId : DomTextOrElementHeader future_ -> DomTextOrElementHeaderInfo
-domNodeToId domNode =
-    case domNode of
-        DomText text ->
-            DomTextInfo text
-
-        DomElementHeader element ->
-            DomElementHeaderInfo (element |> domElementHeaderToInfo)
-
-
-interfaceSingleWithFutureIdToStructuredId : InterfaceSingleWithFutureId -> StructuredId
-interfaceSingleWithFutureIdToStructuredId =
-    \idInterfaceWithFuture ->
-        StructuredId.ofVariant
-            (case idInterfaceWithFuture of
-                IdDomNodeRender path ->
-                    ( "DomNodeRender"
-                    , [ path.path |> List.map StructuredId.ofInt |> StructuredId.ofList ]
+                (\id ( old, updated ) soFar ->
+                    ({ old = old, updated = updated }
+                        |> interfaceSingleEdits
+                        |> List.map (\edit -> { id = id, diff = edit |> Edit })
                     )
-
-                IdAudioSourceLoad sourceUrl ->
-                    ( "AudioSourceLoad"
-                    , [ StructuredId.ofString sourceUrl
-                      ]
-                    )
-
-                IdSocketConnect connect ->
-                    ( "SocketConnect"
-                    , [ StructuredId.ofString connect.address
-                      ]
-                    )
-
-                IdNotificationShow show ->
-                    ( "NotificationShow"
-                    , [ show.id |> StructuredId.ofString
-                      ]
-                    )
-
-                IdHttpRequest request ->
-                    ( "HttpRequest"
-                    , [ request.url |> StructuredId.ofString
-                      ]
-                    )
-
-                IdRequest request ->
-                    request |> interfaceSingleRequestIdToStructuredId
-
-                IdListen listenId ->
-                    listenId |> listenIdToStructuredId
-            )
-
-
-interfaceSingleRequestIdToStructuredId : InterfaceSingleRequestId -> ( String, List StructuredId )
-interfaceSingleRequestIdToStructuredId =
-    \interfaceSingleRequestId ->
-        case interfaceSingleRequestId of
-            IdTimePosixRequest ->
-                ( "TimePosixRequest", [] )
-
-            IdTimezoneOffsetRequest ->
-                ( "TimezoneOffsetRequest", [] )
-
-            IdTimezoneNameRequest ->
-                ( "TimezoneNameRequest", [] )
-
-            IdRandomUnsignedInt32sRequest count ->
-                ( "RandomUnsignedInt32sRequest"
-                , [ count |> StructuredId.ofInt
-                  ]
+                        ++ soFar
                 )
-
-            IdLocalStorageRequest request ->
-                ( "LocalStorageRequest"
-                , [ request.key |> StructuredId.ofString
-                  ]
+                (\id onlyNew soFar ->
+                    { id = id
+                    , diff = onlyNew |> interfaceSingleFutureMap (\_ -> ()) |> Add
+                    }
+                        :: soFar
                 )
-
-            IdWindowSizeRequest ->
-                ( "WindowSizeRequest", [] )
-
-            IdWindowPreferredLanguagesRequest ->
-                ( "WindowPreferredLanguagesRequest", [] )
-
-            IdNavigationUrlRequest ->
-                ( "NavigationUrlRequest", [] )
-
-            IdClipboardRequest ->
-                ( "ClipboardRequest", [] )
-
-            IdGeoLocationRequest ->
-                ( "GeoLocationRequest", [] )
-
-            IdGamepadsRequest ->
-                ( "GamepadsRequest", [] )
-
-
-socketIdToStructuredId : SocketId -> StructuredId
-socketIdToStructuredId =
-    \(SocketId raw) -> raw |> StructuredId.ofInt
-
-
-listenIdToStructuredId : InterfaceSingleListenId -> ( String, List StructuredId )
-listenIdToStructuredId =
-    \listenId ->
-        case listenId of
-            IdWindowEventListen eventName ->
-                ( "WindowEventListen"
-                , [ StructuredId.ofString eventName
-                  ]
-                )
-
-            IdWindowVisibilityChangeListen ->
-                ( "WindowVisibilityChangeListen", [] )
-
-            IdWindowAnimationFrameListen ->
-                ( "WindowAnimationFrameListen", [] )
-
-            IdWindowPreferredLanguagesChangeListen ->
-                ( "WindowPreferredLanguagesChangeListen", [] )
-
-            IdDocumentEventListen eventName ->
-                ( "DocumentEventListen"
-                , [ StructuredId.ofString eventName
-                  ]
-                )
-
-            IdTimePeriodicallyListen intervalDuration ->
-                ( "TimePeriodicallyListen"
-                , [ intervalDuration.milliSeconds |> StructuredId.ofInt
-                  ]
-                )
-
-            IdSocketMessageListen id ->
-                ( "SocketConnect"
-                , [ id |> socketIdToStructuredId
-                  ]
-                )
-
-            IdLocalStorageRemoveOnADifferentTabListen listen ->
-                ( "LocalStorageRemoveOnADifferentTabListen"
-                , [ listen.key |> StructuredId.ofString ]
-                )
-
-            IdLocalStorageSetOnADifferentTabListen listen ->
-                ( "LocalStorageSetOnADifferentTabListen"
-                , [ listen.key |> StructuredId.ofString ]
-                )
-
-            IdGeoLocationChangeListen ->
-                ( "GeoLocationChangeListen", [] )
-
-            IdGamepadsChangeListen ->
-                ( "GamepadsChangeListen", [] )
 
 
 interfaceSingleToStructuredId : InterfaceSingle future_ -> StructuredId
 interfaceSingleToStructuredId =
     \interfaceSingle ->
-        case interfaceSingle of
-            InterfaceWithoutFuture interfaceWithoutFuture ->
-                interfaceWithoutFuture |> interfaceSingleWithoutFutureToStructuredId
-
-            InterfaceWithFuture interfaceWithFuture ->
-                interfaceWithFuture |> interfaceSingleWithFutureToId |> interfaceSingleWithFutureIdToStructuredId
+        interfaceSingle |> interfaceSingleIdToStructuredId
 
 
-interfaceSingleWithFutureToId : InterfaceSingleWithFuture future_ -> InterfaceSingleWithFutureId
-interfaceSingleWithFutureToId =
-    \idInterfaceWithFuture ->
-        case idInterfaceWithFuture of
-            DomNodeRender toRender ->
-                IdDomNodeRender { path = toRender.path }
-
-            AudioSourceLoad audioSourceLoad ->
-                IdAudioSourceLoad audioSourceLoad.url
-
-            SocketConnect socketConnect ->
-                IdSocketConnect { address = socketConnect.address }
-
-            NotificationShow show ->
-                IdNotificationShow { id = show.id }
-
-            HttpRequest httpRequest ->
-                { url = httpRequest.url } |> IdHttpRequest
-
-            Request request ->
-                request |> interfaceSingleRequestToId |> IdRequest
-
-            Listen listen ->
-                listen |> interfaceSingleListenToId |> IdListen
-
-
-interfaceSingleWithoutFutureToStructuredId : InterfaceSingleWithoutFuture -> StructuredId
-interfaceSingleWithoutFutureToStructuredId =
-    \interfaceWithoutFuture ->
+interfaceSingleIdToStructuredId : InterfaceSingle future_ -> StructuredId
+interfaceSingleIdToStructuredId =
+    \interfaceSingleId ->
         StructuredId.ofVariant
-            (case interfaceWithoutFuture of
-                DocumentTitleReplaceBy replacement ->
-                    ( "DocumentTitleReplaceBy"
-                    , [ StructuredId.ofString replacement
-                      ]
-                    )
+            (case interfaceSingleId of
+                DocumentTitleReplaceBy title ->
+                    ( "DocumentTitleReplaceBy", [ title |> StructuredId.ofString ] )
 
-                DocumentAuthorSet new ->
-                    ( "DocumentAuthorSet"
-                    , [ StructuredId.ofString new
-                      ]
-                    )
+                DocumentAuthorSet author ->
+                    ( "DocumentAuthorSet", [ author |> StructuredId.ofString ] )
 
-                DocumentKeywordsSet new ->
-                    ( "DocumentKeywordsSet"
-                    , [ new |> List.map StructuredId.ofString |> StructuredId.ofList
-                      ]
-                    )
+                DocumentKeywordsSet keywords ->
+                    ( "DocumentKeywordsSet", [ keywords |> StructuredId.ofList StructuredId.ofString ] )
 
-                DocumentDescriptionSet new ->
-                    ( "DocumentDescriptionSet"
-                    , [ StructuredId.ofString new
-                      ]
-                    )
+                DocumentDescriptionSet description ->
+                    ( "DocumentDescriptionSet", [ description |> StructuredId.ofString ] )
 
-                ConsoleLog string ->
-                    ( "ConsoleLog"
-                    , [ StructuredId.ofString string
-                      ]
-                    )
+                ConsoleLog message ->
+                    ( "ConsoleLog", [ message |> StructuredId.ofString ] )
 
-                ConsoleWarn string ->
-                    ( "ConsoleWarn"
-                    , [ StructuredId.ofString string
-                      ]
-                    )
+                ConsoleWarn message ->
+                    ( "ConsoleWarn", [ message |> StructuredId.ofString ] )
 
-                ConsoleError string ->
-                    ( "ConsoleError"
-                    , [ StructuredId.ofString string
-                      ]
-                    )
+                ConsoleError message ->
+                    ( "ConsoleError", [ message |> StructuredId.ofString ] )
 
-                NavigationReplaceUrl url ->
-                    ( "NavigationReplaceUrl"
-                    , [ StructuredId.ofString (url |> AppUrl.toString)
-                      ]
-                    )
+                NavigationReplaceUrl appUrl ->
+                    ( "NavigationReplaceUrl", [ appUrl |> appUrlToStructuredId ] )
 
-                NavigationPushUrl url ->
-                    ( "NavigationPushUrl"
-                    , [ StructuredId.ofString (url |> AppUrl.toString)
-                      ]
-                    )
+                NavigationPushUrl appUrl ->
+                    ( "NavigationPushUrl", [ appUrl |> appUrlToStructuredId ] )
 
                 NavigationGo urlSteps ->
-                    ( "NavigationGo"
-                    , [ urlSteps |> StructuredId.ofInt
-                      ]
-                    )
+                    ( "NavigationGo", [ urlSteps |> StructuredId.ofInt ] )
 
                 NavigationLoad url ->
-                    ( "NavigationLoad"
-                    , [ StructuredId.ofString url
-                      ]
-                    )
+                    ( "NavigationLoad", [ url |> StructuredId.ofString ] )
 
                 NavigationReload ->
                     ( "NavigationReload", [] )
 
                 FileDownloadUnsignedInt8s config ->
                     ( "FileDownloadUnsignedInt8s"
-                    , [ StructuredId.ofString config.name
-                      , StructuredId.ofString config.mimeType
-                      , config.content
-                            |> List.map (\bit -> bit |> String.fromInt |> StructuredId.ofString)
-                            |> StructuredId.ofList
+                    , [ config.name |> StructuredId.ofString
+                      , config.mimeType |> StructuredId.ofString
+                      , config.content |> StructuredId.ofList StructuredId.ofInt
                       ]
                     )
 
                 ClipboardReplaceBy replacement ->
-                    ( "ClipboardReplaceBy"
-                    , [ StructuredId.ofString replacement
-                      ]
-                    )
+                    ( "ClipboardReplaceBy", [ replacement |> StructuredId.ofString ] )
 
                 AudioPlay audio ->
                     ( "AudioPlay"
@@ -1563,10 +987,7 @@ interfaceSingleWithoutFutureToStructuredId =
                     )
 
                 SocketDisconnect id ->
-                    ( "SocketDisconnect"
-                    , [ id |> socketIdToStructuredId
-                      ]
-                    )
+                    ( "SocketDisconnect", [ id |> socketIdToStructuredId ] )
 
                 LocalStorageSet set ->
                     ( "LocalStorageSet"
@@ -1577,509 +998,143 @@ interfaceSingleWithoutFutureToStructuredId =
 
                 NotificationAskForPermission ->
                     ( "NotificationAskForPermission", [] )
+
+                DomNodeRender path ->
+                    ( "DomNodeRender"
+                    , [ path.path |> StructuredId.ofList StructuredId.ofInt ]
+                    )
+
+                AudioSourceLoad load ->
+                    ( "AudioSourceLoad"
+                    , [ load.url |> StructuredId.ofString
+                      ]
+                    )
+
+                SocketConnect connect ->
+                    ( "SocketConnect"
+                    , [ StructuredId.ofString connect.address
+                      ]
+                    )
+
+                NotificationShow show ->
+                    ( "NotificationShow"
+                    , [ show.id |> StructuredId.ofString
+                      ]
+                    )
+
+                HttpRequest request ->
+                    ( "HttpRequest"
+                    , [ request.url |> StructuredId.ofString
+                      ]
+                    )
+
+                TimePosixRequest _ ->
+                    ( "TimePosixRequest", [] )
+
+                TimezoneOffsetRequest _ ->
+                    ( "TimezoneOffsetRequest", [] )
+
+                TimezoneNameRequest _ ->
+                    ( "TimezoneNameRequest", [] )
+
+                RandomUnsignedInt32sRequest request ->
+                    ( "RandomUnsignedInt32sRequest"
+                    , [ request.count |> StructuredId.ofInt
+                      ]
+                    )
+
+                LocalStorageRequest request ->
+                    ( "LocalStorageRequest"
+                    , [ request.key |> StructuredId.ofString
+                      ]
+                    )
+
+                WindowSizeRequest _ ->
+                    ( "WindowSizeRequest", [] )
+
+                WindowPreferredLanguagesRequest _ ->
+                    ( "WindowPreferredLanguagesRequest", [] )
+
+                NavigationUrlRequest _ ->
+                    ( "NavigationUrlRequest", [] )
+
+                ClipboardRequest _ ->
+                    ( "ClipboardRequest", [] )
+
+                GeoLocationRequest _ ->
+                    ( "GeoLocationRequest", [] )
+
+                GamepadsRequest _ ->
+                    ( "GamepadsRequest", [] )
+
+                WindowEventListen listen ->
+                    ( "WindowEventListen"
+                    , [ listen.eventName |> StructuredId.ofString
+                      ]
+                    )
+
+                WindowVisibilityChangeListen _ ->
+                    ( "WindowVisibilityChangeListen", [] )
+
+                WindowAnimationFrameListen _ ->
+                    ( "WindowAnimationFrameListen", [] )
+
+                WindowPreferredLanguagesChangeListen _ ->
+                    ( "WindowPreferredLanguagesChangeListen", [] )
+
+                DocumentEventListen listen ->
+                    ( "DocumentEventListen"
+                    , [ listen.eventName |> StructuredId.ofString
+                      ]
+                    )
+
+                TimePeriodicallyListen listen ->
+                    ( "TimePeriodicallyListen"
+                    , [ listen.intervalDurationMilliSeconds |> StructuredId.ofInt
+                      ]
+                    )
+
+                SocketMessageListen listen ->
+                    ( "SocketMessageListen"
+                    , [ listen.id |> socketIdToStructuredId
+                      ]
+                    )
+
+                LocalStorageRemoveOnADifferentTabListen listen ->
+                    ( "LocalStorageRemoveOnADifferentTabListen"
+                    , [ listen.key |> StructuredId.ofString ]
+                    )
+
+                LocalStorageSetOnADifferentTabListen listen ->
+                    ( "LocalStorageSetOnADifferentTabListen"
+                    , [ listen.key |> StructuredId.ofString ]
+                    )
+
+                GeoLocationChangeListen _ ->
+                    ( "GeoLocationChangeListen", [] )
+
+                GamepadsChangeListen _ ->
+                    ( "GamepadsChangeListen", [] )
             )
 
 
-socketIdJsonCodec : JsonCodec SocketId
-socketIdJsonCodec =
-    Json.Codec.map SocketId (\(SocketId index) -> index) Json.Codec.int
-
-
-interfaceSingleListenIdJsonCodec : JsonCodec InterfaceSingleListenId
-interfaceSingleListenIdJsonCodec =
-    Json.Codec.choice
-        (\idTimePeriodicallyListen idWindowEventListen idWindowVisibilityChangeListen idWindowAnimationFrameListen idWindowPreferredLanguagesChangeListen idDocumentEventListen idSocketMessageListen idLocalStorageRemoveOnADifferentTabListen idLocalStorageSetOnADifferentTabListen idGeoLocationChangeListen idGamepadsChangeListen interfaceSingleListenId ->
-            case interfaceSingleListenId of
-                IdTimePeriodicallyListen intervalDuration ->
-                    idTimePeriodicallyListen intervalDuration
-
-                IdWindowEventListen eventName ->
-                    idWindowEventListen eventName
-
-                IdWindowVisibilityChangeListen ->
-                    idWindowVisibilityChangeListen ()
-
-                IdWindowAnimationFrameListen ->
-                    idWindowAnimationFrameListen ()
-
-                IdWindowPreferredLanguagesChangeListen ->
-                    idWindowPreferredLanguagesChangeListen ()
-
-                IdDocumentEventListen eventName ->
-                    idDocumentEventListen eventName
-
-                IdSocketMessageListen id ->
-                    idSocketMessageListen id
-
-                IdLocalStorageRemoveOnADifferentTabListen listen ->
-                    idLocalStorageRemoveOnADifferentTabListen listen
-
-                IdLocalStorageSetOnADifferentTabListen listen ->
-                    idLocalStorageSetOnADifferentTabListen listen
-
-                IdGeoLocationChangeListen ->
-                    idGeoLocationChangeListen ()
-
-                IdGamepadsChangeListen ->
-                    idGamepadsChangeListen ()
-        )
-        |> Json.Codec.variant ( IdTimePeriodicallyListen, "TimePeriodicallyListen" )
-            (Json.Codec.record (\ms -> { milliSeconds = ms })
-                |> Json.Codec.field ( .milliSeconds, "milliSeconds" ) Json.Codec.int
-                |> Json.Codec.recordFinish
-            )
-        |> Json.Codec.variant ( IdWindowEventListen, "WindowEventListen" )
-            Json.Codec.string
-        |> Json.Codec.variant ( \() -> IdWindowVisibilityChangeListen, "WindowVisibilityChangeListen" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdWindowAnimationFrameListen, "WindowAnimationFrameListen" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdWindowPreferredLanguagesChangeListen, "WindowPreferredLanguagesChangeListen" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( IdDocumentEventListen, "DocumentEventListen" )
-            Json.Codec.string
-        |> Json.Codec.variant ( IdSocketMessageListen, "SocketMessageListen" ) socketIdJsonCodec
-        |> Json.Codec.variant ( IdLocalStorageRemoveOnADifferentTabListen, "LocalStorageRemoveOnADifferentTabListen" )
-            (Json.Codec.record (\key -> { key = key })
-                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
-                |> Json.Codec.recordFinish
-            )
-        |> Json.Codec.variant ( IdLocalStorageSetOnADifferentTabListen, "LocalStorageSetOnADifferentTabListen" )
-            (Json.Codec.record (\key -> { key = key })
-                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
-                |> Json.Codec.recordFinish
-            )
-        |> Json.Codec.variant ( \() -> IdGeoLocationChangeListen, "GeoLocationChangeListen" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdGamepadsChangeListen, "GamepadsChangeListen" )
-            Json.Codec.unit
-
-
-interfaceWithFutureDiffJsonCodec : JsonCodec InterfaceWithFutureDiff
-interfaceWithFutureDiffJsonCodec =
-    Json.Codec.choice
-        (\addEditDom addAudioSourceLoad addSocketConnect addNotificationShow addHttpRequest addListen addRequest interfaceWithFutureDiff ->
-            case interfaceWithFutureDiff of
-                EditDom editDomDiff ->
-                    addEditDom editDomDiff
-
-                AddAudioSourceLoad audioSourceLoad ->
-                    addAudioSourceLoad audioSourceLoad
-
-                AddSocketConnect connect ->
-                    addSocketConnect connect
-
-                AddNotificationShow show ->
-                    addNotificationShow show
-
-                AddHttpRequest httpRequestInfo ->
-                    addHttpRequest httpRequestInfo
-
-                AddListen listen ->
-                    addListen listen
-
-                AddRequest request ->
-                    addRequest request
-        )
-        |> Json.Codec.variant ( EditDom, "EditDom" )
-            (Json.Codec.record (\path replacement -> { path = path, replacement = replacement })
-                |> Json.Codec.field ( .path, "path" ) (Json.Codec.list Json.Codec.int)
-                |> Json.Codec.field ( .replacement, "replacement" )
-                    replacementInEditDomDiffJsonCodec
-                |> Json.Codec.recordFinish
-            )
-        |> Json.Codec.variant ( AddAudioSourceLoad, "AddAudioSourceLoad" )
-            Json.Codec.string
-        |> Json.Codec.variant ( AddSocketConnect, "AddSocketConnect" )
-            (Json.Codec.record (\address -> { address = address })
-                |> Json.Codec.field ( .address, "address" ) Json.Codec.string
-                |> Json.Codec.recordFinish
-            )
-        |> Json.Codec.variant ( AddNotificationShow, "AddNotificationShow" )
-            (Json.Codec.record (\id message details -> { id = id, message = message, details = details })
-                |> Json.Codec.field ( .id, "id" ) Json.Codec.string
-                |> Json.Codec.field ( .message, "message" ) Json.Codec.string
-                |> Json.Codec.field ( .details, "details" ) Json.Codec.string
-                |> Json.Codec.recordFinish
-            )
-        |> Json.Codec.variant ( AddHttpRequest, "AddHttpRequest" ) httpRequestInfoJsonCodec
-        |> Json.Codec.variant ( AddListen, "AddListen" ) interfaceSingleListenIdJsonCodec
-        |> Json.Codec.variant ( AddRequest, "AddRequest" ) interfaceSingleRequestIdJsonCodec
-
-
-httpRequestInfoJsonCodec : JsonCodec HttpRequestInfo
-httpRequestInfoJsonCodec =
-    { toJson =
-        \httpRequestId ->
-            Json.Encode.object
-                [ ( "url", httpRequestId.url |> Json.Encode.string )
-                , ( "method", httpRequestId.method |> Json.Encode.string )
-                , ( "headers"
-                  , httpRequestId.headers
-                        |> addContentTypeForBody httpRequestId.body
-                        |> (Json.Codec.list headerJsonCodec).toJson
-                  )
-                , ( "expect", httpRequestId.expect |> httpExpectIdJsonCodec.toJson )
-                , ( "body", httpRequestId.body |> httpBodyToJson )
-                , ( "timeout", httpRequestId.timeout |> httpTimeoutJsonCodec.toJson )
-                ]
-    , jsonDecoder =
-        (Json.Codec.list headerJsonCodec).jsonDecoder
-            |> Json.Decode.andThen
-                (\headers ->
-                    Json.Decode.map5
-                        (\url method expect body timeout ->
-                            { url = url
-                            , method = method
-                            , headers = headers
-                            , expect = expect
-                            , body = body
-                            , timeout = timeout
-                            }
-                        )
-                        (Json.Decode.field "url" Json.Decode.string)
-                        (Json.Decode.field "method" Json.Decode.string)
-                        (Json.Decode.field "expect" httpExpectIdJsonCodec.jsonDecoder)
-                        (Json.Decode.field "body"
-                            (let
-                                maybeContentType : Maybe String
-                                maybeContentType =
-                                    headers
-                                        |> List.LocalExtra.firstJustMap
-                                            (\header ->
-                                                case header.name of
-                                                    "Content-Type" ->
-                                                        header.value |> Just
-
-                                                    _ ->
-                                                        Nothing
-                                            )
-                             in
-                             case maybeContentType of
-                                Just mimeType ->
-                                    Json.Decode.map (\content -> HttpBodyString { mimeType = mimeType, content = content })
-                                        Json.Decode.string
-
-                                Nothing ->
-                                    HttpBodyEmpty |> Json.Decode.null
-                            )
-                        )
-                        (Json.Decode.field "timeout" httpTimeoutJsonCodec.jsonDecoder)
-                )
-    }
-
-
-headerJsonCodec : JsonCodec { name : String, value : String }
-headerJsonCodec =
-    Json.Codec.record (\name value -> { name = name, value = value })
-        |> Json.Codec.field ( .name, "name" ) Json.Codec.string
-        |> Json.Codec.field ( .value, "value" ) Json.Codec.string
-        |> Json.Codec.recordFinish
-
-
-addContentTypeForBody : HttpBody -> (List { name : String, value : String } -> List { name : String, value : String })
-addContentTypeForBody body headers =
-    case body of
-        HttpBodyEmpty ->
-            headers
-
-        HttpBodyString stringBodyInfo ->
-            { name = "Content-Type", value = stringBodyInfo.mimeType } :: headers
-
-        HttpBodyUnsignedInt8s bytesBodyInfo ->
-            { name = "Content-Type", value = bytesBodyInfo.mimeType } :: headers
-
-
-httpBodyToJson : HttpBody -> Json.Encode.Value
-httpBodyToJson =
-    \body ->
-        case body of
-            HttpBodyString stringBodyInfo ->
-                Json.Encode.object
-                    [ ( "tag", "string" |> Json.Encode.string )
-                    , ( "value", stringBodyInfo.content |> Json.Encode.string )
-                    ]
-
-            HttpBodyUnsignedInt8s bytesBodyInfo ->
-                Json.Encode.object
-                    [ ( "tag", "uint8Array" |> Json.Encode.string )
-                    , ( "value", bytesBodyInfo.content |> Json.Encode.list Json.Encode.int )
-                    ]
-
-            HttpBodyEmpty ->
-                Json.Encode.object [ ( "tag", "empty" |> Json.Encode.string ) ]
-
-
-httpTimeoutJsonCodec : JsonCodec (Maybe Int)
-httpTimeoutJsonCodec =
-    Json.Codec.nullable Json.Codec.int
-
-
-httpExpectIdJsonCodec : JsonCodec HttpExpectInfo
-httpExpectIdJsonCodec =
-    Json.Codec.enum [ IdHttpExpectString, IdHttpExpectBytes, IdHttpExpectWhatever ]
-        (\httpExpectId ->
-            case httpExpectId of
-                IdHttpExpectString ->
-                    "string"
-
-                IdHttpExpectBytes ->
-                    "bytes"
-
-                IdHttpExpectWhatever ->
-                    "whatever"
-        )
-
-
-interfaceSingleRequestIdJsonCodec : JsonCodec InterfaceSingleRequestId
-interfaceSingleRequestIdJsonCodec =
-    Json.Codec.choice
-        (\timePosixRequest timezoneOffsetRequest timezoneNameRequest randomUnsignedInt32sRequest windowSizeRequest idWindowPreferredLanguagesRequest navigationUrlRequest clipboardRequest localStorageRequest geoLocationRequest gamepadsRequest interfaceSingleRequestId ->
-            case interfaceSingleRequestId of
-                IdTimePosixRequest ->
-                    timePosixRequest ()
-
-                IdTimezoneOffsetRequest ->
-                    timezoneOffsetRequest ()
-
-                IdTimezoneNameRequest ->
-                    timezoneNameRequest ()
-
-                IdRandomUnsignedInt32sRequest count ->
-                    randomUnsignedInt32sRequest count
-
-                IdWindowSizeRequest ->
-                    windowSizeRequest ()
-
-                IdWindowPreferredLanguagesRequest ->
-                    idWindowPreferredLanguagesRequest ()
-
-                IdNavigationUrlRequest ->
-                    navigationUrlRequest ()
-
-                IdClipboardRequest ->
-                    clipboardRequest ()
-
-                IdLocalStorageRequest request ->
-                    localStorageRequest request
-
-                IdGeoLocationRequest ->
-                    geoLocationRequest ()
-
-                IdGamepadsRequest ->
-                    gamepadsRequest ()
-        )
-        |> Json.Codec.variant ( \() -> IdTimePosixRequest, "TimePosixRequest" ) Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdTimezoneOffsetRequest, "TimezoneOffsetRequest" ) Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdTimezoneNameRequest, "TimezoneNameRequest" ) Json.Codec.unit
-        |> Json.Codec.variant ( IdRandomUnsignedInt32sRequest, "RandomUnsignedInt32sRequest" )
-            Json.Codec.int
-        |> Json.Codec.variant ( \() -> IdWindowSizeRequest, "WindowSizeRequest" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdWindowPreferredLanguagesRequest, "WindowPreferredLanguagesRequest" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdNavigationUrlRequest, "NavigationUrlRequest" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdClipboardRequest, "ClipboardRequest" ) Json.Codec.unit
-        |> Json.Codec.variant ( IdLocalStorageRequest, "LocalStorageRequest" )
-            (Json.Codec.record (\key -> { key = key })
-                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
-                |> Json.Codec.recordFinish
-            )
-        |> Json.Codec.variant ( \() -> IdGeoLocationRequest, "GeoLocationRequest" ) Json.Codec.unit
-        |> Json.Codec.variant ( \() -> IdGamepadsRequest, "GamepadsRequest" ) Json.Codec.unit
-
-
-domElementAttributesNamespacedJsonCodec : JsonCodec (Dict ( String, String ) String)
-domElementAttributesNamespacedJsonCodec =
-    Json.Codec.dict
-        (Json.Codec.map
-            (\r -> { key = ( r.namespace, r.key ), value = r.value })
-            (\entry ->
-                let
-                    ( namespace, key ) =
-                        entry.key
-                in
-                { namespace = namespace, key = key, value = entry.value }
-            )
-            (Json.Codec.record
-                (\namespace key value -> { namespace = namespace, key = key, value = value })
-                |> Json.Codec.field ( .namespace, "namespace" ) Json.Codec.string
-                |> Json.Codec.field ( .key, "key" ) Json.Codec.string
-                |> Json.Codec.field ( .value, "value" ) Json.Codec.string
-                |> Json.Codec.recordFinish
-            )
-        )
-
-
-domElementAttributesJsonCodec : JsonCodec (Dict String String)
-domElementAttributesJsonCodec =
-    Json.Codec.dict
-        (Json.Codec.record
-            (\key value -> { key = key, value = value })
-            |> Json.Codec.field ( .key, "key" ) Json.Codec.string
-            |> Json.Codec.field ( .value, "value" ) Json.Codec.string
-            |> Json.Codec.recordFinish
-        )
-
-
-domElementStylesJsonCodec : JsonCodec (Dict String String)
-domElementStylesJsonCodec =
-    Json.Codec.dict
-        (Json.Codec.record
-            (\key value -> { key = key, value = value })
-            |> Json.Codec.field ( .key, "key" ) Json.Codec.string
-            |> Json.Codec.field ( .value, "value" ) Json.Codec.string
-            |> Json.Codec.recordFinish
-        )
-
-
-domElementEventListensJsonCodec : JsonCodec (Dict String DefaultActionHandling)
-domElementEventListensJsonCodec =
-    Json.Codec.dict
-        (Json.Codec.map
-            (\eventListen -> { key = eventListen.name, value = eventListen.defaultActionHandling })
-            (\entry -> { name = entry.key, defaultActionHandling = entry.value })
-            (Json.Codec.record
-                (\name defaultActionHandling -> { name = name, defaultActionHandling = defaultActionHandling })
-                |> Json.Codec.field ( .name, "name" ) Json.Codec.string
-                |> Json.Codec.field ( .defaultActionHandling, "defaultActionHandling" ) defaultActionHandlingJsonCodec
-                |> Json.Codec.recordFinish
-            )
-        )
-
-
-defaultActionHandlingJsonCodec : JsonCodec DefaultActionHandling
-defaultActionHandlingJsonCodec =
-    Json.Codec.enum [ DefaultActionPrevent, DefaultActionExecute ]
-        (\defaultActionHandling ->
-            case defaultActionHandling of
-                DefaultActionPrevent ->
-                    "DefaultActionPrevent"
-
-                DefaultActionExecute ->
-                    "DefaultActionExecute"
-        )
-
-
-domElementVisibilityAlignmentsJsonDecoder : JsonCodec { y : DomElementVisibilityAlignment, x : DomElementVisibilityAlignment }
-domElementVisibilityAlignmentsJsonDecoder =
-    Json.Codec.record (\x y -> { x = x, y = y })
-        |> Json.Codec.field ( .x, "x" ) domElementVisibilityAlignmentJsonDecoder
-        |> Json.Codec.field ( .y, "y" ) domElementVisibilityAlignmentJsonDecoder
-        |> Json.Codec.recordFinish
-
-
-domElementVisibilityAlignmentJsonDecoder : JsonCodec DomElementVisibilityAlignment
-domElementVisibilityAlignmentJsonDecoder =
-    Json.Codec.enum [ DomElementStart, DomElementEnd, DomElementCenter ]
-        (\alignment ->
-            case alignment of
-                DomElementStart ->
-                    "start"
-
-                DomElementEnd ->
-                    "end"
-
-                DomElementCenter ->
-                    "center"
-        )
-
-
-domElementScrollPositionJsonCodec : JsonCodec { fromLeft : Float, fromTop : Float }
-domElementScrollPositionJsonCodec =
-    Json.Codec.record (\fromLeft fromTop -> { fromLeft = fromLeft, fromTop = fromTop })
-        |> Json.Codec.field ( .fromLeft, "fromLeft" ) Json.Codec.float
-        |> Json.Codec.field ( .fromTop, "fromTop" ) Json.Codec.float
-        |> Json.Codec.recordFinish
-
-
-replacementInEditDomDiffJsonCodec : JsonCodec ReplacementInEditDomDiff
-replacementInEditDomDiffJsonCodec =
-    Json.Codec.choice
-        (\replacementDomNode replacementDomElementStyles replacementDomElementAttributes replacementDomElementAttributesNamespaced replacementDomElementScrollToPosition replacementDomElementScrollToShow replacementDomElementScrollPositionRequest replacementDomElementEventListens replacementInEditDomDiff ->
-            case replacementInEditDomDiff of
-                ReplacementDomNode id ->
-                    replacementDomNode id
-
-                ReplacementDomElementStyles styles ->
-                    replacementDomElementStyles styles
-
-                ReplacementDomElementAttributes attributes ->
-                    replacementDomElementAttributes attributes
-
-                ReplacementDomElementAttributesNamespaced attributesNamespaced ->
-                    replacementDomElementAttributesNamespaced attributesNamespaced
-
-                ReplacementDomElementScrollToPosition maybePosition ->
-                    replacementDomElementScrollToPosition maybePosition
-
-                ReplacementDomElementScrollToShow alignment ->
-                    replacementDomElementScrollToShow alignment
-
-                ReplacementDomElementScrollPositionRequest ->
-                    replacementDomElementScrollPositionRequest ()
-
-                ReplacementDomElementEventListens listens ->
-                    replacementDomElementEventListens listens
-        )
-        |> Json.Codec.variant ( ReplacementDomNode, "Node" ) domNodeIdJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementStyles, "Styles" ) domElementStylesJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementAttributes, "Attributes" ) domElementAttributesJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementAttributesNamespaced, "AttributesNamespaced" ) domElementAttributesNamespacedJsonCodec
-        |> Json.Codec.variant ( ReplacementDomElementScrollToPosition, "ScrollToPosition" )
-            (Json.Codec.nullable domElementScrollPositionJsonCodec)
-        |> Json.Codec.variant ( ReplacementDomElementScrollToShow, "ScrollToShow" )
-            (Json.Codec.nullable domElementVisibilityAlignmentsJsonDecoder)
-        |> Json.Codec.variant ( \() -> ReplacementDomElementScrollPositionRequest, "ScrollPositionRequest" )
-            Json.Codec.unit
-        |> Json.Codec.variant ( ReplacementDomElementEventListens, "EventListens" ) domElementEventListensJsonCodec
-
-
-domNodeIdJsonCodec : JsonCodec DomTextOrElementHeaderInfo
-domNodeIdJsonCodec =
-    Json.Codec.choice
-        (\domTextId domElementId domNodeId ->
-            case domNodeId of
-                DomTextInfo text ->
-                    domTextId text
-
-                DomElementHeaderInfo element ->
-                    domElementId element
-        )
-        |> Json.Codec.variant ( DomTextInfo, "Text" ) Json.Codec.string
-        |> Json.Codec.variant ( DomElementHeaderInfo, "Element" )
-            (Json.Codec.lazy (\() -> domElementHeaderInfoJsonCodec))
-
-
-domElementHeaderInfoJsonCodec : JsonCodec DomElementHeaderInfo
-domElementHeaderInfoJsonCodec =
-    Json.Codec.record
-        (\namespace tag styles attributes attributesNamespaced scrollToPosition scrollToShow scrollPositionRequest eventListens ->
-            { namespace = namespace
-            , tag = tag
-            , styles = styles
-            , attributes = attributes
-            , attributesNamespaced = attributesNamespaced
-            , scrollToPosition = scrollToPosition
-            , scrollToShow = scrollToShow
-            , scrollPositionRequest = scrollPositionRequest
-            , eventListens = eventListens
-            }
-        )
-        |> Json.Codec.field ( .namespace, "namespace" ) (Json.Codec.nullable Json.Codec.string)
-        |> Json.Codec.field ( .tag, "tag" ) Json.Codec.string
-        |> Json.Codec.field ( .styles, "styles" ) domElementStylesJsonCodec
-        |> Json.Codec.field ( .attributes, "attributes" ) domElementAttributesJsonCodec
-        |> Json.Codec.field ( .attributesNamespaced, "attributesNamespaced" ) domElementAttributesNamespacedJsonCodec
-        |> Json.Codec.field ( .scrollToPosition, "scrollToPosition" )
-            (Json.Codec.nullable domElementScrollPositionJsonCodec)
-        |> Json.Codec.field ( .scrollToShow, "scrollToShow" )
-            (Json.Codec.nullable domElementVisibilityAlignmentsJsonDecoder)
-        |> Json.Codec.field ( .scrollPositionRequest, "scrollPositionRequest" ) Json.Codec.bool
-        |> Json.Codec.field ( .eventListens, "eventListens" )
-            domElementEventListensJsonCodec
-        |> Json.Codec.recordFinish
+socketIdToStructuredId : SocketId -> StructuredId
+socketIdToStructuredId =
+    \(SocketId raw) -> raw |> StructuredId.ofInt
+
+
+appUrlToStructuredId : AppUrl -> StructuredId
+appUrlToStructuredId =
+    \appUrl -> appUrl |> AppUrl.toString |> StructuredId.ofString
+
+
+toJsToJson : { id : String, diff : InterfaceSingleDiff } -> Json.Encode.Value
+toJsToJson =
+    \toJs ->
+        Json.Encode.object
+            [ ( "id", toJs.id |> Json.Encode.string )
+            , ( "diff", toJs.diff |> interfaceSingleDiffToJson )
+            ]
 
 
 tagValueToJson : ( String, Json.Encode.Value ) -> Json.Encode.Value
@@ -2091,16 +1146,19 @@ tagValueToJson =
             ]
 
 
-interfaceDiffToJson : InterfaceDiff -> Json.Encode.Value
-interfaceDiffToJson =
-    \interfaceDiff ->
+interfaceSingleDiffToJson : InterfaceSingleDiff -> Json.Encode.Value
+interfaceSingleDiffToJson =
+    \diff ->
         tagValueToJson
-            (case interfaceDiff of
-                InterfaceWithFutureDiff withFutureDiff ->
-                    ( "InterfaceWithFuture", withFutureDiff |> interfaceWithFutureDiffJsonCodec.toJson )
+            (case diff of
+                Add interfaceSingleInfo ->
+                    ( "Add", interfaceSingleInfo |> interfaceSingleToJson )
 
-                InterfaceWithoutFutureDiff withoutFutureDiff ->
-                    ( "InterfaceWithoutFuture", withoutFutureDiff |> interfaceWithoutFutureDiffToJson )
+                Edit edit ->
+                    ( "Edit", edit |> interfaceSingleEditToJson )
+
+                Remove ->
+                    ( "Remove", Json.Encode.null )
             )
 
 
@@ -2145,14 +1203,17 @@ audioProcessingToJson =
             )
 
 
-interfaceWithoutFutureDiffToJson : InterfaceWithoutFutureDiff -> Json.Encode.Value
-interfaceWithoutFutureDiffToJson =
-    \interfaceRemoveDiff ->
+interfaceSingleEditToJson : InterfaceSingleEdit -> Json.Encode.Value
+interfaceSingleEditToJson =
+    \edit ->
         tagValueToJson
-            (case interfaceRemoveDiff of
-                Add add ->
-                    ( "Add"
-                    , add |> interfaceSingleWithoutFutureToJson
+            (case edit of
+                EditDom editDomDiff ->
+                    ( "EditDom"
+                    , Json.Encode.object
+                        [ ( "path", editDomDiff.path |> Json.Encode.list Json.Encode.int )
+                        , ( "replacement", editDomDiff.replacement |> editDomDiffToJson )
+                        ]
                     )
 
                 EditAudio audioEdit ->
@@ -2189,42 +1250,205 @@ interfaceWithoutFutureDiffToJson =
                         , ( "details", editNotificationDiff.details |> Json.Encode.string )
                         ]
                     )
-
-                RemoveDom path ->
-                    ( "RemoveDom"
-                    , Json.Encode.object [ ( "path", path.path |> Json.Encode.list Json.Encode.int ) ]
-                    )
-
-                RemoveHttpRequest httpRequestId ->
-                    ( "RemoveHttpRequest"
-                    , Json.Encode.object [ ( "url", httpRequestId.url |> Json.Encode.string ) ]
-                    )
-
-                RemoveAudio audioId ->
-                    ( "RemoveAudio"
-                    , Json.Encode.object
-                        [ ( "url", audioId.url |> Json.Encode.string )
-                        , ( "startTime", audioId.startTime |> Time.posixToMillis |> Json.Encode.int )
-                        ]
-                    )
-
-                RemoveSocketConnect connect ->
-                    ( "RemoveSocketConnect", Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ] )
-
-                RemoveNotificationShow show ->
-                    ( "RemoveNotificationShow"
-                    , Json.Encode.object
-                        [ ( "id", show.id |> Json.Encode.string )
-                        ]
-                    )
-
-                RemoveListen listenId ->
-                    ( "RemoveListen", listenId |> interfaceSingleListenIdJsonCodec.toJson )
             )
 
 
-interfaceSingleWithoutFutureToJson : InterfaceSingleWithoutFuture -> Json.Encode.Value
-interfaceSingleWithoutFutureToJson =
+domTextOrElementHeaderInfoToJson : DomTextOrElementHeader () -> Json.Encode.Value
+domTextOrElementHeaderInfoToJson =
+    \domNodeId ->
+        tagValueToJson
+            (case domNodeId of
+                DomText text ->
+                    ( "Text", text |> Json.Encode.string )
+
+                DomElementHeader element ->
+                    ( "Element", element |> domElementHeaderInfoToJson )
+            )
+
+
+domElementAttributesNamespacedToJson : Dict ( String, String ) String -> Json.Encode.Value
+domElementAttributesNamespacedToJson =
+    \attributes ->
+        attributes
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( ( namespace, key ), value ) ->
+                    Json.Encode.object
+                        [ ( "namespace", namespace |> Json.Encode.string )
+                        , ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
+domElementAttributesToJson : Dict String String -> Json.Encode.Value
+domElementAttributesToJson =
+    \attributes ->
+        attributes
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( key, value ) ->
+                    Json.Encode.object
+                        [ ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
+domElementStylesToJson : Dict String String -> Json.Encode.Value
+domElementStylesToJson =
+    \styles ->
+        styles
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( key, value ) ->
+                    Json.Encode.object
+                        [ ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
+domElementEventListensInfoToJson : Dict String DefaultActionHandling -> Json.Encode.Value
+domElementEventListensInfoToJson =
+    \listens ->
+        listens
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( name, defaultActionHandling ) ->
+                    Json.Encode.object
+                        [ ( "name", name |> Json.Encode.string )
+                        , ( "defaultActionHandling", defaultActionHandling |> defaultActionHandlingToJson )
+                        ]
+                )
+
+
+defaultActionHandlingToJson : DefaultActionHandling -> Json.Encode.Value
+defaultActionHandlingToJson =
+    \defaultActionHandling ->
+        Json.Encode.string
+            (case defaultActionHandling of
+                DefaultActionPrevent ->
+                    "DefaultActionPrevent"
+
+                DefaultActionExecute ->
+                    "DefaultActionExecute"
+            )
+
+
+domElementVisibilityAlignmentsToJson : { y : DomElementVisibilityAlignment, x : DomElementVisibilityAlignment } -> Json.Encode.Value
+domElementVisibilityAlignmentsToJson =
+    \alignments ->
+        Json.Encode.object
+            [ ( "x", alignments.x |> domElementVisibilityAlignmentToJson )
+            , ( "y", alignments.y |> domElementVisibilityAlignmentToJson )
+            ]
+
+
+domElementVisibilityAlignmentToJson : DomElementVisibilityAlignment -> Json.Encode.Value
+domElementVisibilityAlignmentToJson =
+    \alignment ->
+        Json.Encode.string
+            (case alignment of
+                DomElementStart ->
+                    "start"
+
+                DomElementEnd ->
+                    "end"
+
+                DomElementCenter ->
+                    "center"
+            )
+
+
+domElementScrollPositionToJson : { fromLeft : Float, fromTop : Float } -> Json.Encode.Value
+domElementScrollPositionToJson =
+    \position ->
+        Json.Encode.object
+            [ ( "fromLeft", position.fromLeft |> Json.Encode.float )
+            , ( "fromTop", position.fromTop |> Json.Encode.float )
+            ]
+
+
+nullableToJson : (value -> Json.Encode.Value) -> (Maybe value -> Json.Encode.Value)
+nullableToJson valueToJson =
+    \maybe ->
+        case maybe of
+            Nothing ->
+                Json.Encode.null
+
+            Just value ->
+                value |> valueToJson
+
+
+domElementHeaderInfoToJson : DomElementHeader () -> Json.Encode.Value
+domElementHeaderInfoToJson =
+    \header ->
+        Json.Encode.object
+            [ ( "namespace", header.namespace |> nullableToJson Json.Encode.string )
+            , ( "tag", header.tag |> Json.Encode.string )
+            , ( "styles", header.styles |> domElementStylesToJson )
+            , ( "attributes", header.attributes |> domElementAttributesToJson )
+            , ( "attributesNamespaced", header.attributesNamespaced |> domElementAttributesNamespacedToJson )
+            , ( "scrollToPosition"
+              , header.scrollToPosition |> nullableToJson domElementScrollPositionToJson
+              )
+            , ( "scrollToShow"
+              , header.scrollToShow |> nullableToJson domElementVisibilityAlignmentsToJson
+              )
+            , ( "scrollPositionRequest"
+              , case header.scrollPositionRequest of
+                    Nothing ->
+                        Json.Encode.bool False
+
+                    Just _ ->
+                        Json.Encode.bool True
+              )
+            , ( "eventListens"
+              , header.eventListens
+                    |> Dict.map (\_ listen -> listen.defaultActionHandling)
+                    |> domElementEventListensInfoToJson
+              )
+            ]
+
+
+editDomDiffToJson : DomEdit -> Json.Encode.Value
+editDomDiffToJson =
+    \replacementInEditDomDiff ->
+        tagValueToJson
+            (case replacementInEditDomDiff of
+                ReplacementDomNode node ->
+                    ( "Node", node |> domTextOrElementHeaderInfoToJson )
+
+                ReplacementDomElementStyles styles ->
+                    ( "Styles", styles |> domElementStylesToJson )
+
+                ReplacementDomElementAttributes attributes ->
+                    ( "Attributes", attributes |> domElementAttributesToJson )
+
+                ReplacementDomElementAttributesNamespaced attributesNamespaced ->
+                    ( "AttributesNamespaced", attributesNamespaced |> domElementAttributesNamespacedToJson )
+
+                ReplacementDomElementScrollToPosition maybePosition ->
+                    ( "ScrollToPosition"
+                    , maybePosition |> nullableToJson domElementScrollPositionToJson
+                    )
+
+                ReplacementDomElementScrollToShow alignment ->
+                    ( "ScrollToShow"
+                    , alignment |> nullableToJson domElementVisibilityAlignmentsToJson
+                    )
+
+                ReplacementDomElementScrollPositionRequest ->
+                    ( "ScrollPositionRequest", Json.Encode.null )
+
+                ReplacementDomElementEventListens listens ->
+                    ( "EventListens", listens |> domElementEventListensInfoToJson )
+            )
+
+
+interfaceSingleToJson : InterfaceSingle () -> Json.Encode.Value
+interfaceSingleToJson =
     \add ->
         tagValueToJson
             (case add of
@@ -2281,31 +1505,219 @@ interfaceSingleWithoutFutureToJson =
                     )
 
                 AudioPlay audio ->
-                    ( "Audio", audio |> audioToJson )
+                    ( "AudioPlay", audio |> audioToJson )
 
                 SocketMessage message ->
                     ( "SocketMessage"
                     , Json.Encode.object
-                        [ ( "id", message.id |> socketIdJsonCodec.toJson )
+                        [ ( "id", message.id |> socketIdToJson )
                         , ( "data", message.data |> Json.Encode.string )
                         ]
                     )
 
                 SocketDisconnect id ->
                     ( "SocketDisconnect"
-                    , id |> socketIdJsonCodec.toJson
+                    , id |> socketIdToJson
                     )
 
                 LocalStorageSet set ->
                     ( "LocalStorageSet"
                     , Json.Encode.object
                         [ ( "key", set.key |> Json.Encode.string )
-                        , ( "value", set.value |> (Json.Codec.nullable Json.Codec.string).toJson )
+                        , ( "value", set.value |> nullableToJson Json.Encode.string )
                         ]
                     )
 
                 NotificationAskForPermission ->
                     ( "NotificationAskForPermission", Json.Encode.null )
+
+                DomNodeRender render ->
+                    ( "DomNodeRender"
+                    , Json.Encode.object
+                        [ ( "path", render.path |> Json.Encode.list Json.Encode.int )
+                        , ( "node", render.node |> domTextOrElementHeaderInfoToJson )
+                        ]
+                    )
+
+                AudioSourceLoad audioSourceLoad ->
+                    ( "AudioSourceLoad", audioSourceLoad.url |> Json.Encode.string )
+
+                SocketConnect connect ->
+                    ( "SocketConnect"
+                    , Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ]
+                    )
+
+                NotificationShow show ->
+                    ( "NotificationShow"
+                    , Json.Encode.object
+                        [ ( "id", show.id |> Json.Encode.string )
+                        , ( "message", show.message |> Json.Encode.string )
+                        , ( "details", show.details |> Json.Encode.string )
+                        ]
+                    )
+
+                HttpRequest httpRequestInfo ->
+                    ( "HttpRequest", httpRequestInfo |> httpRequestInfoToJson )
+
+                TimePosixRequest _ ->
+                    ( "TimePosixRequest", Json.Encode.null )
+
+                TimezoneOffsetRequest _ ->
+                    ( "TimezoneOffsetRequest", Json.Encode.null )
+
+                TimezoneNameRequest _ ->
+                    ( "TimezoneNameRequest", Json.Encode.null )
+
+                RandomUnsignedInt32sRequest request ->
+                    ( "RandomUnsignedInt32sRequest", request.count |> Json.Encode.int )
+
+                WindowSizeRequest _ ->
+                    ( "WindowSizeRequest", Json.Encode.null )
+
+                WindowPreferredLanguagesRequest _ ->
+                    ( "WindowPreferredLanguagesRequest", Json.Encode.null )
+
+                NavigationUrlRequest _ ->
+                    ( "NavigationUrlRequest", Json.Encode.null )
+
+                ClipboardRequest _ ->
+                    ( "ClipboardRequest", Json.Encode.null )
+
+                LocalStorageRequest request ->
+                    ( "LocalStorageRequest"
+                    , Json.Encode.object [ ( "key", request.key |> Json.Encode.string ) ]
+                    )
+
+                GeoLocationRequest _ ->
+                    ( "GeoLocationRequest", Json.Encode.null )
+
+                GamepadsRequest _ ->
+                    ( "GamepadsRequest", Json.Encode.null )
+
+                TimePeriodicallyListen intervalDuration ->
+                    ( "TimePeriodicallyListen"
+                    , Json.Encode.object
+                        [ ( "milliSeconds", intervalDuration.intervalDurationMilliSeconds |> Json.Encode.int ) ]
+                    )
+
+                WindowEventListen listen ->
+                    ( "WindowEventListen", listen.eventName |> Json.Encode.string )
+
+                WindowVisibilityChangeListen _ ->
+                    ( "WindowVisibilityChangeListen", Json.Encode.null )
+
+                WindowAnimationFrameListen _ ->
+                    ( "WindowAnimationFrameListen", Json.Encode.null )
+
+                WindowPreferredLanguagesChangeListen _ ->
+                    ( "WindowPreferredLanguagesChangeListen", Json.Encode.null )
+
+                DocumentEventListen listen ->
+                    ( "DocumentEventListen", listen.eventName |> Json.Encode.string )
+
+                SocketMessageListen listen ->
+                    ( "SocketMessageListen", listen.id |> socketIdToJson )
+
+                LocalStorageRemoveOnADifferentTabListen listen ->
+                    ( "LocalStorageRemoveOnADifferentTabListen"
+                    , Json.Encode.object
+                        [ ( "key", listen.key |> Json.Encode.string ) ]
+                    )
+
+                LocalStorageSetOnADifferentTabListen listen ->
+                    ( "LocalStorageSetOnADifferentTabListen"
+                    , Json.Encode.object
+                        [ ( "key", listen.key |> Json.Encode.string ) ]
+                    )
+
+                GeoLocationChangeListen _ ->
+                    ( "GeoLocationChangeListen", Json.Encode.null )
+
+                GamepadsChangeListen _ ->
+                    ( "GamepadsChangeListen", Json.Encode.null )
+            )
+
+
+socketIdToJson : SocketId -> Json.Encode.Value
+socketIdToJson =
+    \(SocketId index) -> index |> Json.Encode.int
+
+
+httpRequestInfoToJson : HttpRequest () -> Json.Encode.Value
+httpRequestInfoToJson =
+    \httpRequestId ->
+        Json.Encode.object
+            [ ( "url", httpRequestId.url |> Json.Encode.string )
+            , ( "method", httpRequestId.method |> Json.Encode.string )
+            , ( "headers"
+              , httpRequestId.headers
+                    |> addContentTypeForBody httpRequestId.body
+                    |> Json.Encode.list headerToJson
+              )
+            , ( "expect", httpRequestId.expect |> httpExpectInfoToJson )
+            , ( "body", httpRequestId.body |> httpBodyToJson )
+            , ( "timeout", httpRequestId.timeout |> httpTimeoutToJson )
+            ]
+
+
+headerToJson : { name : String, value : String } -> Json.Encode.Value
+headerToJson =
+    \header ->
+        Json.Encode.object
+            [ ( "name", header.name |> Json.Encode.string )
+            , ( "value", header.value |> Json.Encode.string )
+            ]
+
+
+addContentTypeForBody : HttpBody -> (List { name : String, value : String } -> List { name : String, value : String })
+addContentTypeForBody body headers =
+    case body of
+        HttpBodyEmpty ->
+            headers
+
+        HttpBodyString stringBodyInfo ->
+            { name = "Content-Type", value = stringBodyInfo.mimeType } :: headers
+
+        HttpBodyUnsignedInt8s bytesBodyInfo ->
+            { name = "Content-Type", value = bytesBodyInfo.mimeType } :: headers
+
+
+httpBodyToJson : HttpBody -> Json.Encode.Value
+httpBodyToJson =
+    \body ->
+        tagValueToJson
+            (case body of
+                HttpBodyString stringBodyInfo ->
+                    ( "String"
+                    , stringBodyInfo.content |> Json.Encode.string
+                    )
+
+                HttpBodyUnsignedInt8s bytesBodyInfo ->
+                    ( "Uint8Array", bytesBodyInfo.content |> Json.Encode.list Json.Encode.int )
+
+                HttpBodyEmpty ->
+                    ( "Empty", Json.Encode.null )
+            )
+
+
+httpTimeoutToJson : Maybe Int -> Json.Encode.Value
+httpTimeoutToJson =
+    nullableToJson Json.Encode.int
+
+
+httpExpectInfoToJson : HttpExpect () -> Json.Encode.Value
+httpExpectInfoToJson =
+    \httpExpectId ->
+        Json.Encode.string
+            (case httpExpectId of
+                HttpExpectString _ ->
+                    "String"
+
+                HttpExpectBytes _ ->
+                    "Bytes"
+
+                HttpExpectWhatever _ ->
+                    "Whatever"
             )
 
 
@@ -2341,62 +1753,11 @@ programInit appConfig =
         , appState = appConfig.initialState
         }
     , { old = Set.StructuredId.empty, updated = initialInterface }
-        |> interfaceDiffs
-        |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
+        |> interfacesDiff
+        |> List.map (\diff -> appConfig.ports.toJs (diff |> toJsToJson))
         |> Cmd.batch
         |> Cmd.map never
     )
-
-
-{-| Quickly find out what [interface](#InterfaceSingleWithFuture) a given
-[diff](#InterfaceWithFutureDiff) that comes back belonged to.
-
-Use in combination with [`interfaceFutureJsonDecoder`](#interfaceFutureJsonDecoder) to feed it the event data json that comes back
-
--}
-findInterfaceAssociatedWithDiffComingBack :
-    InterfaceWithFutureDiff
-    ->
-        (FastDict.Dict (List String) (InterfaceSingle future)
-         -> Maybe (InterfaceSingleWithFuture future)
-        )
-findInterfaceAssociatedWithDiffComingBack diff =
-    \interfaces ->
-        case interfaces |> Set.StructuredId.elementWithStructuredId (diff |> interfaceWithFutureDiffToId |> interfaceSingleWithFutureIdToStructuredId) of
-            Just (InterfaceWithFuture interfaceSingleAcceptingFuture) ->
-                interfaceSingleAcceptingFuture |> Just
-
-            Just (InterfaceWithoutFuture _) ->
-                Nothing
-
-            Nothing ->
-                Nothing
-
-
-interfaceWithFutureDiffToId : InterfaceWithFutureDiff -> InterfaceSingleWithFutureId
-interfaceWithFutureDiffToId =
-    \idInterfaceWithFuture ->
-        case idInterfaceWithFuture of
-            EditDom toEdit ->
-                IdDomNodeRender { path = toEdit.path }
-
-            AddNotificationShow show ->
-                IdNotificationShow { id = show.id }
-
-            AddAudioSourceLoad sourceUrl ->
-                IdAudioSourceLoad sourceUrl
-
-            AddSocketConnect socketConnect ->
-                IdSocketConnect socketConnect
-
-            AddHttpRequest httpRequestInfo ->
-                IdHttpRequest { url = httpRequestInfo.url }
-
-            AddRequest request ->
-                request |> IdRequest
-
-            AddListen listen ->
-                listen |> IdListen
 
 
 {-| The "subscriptions" part for an embedded program
@@ -2406,42 +1767,71 @@ programSubscriptions appConfig =
     \(State state) ->
         appConfig.ports.fromJs
             (\interfaceJson ->
-                case interfaceJson |> Json.Decode.decodeValue comingBackJsonDecoder of
-                    Ok comingBack ->
-                        case state.interface |> findInterfaceAssociatedWithDiffComingBack comingBack.diff of
-                            Just interfaceSingleAcceptingFuture ->
-                                case comingBack.eventData |> Json.Decode.decodeValue (interfaceSingleAcceptingFuture |> interfaceFutureJsonDecoder) of
-                                    Ok eventData ->
-                                        eventData |> AppEventToNewAppState
+                interfaceJson
+                    |> Json.Decode.decodeValue
+                        (Json.Decode.field "id" Json.Decode.string
+                            |> Json.Decode.andThen
+                                (\originalInterfaceId ->
+                                    case state.interface |> Set.StructuredId.elementWithStructuredIdAsString originalInterfaceId of
+                                        Just interfaceSingleAcceptingFuture ->
+                                            case interfaceSingleAcceptingFuture |> interfaceSingleFutureJsonDecoder of
+                                                Just eventDataDecoder ->
+                                                    Json.Decode.field "eventData" eventDataDecoder
 
-                                    Err eventDataJsonDecodeError ->
-                                        eventDataJsonDecodeError |> InterfaceEventDataFailedToDecode
+                                                Nothing ->
+                                                    "interface did not expect any events" |> Json.Decode.fail
 
-                            Nothing ->
-                                InterfaceEventIgnored
-
-                    Err interfaceDiffJsonDecodeError ->
-                        interfaceDiffJsonDecodeError |> InterfaceDiffFailedToDecode
+                                        Nothing ->
+                                            "no associated interface found" |> Json.Decode.fail
+                                )
+                            |> Json.Decode.map JsEventEnabledConstructionOfNewAppState
+                        )
+                    |> resultValueOrOnError JsEventFailedToDecode
             )
 
 
-comingBackJsonDecoder : Json.Decode.Decoder { diff : InterfaceWithFutureDiff, eventData : Json.Decode.Value }
-comingBackJsonDecoder =
-    Json.Decode.map2 (\diff eventData -> { diff = diff, eventData = eventData })
-        (Json.Decode.field "diff" interfaceWithFutureDiffJsonCodec.jsonDecoder)
-        (Json.Decode.field "eventData" Json.Decode.value)
+resultValueOrOnError : (error -> value) -> (Result error value -> value)
+resultValueOrOnError errorToValue =
+    \result ->
+        case result of
+            Ok value ->
+                value
+
+            Err error ->
+                error |> errorToValue
+
+
+onlyStringJsonDecoder : String -> Json.Decode.Decoder ()
+onlyStringJsonDecoder specificAllowedString =
+    Json.Decode.string
+        |> Json.Decode.andThen
+            (\str ->
+                if str == specificAllowedString then
+                    () |> Json.Decode.succeed
+
+                else
+                    ([ "expected only \"", specificAllowedString, "\"" ] |> String.concat)
+                        |> Json.Decode.fail
+            )
+
+
+tagValueJsonDecoder : String -> (Json.Decode.Decoder value -> Json.Decode.Decoder value)
+tagValueJsonDecoder name valueJsonDecoder =
+    Json.Decode.map2 (\() variantValue -> variantValue)
+        (Json.Decode.field "tag" (onlyStringJsonDecoder name))
+        (Json.Decode.field "value" valueJsonDecoder)
 
 
 {-| [json `Decoder`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Decoder)
 for the transformed event data coming back
 -}
-interfaceFutureJsonDecoder : InterfaceSingleWithFuture future -> Json.Decode.Decoder future
-interfaceFutureJsonDecoder interface =
+interfaceSingleFutureJsonDecoder : InterfaceSingle future -> Maybe (Json.Decode.Decoder future)
+interfaceSingleFutureJsonDecoder interface =
     case interface of
         DomNodeRender toRender ->
             case toRender.node of
                 DomText _ ->
-                    Json.Decode.fail "received event from a text node"
+                    Nothing
 
                 DomElementHeader domElement ->
                     Json.Decode.oneOf
@@ -2466,113 +1856,260 @@ interfaceFutureJsonDecoder interface =
 
                             Just request ->
                                 tagValueJsonDecoder "ScrollPositionRequest"
-                                    domElementScrollPositionJsonCodec.jsonDecoder
+                                    domElementScrollPositionJsonDecoder
                                     |> Json.Decode.map request
                                     |> Just
                          ]
                             |> List.filterMap identity
                         )
+                        |> Just
 
         AudioSourceLoad load ->
-            Json.Decode.map load.on
-                (Json.Decode.oneOf
-                    [ Json.Decode.map (\duration -> Ok { url = load.url, duration = duration })
-                        (Json.Decode.field "ok"
-                            (Json.Decode.field "durationInSeconds"
-                                (Json.Decode.map Duration.seconds Json.Decode.float)
+            Json.Decode.oneOf
+                [ Json.Decode.map (\duration -> Ok { url = load.url, duration = duration })
+                    (tagValueJsonDecoder "Success"
+                        (Json.Decode.field "durationInSeconds"
+                            (Json.Decode.map Duration.seconds Json.Decode.float)
+                        )
+                    )
+                , tagValueJsonDecoder "Error"
+                    (Json.Decode.string
+                        |> Json.Decode.map
+                            (\errorMessage ->
+                                Err
+                                    (case errorMessage of
+                                        "NetworkError" ->
+                                            AudioSourceLoadNetworkError
+
+                                        "MediaDecodeAudioDataUnknownContentType" ->
+                                            AudioSourceLoadDecodeError
+
+                                        "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
+                                            AudioSourceLoadDecodeError
+
+                                        unknownMessage ->
+                                            AudioSourceLoadUnknownError unknownMessage
+                                    )
                             )
-                        )
-                    , Json.Decode.map
-                        (\errorMessage ->
-                            case errorMessage of
-                                "NetworkError" ->
-                                    Err AudioSourceLoadNetworkError
-
-                                "MediaDecodeAudioDataUnknownContentType" ->
-                                    Err AudioSourceLoadDecodeError
-
-                                "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
-                                    Err AudioSourceLoadDecodeError
-
-                                unknownMessage ->
-                                    Err (AudioSourceLoadUnknownError unknownMessage)
-                        )
-                        (Json.Decode.field "err" Json.Decode.string)
-                    ]
-                )
+                    )
+                ]
+                |> Json.Decode.map load.on
+                |> Just
 
         SocketConnect connect ->
-            socketConnectionEventJsonCodec.jsonDecoder
+            socketConnectionEventJsonDecoder
                 |> Json.Decode.map connect.on
+                |> Just
 
         NotificationShow show ->
-            notificationResponseJsonCodec.jsonDecoder
+            notificationResponseJsonDecoder
                 |> Json.Decode.map show.on
+                |> Just
 
         HttpRequest httpRequest ->
             Json.Decode.oneOf
-                [ Json.Decode.field "ok" (httpExpectJsonDecoder httpRequest.expect)
-                , Json.Decode.field "err" (httpErrorJsonDecoder httpRequest)
+                [ tagValueJsonDecoder "Success" (httpExpectJsonDecoder httpRequest.expect)
+                , tagValueJsonDecoder "Error" (httpErrorJsonDecoder httpRequest)
                     |> Json.Decode.map (httpExpectOnError httpRequest.expect)
                 ]
+                |> Just
 
-        Request request ->
-            request |> requestFutureJsonDecoder
+        LocalStorageRequest request ->
+            Json.Decode.nullable Json.Decode.string
+                |> Json.Decode.map request.on
+                |> Just
 
-        Listen listen ->
-            listen |> listenFutureJsonDecoder
+        WindowSizeRequest toFuture ->
+            Json.Decode.map2 (\width height -> { width = width, height = height })
+                (Json.Decode.field "width" Json.Decode.int)
+                (Json.Decode.field "height" Json.Decode.int)
+                |> Json.Decode.map toFuture
+                |> Just
+
+        WindowPreferredLanguagesRequest toFuture ->
+            Json.Decode.list Json.Decode.string
+                |> Json.Decode.map toFuture
+                |> Just
+
+        NavigationUrlRequest toFuture ->
+            urlJsonDecoder
+                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toFuture)
+                |> Just
+
+        ClipboardRequest toFuture ->
+            Json.Decode.map toFuture Json.Decode.string |> Just
+
+        TimePosixRequest requestTimeNow ->
+            Json.Decode.map requestTimeNow timePosixJsonDecoder |> Just
+
+        TimezoneOffsetRequest requestTimezoneOffset ->
+            Json.Decode.map requestTimezoneOffset Json.Decode.int |> Just
+
+        TimezoneNameRequest requestTimezoneName ->
+            Json.Decode.map requestTimezoneName
+                (Json.Decode.oneOf
+                    [ Json.Decode.map Time.Offset Json.Decode.int
+                    , Json.Decode.map Time.Name Json.Decode.string
+                    ]
+                )
+                |> Just
+
+        RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
+            Json.Decode.list Json.Decode.int
+                |> Json.Decode.map randomUnsignedInt32sRequest.on
+                |> Just
+
+        GeoLocationRequest request ->
+            geoLocationJsonDecoder |> Json.Decode.map request |> Just
+
+        GamepadsRequest request ->
+            gamepadsJsonDecoder |> Json.Decode.map request |> Just
+
+        WindowEventListen listen ->
+            listen.on |> Just
+
+        WindowVisibilityChangeListen toFuture ->
+            windowVisibilityJsonDecoder
+                |> Json.Decode.map toFuture
+                |> Just
+
+        WindowAnimationFrameListen toFuture ->
+            timePosixJsonDecoder
+                |> Json.Decode.map toFuture
+                |> Just
+
+        WindowPreferredLanguagesChangeListen toFuture ->
+            Json.Decode.list Json.Decode.string
+                |> Json.Decode.map toFuture
+                |> Just
+
+        DocumentEventListen listen ->
+            listen.on |> Just
+
+        TimePeriodicallyListen timePeriodicallyListen ->
+            timePosixJsonDecoder
+                |> Json.Decode.map timePeriodicallyListen.on
+                |> Just
+
+        LocalStorageSetOnADifferentTabListen listen ->
+            Json.Decode.map3
+                (\appUrl oldValue newValue ->
+                    { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
+                )
+                (Json.Decode.field "url"
+                    (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
+                )
+                (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
+                (Json.Decode.field "newValue" Json.Decode.string)
+                |> Json.Decode.map listen.on
+                |> Just
+
+        LocalStorageRemoveOnADifferentTabListen listen ->
+            urlJsonDecoder
+                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
+                |> Just
+
+        SocketMessageListen messageListen ->
+            Json.Decode.string |> Json.Decode.map messageListen.on |> Just
+
+        GeoLocationChangeListen toFuture ->
+            geoLocationJsonDecoder |> Json.Decode.map toFuture |> Just
+
+        GamepadsChangeListen toFuture ->
+            gamepadsJsonDecoder |> Json.Decode.map toFuture |> Just
+
+        DocumentTitleReplaceBy _ ->
+            Nothing
+
+        DocumentAuthorSet _ ->
+            Nothing
+
+        DocumentKeywordsSet _ ->
+            Nothing
+
+        DocumentDescriptionSet _ ->
+            Nothing
+
+        ConsoleLog _ ->
+            Nothing
+
+        ConsoleWarn _ ->
+            Nothing
+
+        ConsoleError _ ->
+            Nothing
+
+        NavigationReplaceUrl _ ->
+            Nothing
+
+        NavigationPushUrl _ ->
+            Nothing
+
+        NavigationGo _ ->
+            Nothing
+
+        NavigationLoad _ ->
+            Nothing
+
+        NavigationReload ->
+            Nothing
+
+        FileDownloadUnsignedInt8s _ ->
+            Nothing
+
+        ClipboardReplaceBy _ ->
+            Nothing
+
+        AudioPlay _ ->
+            Nothing
+
+        SocketMessage _ ->
+            Nothing
+
+        SocketDisconnect _ ->
+            Nothing
+
+        LocalStorageSet _ ->
+            Nothing
+
+        NotificationAskForPermission ->
+            Nothing
 
 
-tagValueJsonDecoder : String -> (Json.Decode.Decoder value -> Json.Decode.Decoder value)
-tagValueJsonDecoder name valueJsonDecoder =
-    Json.Decode.map2 (\() variantValue -> variantValue)
-        (Json.Decode.field "tag" (onlyStringJsonDecoder name))
-        (Json.Decode.field "value" valueJsonDecoder)
+domElementScrollPositionJsonDecoder : Json.Decode.Decoder { fromLeft : Float, fromTop : Float }
+domElementScrollPositionJsonDecoder =
+    Json.Decode.map2 (\fromLeft fromTop -> { fromLeft = fromLeft, fromTop = fromTop })
+        (Json.Decode.field "fromLeft" Json.Decode.float)
+        (Json.Decode.field "fromTop" Json.Decode.float)
 
 
-onlyStringJsonDecoder : String -> Json.Decode.Decoder ()
-onlyStringJsonDecoder specificAllowedString =
-    Json.Decode.string
-        |> Json.Decode.andThen
-            (\str ->
-                if str == specificAllowedString then
-                    () |> Json.Decode.succeed
+notificationResponseJsonDecoder : Json.Decode.Decoder NotificationClicked
+notificationResponseJsonDecoder =
+    Json.Decode.map (\() -> NotificationClicked) (onlyStringJsonDecoder "Clicked")
 
-                else
-                    ([ "expected only \"", specificAllowedString, "\"" ] |> String.concat)
-                        |> Json.Decode.fail
+
+socketConnectionEventJsonDecoder : Json.Decode.Decoder SocketConnectionEvent
+socketConnectionEventJsonDecoder =
+    Json.Decode.oneOf
+        [ Json.Decode.map SocketConnected (tagValueJsonDecoder "SocketConnected" socketIdJsonDecoder)
+        , Json.Decode.map SocketDisconnected
+            (tagValueJsonDecoder "SocketDisconnected"
+                (Json.Decode.map2 (\code reason -> { code = code, reason = reason })
+                    (Json.Decode.field "code" Json.Decode.int)
+                    (Json.Decode.field "reason" Json.Decode.string)
+                )
             )
+        ]
 
 
-notificationResponseJsonCodec : JsonCodec NotificationClicked
-notificationResponseJsonCodec =
-    Json.Codec.enum [ NotificationClicked ]
-        (\NotificationClicked -> "Clicked")
+socketIdJsonDecoder : Json.Decode.Decoder SocketId
+socketIdJsonDecoder =
+    Json.Decode.map SocketId Json.Decode.int
 
 
-socketConnectionEventJsonCodec : JsonCodec SocketConnectionEvent
-socketConnectionEventJsonCodec =
-    Json.Codec.choice
-        (\socketConnected socketDisconnected socketConnectionEvent ->
-            case socketConnectionEvent of
-                SocketConnected id ->
-                    socketConnected id
-
-                SocketDisconnected disconnected ->
-                    socketDisconnected disconnected
-        )
-        |> Json.Codec.variant ( SocketConnected, "SocketConnected" ) socketIdJsonCodec
-        |> Json.Codec.variant ( SocketDisconnected, "SocketDisconnected" )
-            (Json.Codec.record (\code reason -> { code = code, reason = reason })
-                |> Json.Codec.field ( .code, "code" ) Json.Codec.int
-                |> Json.Codec.field ( .reason, "reason" ) Json.Codec.string
-                |> Json.Codec.recordFinish
-            )
-
-
-timePosixJsonCodec : JsonCodec Time.Posix
-timePosixJsonCodec =
-    Json.Codec.map Time.millisToPosix Time.posixToMillis Json.Codec.int
+timePosixJsonDecoder : Json.Decode.Decoder Time.Posix
+timePosixJsonDecoder =
+    Json.Decode.map Time.millisToPosix Json.Decode.int
 
 
 urlJsonDecoder : Json.Decode.Decoder Url
@@ -3021,55 +2558,6 @@ listAtIndex index sticks =
                 listAtIndex (index - 1) tail
 
 
-requestFutureJsonDecoder : InterfaceSingleRequest future -> Json.Decode.Decoder future
-requestFutureJsonDecoder =
-    \interfaceSingleRequest ->
-        case interfaceSingleRequest of
-            LocalStorageRequest request ->
-                Json.Decode.nullable Json.Decode.string
-                    |> Json.Decode.map request.on
-
-            WindowSizeRequest toFuture ->
-                Json.Decode.map2 (\width height -> toFuture { width = width, height = height })
-                    (Json.Decode.field "width" Json.Decode.int)
-                    (Json.Decode.field "height" Json.Decode.int)
-
-            WindowPreferredLanguagesRequest toFuture ->
-                Json.Decode.list Json.Decode.string
-                    |> Json.Decode.map toFuture
-
-            NavigationUrlRequest toFuture ->
-                urlJsonDecoder
-                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toFuture)
-
-            ClipboardRequest toFuture ->
-                Json.Decode.map toFuture Json.Decode.string
-
-            TimePosixRequest requestTimeNow ->
-                Json.Decode.map requestTimeNow timePosixJsonCodec.jsonDecoder
-
-            TimezoneOffsetRequest requestTimezoneOffset ->
-                Json.Decode.map requestTimezoneOffset Json.Decode.int
-
-            TimezoneNameRequest requestTimezoneName ->
-                Json.Decode.map requestTimezoneName
-                    (Json.Decode.oneOf
-                        [ Json.Decode.map Time.Offset Json.Decode.int
-                        , Json.Decode.map Time.Name Json.Decode.string
-                        ]
-                    )
-
-            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
-                Json.Decode.map randomUnsignedInt32sRequest.on
-                    (Json.Decode.list Json.Decode.int)
-
-            GeoLocationRequest request ->
-                Json.Decode.map request geoLocationJsonDecoder
-
-            GamepadsRequest request ->
-                Json.Decode.map request gamepadsJsonDecoder
-
-
 httpExpectOnError : HttpExpect future -> (HttpError -> future)
 httpExpectOnError =
     \httpExpect ->
@@ -3191,69 +2679,12 @@ httpNetworkErrorCodes =
     Set.fromList [ "EAGAIN", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "UND_ERR", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_OVERFLOW", "UND_ERR_BODY_TIMEOUT", "UND_ERR_RESPONSE_STATUS_CODE", "UND_ERR_INVALID_ARG", "UND_ERR_INVALID_RETURN_VALUE", "UND_ERR_ABORTED", "UND_ERR_DESTROYED", "UND_ERR_CLOSED", "UND_ERR_SOCKET", "UND_ERR_NOT_SUPPORTED", "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH", "UND_ERR_RES_CONTENT_LENGTH_MISMATCH", "UND_ERR_INFO", "UND_ERR_RES_EXCEEDED_MAX_SIZE" ]
 
 
-listenFutureJsonDecoder : InterfaceSingleListen future -> Json.Decode.Decoder future
-listenFutureJsonDecoder interfaceSingleListen =
-    case interfaceSingleListen of
-        WindowEventListen listen ->
-            listen.on
-
-        WindowVisibilityChangeListen toFuture ->
-            windowVisibilityCodec.jsonDecoder
-                |> Json.Decode.map toFuture
-
-        WindowAnimationFrameListen toFuture ->
-            timePosixJsonCodec.jsonDecoder
-                |> Json.Decode.map toFuture
-
-        WindowPreferredLanguagesChangeListen toFuture ->
-            Json.Decode.list Json.Decode.string
-                |> Json.Decode.map toFuture
-
-        DocumentEventListen listen ->
-            listen.on
-
-        TimePeriodicallyListen timePeriodicallyListen ->
-            timePosixJsonCodec.jsonDecoder
-                |> Json.Decode.map timePeriodicallyListen.on
-
-        LocalStorageSetOnADifferentTabListen listen ->
-            Json.Decode.map3
-                (\appUrl oldValue newValue ->
-                    { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
-                )
-                (Json.Decode.field "url"
-                    (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
-                )
-                (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
-                (Json.Decode.field "newValue" Json.Decode.string)
-                |> Json.Decode.map listen.on
-
-        LocalStorageRemoveOnADifferentTabListen listen ->
-            urlJsonDecoder
-                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
-
-        SocketMessageListen messageListen ->
-            Json.Decode.string
-                |> Json.Decode.map messageListen.on
-
-        GeoLocationChangeListen toFuture ->
-            geoLocationJsonDecoder |> Json.Decode.map toFuture
-
-        GamepadsChangeListen toFuture ->
-            gamepadsJsonDecoder |> Json.Decode.map toFuture
-
-
-windowVisibilityCodec : JsonCodec WindowVisibility
-windowVisibilityCodec =
-    Json.Codec.enum [ WindowShown, WindowHidden ]
-        (\windowVisibility ->
-            case windowVisibility of
-                WindowShown ->
-                    "visible"
-
-                WindowHidden ->
-                    "hidden"
-        )
+windowVisibilityJsonDecoder : Json.Decode.Decoder WindowVisibility
+windowVisibilityJsonDecoder =
+    Json.Decode.oneOf
+        [ Json.Decode.map (\() -> WindowShown) (onlyStringJsonDecoder "visible")
+        , Json.Decode.map (\() -> WindowHidden) (onlyStringJsonDecoder "hidden")
+        ]
 
 
 {-| Controller information on button presses, thumbstick positions etc.
@@ -3366,45 +2797,29 @@ programUpdate : ProgramConfig state -> (ProgramEvent state -> ProgramState state
 programUpdate appConfig =
     \event ->
         case event of
-            InterfaceEventIgnored ->
-                \state ->
-                    ( state, Cmd.none )
-
-            InterfaceDiffFailedToDecode jsonError ->
+            JsEventFailedToDecode jsonError ->
                 \state ->
                     ( state
-                    , ([ "bug: interface diff failed to decode: "
-                       , jsonError |> Json.Decode.errorToString
-                       , ". Please open an issue on github.com/lue-bird/elm-state-interface"
-                       ]
-                        |> String.concat
-                      )
-                        |> ConsoleError
-                        |> Add
-                        |> InterfaceWithoutFutureDiff
-                        |> interfaceDiffToJson
+                    , let
+                        notifyOfBugInterface : InterfaceSingle ()
+                        notifyOfBugInterface =
+                            ([ "bug: js event failed to decode: "
+                             , jsonError |> Json.Decode.errorToString
+                             , ". Please open an issue on github.com/lue-bird/elm-state-interface"
+                             ]
+                                |> String.concat
+                            )
+                                |> ConsoleError
+                      in
+                      { id = notifyOfBugInterface |> interfaceSingleToStructuredId |> StructuredId.toString
+                      , diff = notifyOfBugInterface |> Add
+                      }
+                        |> toJsToJson
                         |> appConfig.ports.toJs
                         |> Cmd.map never
                     )
 
-            InterfaceEventDataFailedToDecode jsonError ->
-                \state ->
-                    ( state
-                    , ([ "bug: interface event data failed to decode: "
-                       , jsonError |> Json.Decode.errorToString
-                       , ". Please open an issue on github.com/lue-bird/elm-state-interface"
-                       ]
-                        |> String.concat
-                      )
-                        |> ConsoleError
-                        |> Add
-                        |> InterfaceWithoutFutureDiff
-                        |> interfaceDiffToJson
-                        |> appConfig.ports.toJs
-                        |> Cmd.map never
-                    )
-
-            AppEventToNewAppState updatedAppState ->
+            JsEventEnabledConstructionOfNewAppState updatedAppState ->
                 \(State oldState) ->
                     let
                         updatedInterface : Set.StructuredId.Set (InterfaceSingle state)
@@ -3415,8 +2830,8 @@ programUpdate appConfig =
                     in
                     ( State { interface = updatedInterface, appState = updatedAppState }
                     , { old = oldState.interface, updated = updatedInterface }
-                        |> interfaceDiffs
-                        |> List.map (\diff -> appConfig.ports.toJs (diff |> interfaceDiffToJson))
+                        |> interfacesDiff
+                        |> List.map (\diff -> appConfig.ports.toJs (diff |> toJsToJson))
                         |> Cmd.batch
                         |> Cmd.map never
                     )
@@ -3460,54 +2875,26 @@ type alias HttpMetadata =
         }
 
 
-{-| Safe to ignore. Individual messages to js. Also used to identify responses with the same part in the interface
+{-| Individual message to js to sync up with the latest interface type
 -}
-type InterfaceDiff
-    = InterfaceWithFutureDiff InterfaceWithFutureDiff
-    | InterfaceWithoutFutureDiff InterfaceWithoutFutureDiff
+type InterfaceSingleDiff
+    = Add (InterfaceSingle ())
+    | Edit InterfaceSingleEdit
+    | Remove
 
 
-{-| Actions that will never notify elm again
+{-| Individual message to js to sync up with the latest interface type,
+describing changes to an existing interface with the same identity
 -}
-type InterfaceWithoutFutureDiff
-    = Add InterfaceSingleWithoutFuture
-    | EditAudio { url : String, startTime : Time.Posix, replacement : EditAudioDiff }
-    | RemoveHttpRequest { url : String }
-    | RemoveDom { path : List Int }
-    | RemoveSocketConnect { address : String }
-    | RemoveAudio { url : String, startTime : Time.Posix }
+type InterfaceSingleEdit
+    = EditDom { path : List Int, replacement : DomEdit }
+    | EditAudio { url : String, startTime : Time.Posix, replacement : AudioEdit }
     | EditNotification { id : String, message : String, details : String }
-    | RemoveNotificationShow { id : String }
-    | RemoveListen InterfaceSingleListenId
-
-
-{-| Actions that will notify elm some time in the future
--}
-type InterfaceSingleWithFutureId
-    = IdDomNodeRender { path : List Int }
-    | IdAudioSourceLoad String
-    | IdSocketConnect { address : String }
-    | IdNotificationShow { id : String }
-    | IdHttpRequest { url : String }
-    | IdRequest InterfaceSingleRequestId
-    | IdListen InterfaceSingleListenId
-
-
-{-| Actions that will notify elm some time in the future
--}
-type InterfaceWithFutureDiff
-    = EditDom EditDomDiff
-    | AddSocketConnect { address : String }
-    | AddAudioSourceLoad String
-    | AddNotificationShow { id : String, message : String, details : String }
-    | AddHttpRequest HttpRequestInfo
-    | AddRequest InterfaceSingleRequestId
-    | AddListen InterfaceSingleListenId
 
 
 {-| What parts of an [`Audio`](#Audio) are replaced
 -}
-type EditAudioDiff
+type AudioEdit
     = ReplacementAudioVolume AudioParameterTimeline
     | ReplacementAudioSpeed AudioParameterTimeline
     | ReplacementAudioStereoPan AudioParameterTimeline
@@ -3572,17 +2959,10 @@ type alias AudioParameterTimeline =
     }
 
 
-{-| Change the current node at a given path using a given [`ReplacementInEditDomDiff`](#ReplacementInEditDomDiff)
--}
-type alias EditDomDiff =
-    RecordWithoutConstructorFunction
-        { path : List Int, replacement : ReplacementInEditDomDiff }
-
-
 {-| What parts of a node are replaced. Either all modifiers of a certain kind or the whole node
 -}
-type ReplacementInEditDomDiff
-    = ReplacementDomNode DomTextOrElementHeaderInfo
+type DomEdit
+    = ReplacementDomNode (DomTextOrElementHeader ())
     | ReplacementDomElementStyles (Dict String String)
     | ReplacementDomElementAttributes (Dict String String)
     | ReplacementDomElementAttributesNamespaced (Dict ( String, String ) String)

@@ -40,7 +40,7 @@ render =
     \domNode ->
         domNode
             |> nodeFlatten
-            |> List.map (\nodeAndPath -> nodeAndPath |> Web.DomNodeRender |> Web.InterfaceWithFuture)
+            |> List.map (\nodeAndPath -> nodeAndPath |> Web.DomNodeRender)
             |> Rope.fromList
 
 

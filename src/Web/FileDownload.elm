@@ -35,5 +35,4 @@ bytes fileDownloadConfig =
         , mimeType = fileDownloadConfig.mimeType
         , content = fileDownloadConfig.content |> Bytes.LocalExtra.toUnsignedInt8List
         }
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton

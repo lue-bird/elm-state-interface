@@ -10,7 +10,7 @@ import Time
 import Web exposing (AudioParameterTimeline)
 
 
-{-| Set it to a constant value. Add [`through`](#through) to make it transition from this starting value over time.
+{-| Set it to a constant value. Add [`through`](#through) to make it transition from this starting value over time
 -}
 at : Float -> AudioParameterTimeline
 at valueAtTheStart =

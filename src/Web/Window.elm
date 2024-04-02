@@ -31,7 +31,6 @@ import Web
 titleReplaceBy : String -> Web.Interface future_
 titleReplaceBy titleReplacement =
     Web.DocumentTitleReplaceBy titleReplacement
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -40,7 +39,6 @@ titleReplaceBy titleReplacement =
 authorSet : String -> Web.Interface future_
 authorSet authorName =
     Web.DocumentAuthorSet authorName
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -50,7 +48,6 @@ which should consist of words relevant to the page's content
 keywordsSet : List String -> Web.Interface future_
 keywordsSet authorName =
     Web.DocumentKeywordsSet authorName
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -61,7 +58,6 @@ Several browsers, like Firefox and Opera, use this as the default description of
 descriptionSet : String -> Web.Interface future_
 descriptionSet authorName =
     Web.DocumentDescriptionSet authorName
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -71,8 +67,6 @@ that has no native [`Interface`](Web#Interface), like like scroll, scrollend, se
 documentListenTo : String -> Web.Interface Json.Decode.Value
 documentListenTo eventName =
     Web.DocumentEventListen { eventName = eventName, on = Json.Decode.value }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -81,8 +75,6 @@ documentListenTo eventName =
 listenTo : String -> Web.Interface Json.Decode.Value
 listenTo eventName =
     Web.WindowEventListen { eventName = eventName, on = Json.Decode.value }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -95,8 +87,6 @@ These times will also be the last reliable observation you can make before a use
 visibilityChangeListen : Web.Interface Web.WindowVisibility
 visibilityChangeListen =
     Web.WindowVisibilityChangeListen identity
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -106,8 +96,6 @@ not including toolbars/scrollbars
 sizeRequest : Web.Interface { width : Int, height : Int }
 sizeRequest =
     Web.WindowSizeRequest identity
-        |> Web.Request
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -124,8 +112,6 @@ resizeListen =
                     (Json.Decode.field "innerHeight" Json.Decode.int)
                 )
         }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -146,8 +132,6 @@ Note: uses [`window.requestAnimationFrame`](https://developer.mozilla.org/en-US/
 animationFrameListen : Web.Interface Time.Posix
 animationFrameListen =
     Web.WindowAnimationFrameListen identity
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -161,8 +145,6 @@ Note: uses [`window.navigator.languages`](https://developer.mozilla.org/en-US/do
 preferredLanguagesRequest : Web.Interface (List String)
 preferredLanguagesRequest =
     Web.WindowPreferredLanguagesRequest identity
-        |> Web.Request
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -176,6 +158,4 @@ Note: uses [`window.onlanguagechange`](https://developer.mozilla.org/en-US/docs/
 preferredLanguagesChangeListen : Web.Interface (List String)
 preferredLanguagesChangeListen =
     Web.WindowPreferredLanguagesChangeListen identity
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton

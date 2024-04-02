@@ -172,5 +172,4 @@ request =
     \httpRequest ->
         httpRequest
             |> Web.HttpRequest
-            |> Web.InterfaceWithFuture
             |> Rope.singleton

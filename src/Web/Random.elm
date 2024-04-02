@@ -87,6 +87,4 @@ Note: uses [`window.crypto.getRandomValues`](https://developer.mozilla.org/en-US
 unsignedInt32s : Int -> Web.Interface (List Int)
 unsignedInt32s count =
     Web.RandomUnsignedInt32sRequest { count = count, on = identity }
-        |> Web.Request
-        |> Web.InterfaceWithFuture
         |> Rope.singleton

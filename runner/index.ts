@@ -6,34 +6,248 @@ export interface ElmPorts {
 }
 
 export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
-    const addInterfaceWithoutFutureImplementation: (tag: string) => ((config: any) => any) = tag => {
+    appConfig.ports.toJs.subscribe(function (fromElm: { id: string, diff: { tag: "Add" | "Edit" | "Remove", value: any } }) {
+        // console.log("elm → js: ", fromElm)
+        function sendToElm(eventData: void) {
+            const toElm = {
+                id: fromElm.id,
+                eventData: eventData
+            }
+            appConfig.ports.fromJs.send(toElm)
+            // console.log("js → elm: ", toElm)
+        }
+        interfaceDiffImplementation(fromElm.diff.tag, sendToElm, fromElm.id)(fromElm.diff.value)
+    })
+    function interfaceDiffImplementation(tag: "Add" | "Edit" | "Remove", sendToElm: (v: any) => void, id: string): ((config: any) => void) {
         switch (tag) {
-            case "DocumentTitleReplaceBy": return (config: string) => { window.document.title = config }
-            case "DocumentAuthorSet": return (config: string) => { getMeta("author").content = config }
-            case "DocumentKeywordsSet": return (config: string) => { getMeta("keywords").content = config }
-            case "DocumentDescriptionSet": return (config: string) => { getMeta("description").content = config }
-            case "ConsoleLog": return (config: string) => { window?.console.log(config) }
-            case "ConsoleWarn": return (config: string) => { window?.console.warn(config) }
-            case "ConsoleError": return (config: string) => { window?.console.error(config) }
-            case "NavigationPushUrl": return (config: string) => { pushUrl(config) }
-            case "NavigationReplaceUrl": return (config: string) => { replaceUrl(config) }
-            case "NavigationGo": return (config: number) => { go(config) }
-            case "NavigationLoad": return (config: string) => { load(config) }
-            case "NavigationReload": return (_config: null) => { reload() }
-            case "FileDownloadUnsignedInt8s": return (config: {
-                mimeType: string;
-                name: string;
-                content: number[];
-            }) => {
+            case "Add": return (config: { tag: string, value: any }) => {
+                const abortController = new AbortController()
+                abortControllers.set(id, abortController)
+                interfaceAddImplementation(id, config.tag, sendToElm, abortController.signal)(config.value)
+            }
+            case "Edit": return (config: { tag: string, value: any }) => {
+                interfaceEditImplementation(id, config.tag, sendToElm)(config.value)
+            }
+            case "Remove": return (_config: null) => {
+                const abortController = abortControllers.get(id)
+                if (abortController) {
+                    abortController.abort()
+                    abortControllers.delete(id)
+                }
+            }
+        }
+    }
+    function interfaceAddImplementation(id: string, tag: string, sendToElm: (v: any) => void, abortSignal: AbortSignal): ((config: any) => void) {
+        switch (tag) {
+            case "DocumentTitleReplaceBy": return (config: string) => {
+                window.document.title = config
+            }
+            case "DocumentAuthorSet": return (config: string) => {
+                getOrAddMeta("author").content = config
+            }
+            case "DocumentKeywordsSet": return (config: string) => {
+                getOrAddMeta("keywords").content = config
+            }
+            case "DocumentDescriptionSet": return (config: string) => {
+                getOrAddMeta("description").content = config
+            }
+            case "DocumentEventListen": return (config: string) => {
+                window.document.addEventListener(config, sendToElm, { signal: abortSignal })
+            }
+            case "ConsoleLog": return (message: string) => {
+                window?.console.log(message)
+            }
+            case "ConsoleWarn": return (message: string) => {
+                window?.console.warn(message)
+            }
+            case "ConsoleError": return (message: string) => {
+                window?.console.error(message)
+            }
+            case "NavigationReplaceUrl": return (appUrl: string) => {
+                window.history.replaceState({ appUrl: appUrl }, "", window.location.origin + appUrl)
+            }
+            case "NavigationPushUrl": return (appUrl: string) => {
+                if (window.history.state === null || (history.state.appUrl !== appUrl)) {
+                    window.history.pushState({ appUrl: appUrl }, "", window.location.origin + appUrl)
+                }
+            }
+            case "NavigationGo": return (config: number) => {
+                window.history.go(config)
+            }
+            case "NavigationLoad": return (url: string) => {
+                try {
+                    window.location.href = url
+                } catch (_error) {
+                    // Only Firefox can throw a NS_ERROR_MALFORMED_URI exception here.
+                    // Other browsers reload the page, so let's be consistent about that.
+                    window.document.location.reload()
+                }
+            }
+            case "NavigationReload": return (_config: null) => {
+                window.document.location.reload()
+            }
+            case "NavigationUrlRequest": return (_config: null) => {
+                sendToElm(window.location.href)
+            }
+            case "FileDownloadUnsignedInt8s": return (config: { mimeType: string, name: string, content: number[] }) => {
                 fileDownloadBytes(config)
             }
-            case "ClipboardReplaceBy": return (config: string) => { navigator.clipboard.writeText(config) }
-            case "Audio": return addAudio
-            case "SocketDisconnect": return (index: number) => {
-                const socketToDisconnect = sockets.at(index)
-                if (socketToDisconnect) {
-                    socketToDisconnect.close()
-                } else { } // socket is already closed
+            case "ClipboardReplaceBy": return (config: string) => {
+                window.navigator.clipboard.writeText(config)
+            }
+            case "ClipboardRequest": return (_config: null) => {
+                window.navigator.clipboard.readText()
+                    .catch(_notAllowed => {
+                        warn("clipboard cannot be read")
+                    })
+                    .then(sendToElm)
+            }
+            case "AudioSourceLoad": return (config: string) => {
+                audioSourceLoad(config, sendToElm, abortSignal)
+            }
+            case "AudioPlay": return (config: AudioInfo) => {
+                const audioBuffer = audioBuffers.get(config.url)
+                if (audioBuffer) {
+                    const createdAudioPlaying = createAudio(config, audioBuffer)
+                    audioPlaying.set(id, createdAudioPlaying)
+                    abortSignal.addEventListener("abort", _event => {
+                        createdAudioPlaying.sourceNode.stop()
+                        createdAudioPlaying.sourceNode.disconnect()
+                        createdAudioPlaying.gainNode.disconnect()
+                        createdAudioPlaying.stereoPanNode.disconnect()
+                        createdAudioPlaying.processingNodes.forEach(node => { node.disconnect() })
+                    })
+                } else {
+                    warn("tried to play audio from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
+                }
+            }
+            case "DomNodeRender": return (config: { path: number[], node: any }) => {
+                const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, config.path)
+                const newDomNode = createDomNode(id, config.node, oldDomNodeToEdit.childNodes, sendToElm)
+                oldDomNodeToEdit.parentElement?.replaceChild(newDomNode, oldDomNodeToEdit)
+                abortSignal.addEventListener("abort", _event => {
+                    domListenAbortControllers.delete(id)
+                    // it is possible that the "newDomNode" has been replaced
+                    // by e.g.a text where there was an Element previously
+                    const toRemove = domInElementAt(appConfig.domElement, 0, config.path)
+                    if (toRemove) {
+                        while (toRemove.nextSibling) {
+                            toRemove.nextSibling.remove()
+                        }
+                        toRemove.remove()
+                    }
+                })
+            }
+            case "NotificationAskForPermission": return (_config: null) => {
+                askForNotificationPermissionIfNotAsked()
+            }
+            case "NotificationShow": return (config: { id: string, message: string, details: string }) => {
+                askForNotificationPermissionIfNotAsked().then(status => {
+                    switch (status) {
+                        case "denied": break
+                        case "granted": {
+                            const newNotification = new Notification(
+                                config.message,
+                                {
+                                    body: config.details,
+                                    tag: config.id
+                                }
+                            )
+                            newNotification.onclick = _event => { sendToElm("Clicked") }
+                            abortSignal.addEventListener("abort", _event => {
+                                newNotification.close()
+                            })
+                        }
+                    }
+                })
+            }
+            case "HttpRequest": return (config: HttpRequest) => {
+                httpFetch(config, abortSignal).then(sendToElm)
+            }
+            case "TimePosixRequest": return (_config: null) => {
+                sendToElm(Date.now())
+            }
+            case "TimezoneOffsetRequest": return (_config: null) => {
+                // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
+                sendToElm(new Date().getTimezoneOffset())
+            }
+            case "TimezoneNameRequest": return (_config: null) => {
+                sendToElm(getTimezoneName())
+            }
+            case "TimePeriodicallyListen": return (config: { milliSeconds: number }) => {
+                const timePeriodicallyListenId =
+                    window.setInterval(
+                        () => { sendToElm(Date.now()) },
+                        config.milliSeconds
+                    )
+                abortSignal.addEventListener("abort", _event => {
+                    window.clearInterval(timePeriodicallyListenId)
+                })
+            }
+            case "RandomUnsignedInt32sRequest": return (config: number) => {
+                sendToElm(crypto.getRandomValues(new Uint32Array(config)))
+            }
+            case "WindowSizeRequest": return (_config: null) => {
+                sendToElm({ width: window.innerWidth, height: window.innerHeight })
+            }
+            case "WindowPreferredLanguagesRequest": return (_config: null) => {
+                sendToElm(window.navigator.languages)
+            }
+            case "WindowEventListen": return (config: string) => {
+                window.addEventListener(config, sendToElm, { signal: abortSignal })
+            }
+            case "WindowVisibilityChangeListen": return (_config: null) => {
+                window.document.addEventListener(
+                    "visibilitychange",
+                    _eventWhichDoesNotContainTheNewVisibility => {
+                        sendToElm(window.document.visibilityState)
+                    },
+                    { signal: abortSignal }
+                )
+            }
+            case "WindowAnimationFrameListen": return (_config: null) => {
+                let runningAnimationFrameLoopId: number
+                function addAnimationFrameListen(): number {
+                    return window.requestAnimationFrame(_timestamp => {
+                        if (!abortSignal.aborted) {
+                            sendToElm(Date.now())
+                            runningAnimationFrameLoopId = addAnimationFrameListen()
+                        }
+                    })
+                }
+                runningAnimationFrameLoopId = addAnimationFrameListen()
+                abortSignal.addEventListener("abort", _event => {
+                    window.cancelAnimationFrame(runningAnimationFrameLoopId)
+                })
+            }
+            case "WindowPreferredLanguagesChangeListen": return (_config: null) => {
+                window.addEventListener(
+                    "languagechange",
+                    _event => { sendToElm(window.navigator.languages) }
+                    , { signal: abortSignal }
+                )
+            }
+            case "SocketConnect": return (config: { address: string }) => {
+                const createdSocket = new WebSocket(config.address)
+                sockets.push(createdSocket)
+                const socketId = sockets.length
+                createdSocket.onopen = _event => {
+                    sendToElm({ tag: "SocketConnected", value: socketId })
+                    createdSocket.onopen = null
+                }
+                createdSocket.onclose = (event) => {
+                    sendToElm({ tag: "SocketDisconnected", value: { code: event.code, reason: event.reason } })
+                    sockets[socketId] = null
+                }
+                abortSignal.addEventListener("abort", _event => {
+                    sockets
+                        .flatMap(socket => socket ? [socket] : [])
+                        .filter(socket => socket.url == config.address)
+                        .forEach(socketToStopFromConnecting => {
+                            socketToStopFromConnecting.onopen = null
+                            socketToStopFromConnecting.onclose = null
+                        })
+                })
             }
             case "SocketMessage": return (config: { id: number, data: string }) => {
                 const socketToDisconnect = sockets.at(config.id)
@@ -41,6 +255,26 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     socketToDisconnect.send(config.data)
                 } else {
                     warn("trying to send messages on closed socket")
+                }
+            }
+            case "SocketDisconnect": return (index: number) => {
+                const socketToDisconnect = sockets.at(index)
+                if (socketToDisconnect) {
+                    socketToDisconnect.close()
+                } else { } // socket is already closed
+            }
+            case "SocketMessageListen": return (index: number) => {
+                const socketToListenToMessagesFrom = sockets.at(index)
+                if (socketToListenToMessagesFrom) {
+                    socketToListenToMessagesFrom.addEventListener(
+                        "message",
+                        event => {
+                            sendToElm(event.data)
+                        },
+                        { signal: abortSignal }
+                    )
+                } else {
+                    warn("trying to listen to messages on closed socket")
                 }
             }
             case "LocalStorageSet": return (config: { key: string, value: string | null }) => {
@@ -54,17 +288,83 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     warn("local storage cannot be written to: " + disallowedByUserOrQuotaExceeded)
                 }
             }
-            case "NotificationAskForPermission": return (_config: null) => {
-                askForNotificationPermissionIfNotAsked()
+            case "LocalStorageRequest": return (config: { key: string }) => {
+                sendToElm(window.localStorage.getItem(config.key))
+            }
+            case "LocalStorageRemoveOnADifferentTabListen": return (config: { key: string }) => {
+                window.addEventListener(
+                    "storage",
+                    storageEvent => {
+                        if (storageEvent.key === config.key && storageEvent.newValue === null) {
+                            sendToElm(storageEvent.url)
+                        }
+                    },
+                    { signal: abortSignal }
+                )
+            }
+            case "LocalStorageSetOnADifferentTabListen": return (config: { key: string }) => {
+                window.addEventListener(
+                    "storage",
+                    storageEvent => {
+                        if (storageEvent.key === config.key && storageEvent.newValue !== null) {
+                            sendToElm({ url: storageEvent.url, oldValue: storageEvent.oldValue, newValue: storageEvent.newValue })
+                        }
+                    },
+                    { signal: abortSignal }
+                )
+            }
+            case "GeoLocationRequest": return (_config: null) => {
+                window.navigator.geolocation.getCurrentPosition(
+                    geoPosition => { sendToElm(geoPosition.coords) },
+                    error => {
+                        warn("geo location cannot be read: " + error)
+                    },
+                    { timeout: 10000 }
+                )
+            }
+            case "GeoLocationChangeListen": return (_config: null) => {
+                const geoLocationChangeListenId =
+                    navigator.geolocation.watchPosition(
+                        geoPosition => { sendToElm(geoPosition.coords) },
+                        error => {
+                            warn("geo location cannot be read: " + error)
+                        }
+                    )
+                abortSignal.addEventListener("abort", _event => {
+                    navigator.geolocation.clearWatch(geoLocationChangeListenId)
+                })
+            }
+            case "GamepadsRequest": return (_config: null) => {
+                sendToElm(window.navigator.getGamepads())
+            }
+            case "GamepadsChangeListen": return (_config: null) => {
+                const gamepadsChangePollingIntervalId = window.setInterval(
+                    function () {
+                        const newGamepads = window.navigator.getGamepads()
+                        if (gamepadsFromLastPoll !== newGamepads) {
+                            sendToElm(newGamepads)
+                            gamepadsFromLastPoll = newGamepads
+                        }
+                    },
+                    14
+                )
+                abortSignal.addEventListener("abort", _event => {
+                    window.clearInterval(gamepadsChangePollingIntervalId)
+                })
             }
             default: return (_config: any) => {
-                notifyOfUnknownMessageKind("InterfaceWithoutFuture.Add." + tag)
+                notifyOfUnknownMessageKind("Add." + tag)
             }
         }
     }
-    const interfaceWithoutFutureImplementation: (tag: string) => ((config: any) => void) = tag => {
+    function interfaceEditImplementation(id: string, tag: string, sendToElm: (v: any) => void): ((config: any) => void) {
         switch (tag) {
-            case "EditAudio": return editAudio
+            case "EditDom": return (config: { path: number[], replacement: any }) => {
+                editDom(id, config.path, config.replacement, sendToElm)
+            }
+            case "EditAudio": return (config: any) => {
+                editAudio(id, config)
+            }
             case "EditNotification": return (config: { id: string, message: string, details: string }) => {
                 const oldNotification = notifications[config.id]
                 if (oldNotification) {
@@ -79,305 +379,12 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                     notifications[config.id] = newNotification
                 }
             }
-            case "RemoveNotificationShow": return (config: { id: string }) => {
-                const notification = notifications[config.id]
-                if (notification) {
-                    notification.close()
-                    delete notifications[config.id]
-                }
-            }
-            case "RemoveDom": return (config: { path: number[] }) => {
-                removeDom(config.path)
-            }
-            case "RemoveHttpRequest": return (config: { url: string }) => {
-                const maybeAbortController = httpRequestAbortControllers[config.url]
-                if (maybeAbortController) {
-                    maybeAbortController.abort()
-                }
-            }
-            case "RemoveAudio": return removeAudio
-            case "RemoveSocketConnect": return (config: { address: string }) => {
-                sockets
-                    .flatMap(socket => socket ? [socket] : [])
-                    .filter(socket => socket.url == config.address)
-                    .forEach(socketToStopFromConnecting => {
-                        socketToStopFromConnecting.onopen = null
-                        socketToStopFromConnecting.onclose = null
-                    })
-            }
-            case "RemoveListen": return (config: { tag: string, value: any }) => {
-                interfaceListenRemoveImplementation(config.tag)(config.value)
-            }
-            case "Add": return (config: { tag: string, value: any }) => {
-                addInterfaceWithoutFutureImplementation(config.tag)(config.value)
-            }
             default: return (_config: any) => {
-                notifyOfUnknownMessageKind("InterfaceWithoutFuture." + tag)
+                notifyOfUnknownMessageKind("Edit." + tag)
             }
-        }
-    }
-    const interfaceListenAddImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
-        switch (tag) {
-            case "TimePeriodicallyListen": return (config, sendToElm) => {
-                addTimePeriodicallyListen(config, sendToElm)
-            }
-            case "WindowEventListen": return windowEventListenAdd
-            case "WindowVisibilityChangeListen": return (_config: null, sendToElm) => {
-                window.document.onvisibilitychange = _eventWhichDoesNotContainTheNewVisibility => {
-                    sendToElm(window.document.visibilityState)
-                }
-            }
-            case "WindowAnimationFrameListen": return (_config: null, sendToElm) => {
-                addAnimationFrameListen(sendToElm)
-            }
-            case "DocumentEventListen": return documentEventListenAdd
-            case "SocketMessageListen": return (index: number, sendToElm) => {
-                const socketToListenToMessagesFrom = sockets.at(index)
-                if (socketToListenToMessagesFrom) {
-                    socketToListenToMessagesFrom.onmessage = (event) => {
-                        sendToElm(event.data)
-                    }
-                } else {
-                    warn("trying to listen to messages on closed socket")
-                }
-            }
-            case "LocalStorageRemoveOnADifferentTabListen": return (config: { key: string }, sendToElm) => {
-                const abortController = new AbortController()
-                window.addEventListener(
-                    "storage",
-                    storageEvent => {
-                        if (storageEvent.key === config.key && storageEvent.newValue === null) {
-                            sendToElm(storageEvent.url)
-                        }
-                    },
-                    { signal: abortController.signal }
-                )
-                localStorageRemoveOnADifferentTabListenAbortControllers[config.key] = abortController
-            }
-            case "LocalStorageSetOnADifferentTabListen": return (config: { key: string }, sendToElm) => {
-                const abortController = new AbortController()
-                window.addEventListener(
-                    "storage",
-                    storageEvent => {
-                        if (storageEvent.key === config.key && storageEvent.newValue !== null) {
-                            sendToElm({ url: storageEvent.url, oldValue: storageEvent.oldValue, newValue: storageEvent.newValue })
-                        }
-                    },
-                    { signal: abortController.signal }
-                )
-                localStorageSetOnADifferentTabListenAbortControllers[config.key] = abortController
-            }
-            case "GeoLocationChangeListen": return (_config: null, sendToElm) => {
-                geoLocationChangeListenId =
-                    navigator.geolocation.watchPosition(
-                        geoPosition => { sendToElm(geoPosition.coords) },
-                        error => {
-                            warn("geo location cannot be read: " + error)
-                        }
-                    )
-            }
-            case "WindowPreferredLanguagesChangeListen": return (_config: null, sendToElm) => {
-                window.onlanguagechange = function (_event) { sendToElm(window.navigator.languages) }
-            }
-            case "GamepadsChangeListen": return (_config: null, sendToElm) => {
-                gamepadsChangePollingIntervalId = window.setInterval(
-                    function () {
-                        const newGamepads = window.navigator.getGamepads()
-                        if (gamepadsFromLastPoll !== newGamepads) {
-                            sendToElm(newGamepads)
-                            gamepadsFromLastPoll = newGamepads
-                        }
-                    },
-                    14
-                )
-            }
-            default: return (_config: any, _sendToElm) => {
-                notifyOfUnknownMessageKind("InterfaceWithFuture.AddListen." + tag)
-            }
-        }
-    }
-    const interfaceListenRemoveImplementation: (tag: string) => ((config: any) => void) = tag => {
-        switch (tag) {
-            case "TimePeriodicallyListen": return removeTimePeriodicallyListen
-            case "WindowEventListen": return windowEventListenRemove
-            case "WindowVisibilityChangeListen": return (_config: null) => {
-                window.document.onvisibilitychange = null
-            }
-            case "AnimationFrameListen": return (_config: null) => { removeAnimationFrameListen() }
-            case "DocumentEventListen": return documentEventListenRemove
-            case "SocketMessageListen": return (index: number) => {
-                const socketToListenToMessagesFrom = sockets.at(index)
-                if (socketToListenToMessagesFrom) {
-                    socketToListenToMessagesFrom.onmessage = null
-                } else { } // already removed
-            }
-            case "LocalStorageRemoveOnADifferentTabListen": return (config: { key: string }) => {
-                localStorageRemoveOnADifferentTabListenAbortControllers[config.key]?.abort()
-                delete localStorageRemoveOnADifferentTabListenAbortControllers[config.key]
-            }
-            case "LocalStorageSetOnADifferentTabListen": return (config: { key: string }) => {
-                localStorageSetOnADifferentTabListenAbortControllers[config.key]?.abort()
-                delete localStorageSetOnADifferentTabListenAbortControllers[config.key]
-            }
-            case "GeoLocationChangeListen": return (_config: null) => {
-                if (geoLocationChangeListenId) {
-                    navigator.geolocation.clearWatch(geoLocationChangeListenId)
-                    geoLocationChangeListenId = null
-                }
-            }
-            case "WindowPreferredLanguagesChangeListen": return (_config: null) => {
-                window.onlanguagechange = null
-            }
-            case "GamepadsChangeListen": return (_config: null) => {
-                if (gamepadsChangePollingIntervalId) {
-                    window.clearInterval(gamepadsChangePollingIntervalId)
-                    gamepadsChangePollingIntervalId = null
-                }
-            }
-            default: return (_config: any) => {
-                notifyOfUnknownMessageKind("InterfaceWithoutFuture.RemoveListen." + tag)
-            }
-        }
-    }
-    const interfaceWithFutureImplementation: (tag: string) => ((config: any, sendToElm: (v: any) => void) => void) = tag => {
-        switch (tag) {
-            case "EditDom": return (config: { path: number[], replacement: any }, sendToElm) => {
-                editDom(config.path, config.replacement, sendToElm)
-            }
-            case "AddAudioSourceLoad": return audioSourceLoad
-            case "AddSocketConnect": return (config: { address: string }, sendToElm) => {
-                const createdSocket = new WebSocket(config.address)
-                sockets.push(createdSocket)
-                const socketId = sockets.length
-                createdSocket.onopen = _event => {
-                    sendToElm({ tag: "SocketConnected", value: socketId })
-                    createdSocket.onopen = null
-                }
-                createdSocket.onclose = (event) => {
-                    sendToElm({ tag: "SocketDisconnected", value: { code: event.code, reason: event.reason } })
-                    sockets[socketId] = null
-                }
-            }
-            case "AddNotificationShow": return (config: { id: string, message: string, details: string }, sendToElm) => {
-                askForNotificationPermissionIfNotAsked().then(status => {
-                    switch (status) {
-                        case "denied": break
-                        case "granted": {
-                            const newNotification = new Notification(
-                                config.message,
-                                {
-                                    body: config.details,
-                                    tag: config.id
-                                }
-                            )
-                            newNotification.onclick = _event => { sendToElm("Clicked") }
-                            notifications[config.id] = newNotification
-                        }
-                    }
-                })
-            }
-            case "AddHttpRequest": return (config: HttpRequest) => {
-                const abortController = new AbortController()
-                httpRequestAbortControllers[config.url] = abortController
-                return httpFetch(config, abortController)
-            }
-            case "AddListen": return (config: { tag: string, value: any }, sendToElm) => {
-                interfaceListenAddImplementation(config.tag)(config.value, sendToElm)
-            }
-            case "AddRequest": return (config: { tag: string, value: any }, sendToElm) => {
-                interfaceRequestImplementation(config.tag)(config.value)
-                    .then(sendToElm)
-                    .catch((_error: null) => {
-                        notifyOfUnknownMessageKind("InterfaceWithFuture.AddRequest." + config.tag)
-                    })
-            }
-            default: return (_config: any, _sendToElm) => {
-                notifyOfUnknownMessageKind("InterfaceWithFuture." + tag)
-            }
-        }
-    }
-    const interfaceRequestImplementation: (tag: string) => ((config: any) => Promise<any>) = tag => {
-        switch (tag) {
-            case "LocalStorageRequest": return (config: { key: string }) => {
-                return Promise.resolve(window.localStorage.getItem(config.key))
-            }
-            case "TimePosixRequest": return (_config: null) => {
-                return Promise.resolve(Date.now())
-            }
-            case "TimezoneOffsetRequest": return (_config: null) => {
-                // Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L38-L52
-                return Promise.resolve(new Date().getTimezoneOffset())
-            }
-            case "TimezoneNameRequest": return (_config: null) => {
-                return Promise.resolve(getTimezoneName())
-            }
-            case "RandomUnsignedInt32sRequest": return (config: number) => {
-                return Promise.resolve(crypto.getRandomValues(new Uint32Array(config)))
-            }
-            case "WindowSizeRequest": return (_config: null) => {
-                return Promise.resolve({ width: window.innerWidth, height: window.innerHeight })
-            }
-            case "NavigationUrlRequest": return (_config: null) => {
-                return Promise.resolve(window.location.href)
-            }
-            case "ClipboardRequest": return (_config: null) => {
-                return window.navigator.clipboard.readText()
-                    .catch(_notAllowed => {
-                        warn("clipboard cannot be read")
-                    })
-            }
-            case "GeoLocationRequest": return (_config: null) => {
-                return new Promise((resolve, _reject) => {
-                    window.navigator.geolocation.getCurrentPosition(
-                        geoPosition => { resolve(geoPosition.coords) },
-                        error => {
-                            warn("geo location cannot be read: " + error)
-                        },
-                        { timeout: 10000 }
-                    )
-                })
-            }
-            case "GamepadsRequest": return (_config: null) => {
-                return Promise.resolve(window.navigator.getGamepads())
-            }
-            case "WindowPreferredLanguagesRequest": return (_config: null) => {
-                return Promise.resolve(window.navigator.languages)
-            }
-            default: return (_config: any) => Promise.reject(null)
         }
     }
 
-    appConfig.ports.toJs.subscribe(function (fromElm: { tag: "InterfaceWithFuture" | "InterfaceWithoutFuture", value: { tag: string, value: any } }) {
-        // console.log("elm → js: ", fromElm)
-        function sendToElm(eventData: void) {
-            const toElm = {
-                diff: fromElm.value, // since only InterfaceWithFuture will send something back
-                eventData: eventData
-            }
-            appConfig.ports.fromJs.send(toElm)
-            // console.log("js → elm: ", toElm)
-        }
-        switch (fromElm.tag) {
-            case "InterfaceWithFuture": {
-                interfaceWithFutureImplementation(fromElm.value.tag)(fromElm.value.value, sendToElm)
-                break
-            }
-            case "InterfaceWithoutFuture": {
-                interfaceWithoutFutureImplementation(fromElm.value.tag)(fromElm.value.value)
-                break
-            }
-        }
-    })
-
-    function removeDom(path: number[]): void {
-        const toRemove = domInElementAt(appConfig.domElement, 0, path)
-        if (toRemove) {
-            while (toRemove.nextSibling) {
-                toRemove.nextSibling.remove()
-            }
-            toRemove.remove()
-        }
-    }
     function domInElementAt(parent: Element, indexInParent: number, subPath: number[]): ChildNode | null {
         const currentDom = parent.childNodes.item(indexInParent)
         return (subPath.length === 0) ?
@@ -418,6 +425,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
     }
 
     function editDom(
+        id: string,
         path: number[],
         replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens", value: any },
         sendToElm: (v: any) => void
@@ -425,18 +433,21 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
         switch (replacement.tag) {
             case "Node": {
                 const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, path)
-                const newDomNode = createDomNode(replacement.value, oldDomNodeToEdit.childNodes, sendToElm)
+                const newDomNode = createDomNode(id, replacement.value, oldDomNodeToEdit.childNodes, sendToElm)
                 oldDomNodeToEdit.parentElement?.replaceChild(newDomNode, oldDomNodeToEdit)
                 break
             }
             case "Styles": case "Attributes": case "AttributesNamespaced": case "ScrollToPosition": case "ScrollToShow": case "ScrollPositionRequest": case "EventListens": {
-                const oldDomNodeToEdit = domInElementAt(appConfig.domElement, 0, path)
-                if (oldDomNodeToEdit && (oldDomNodeToEdit instanceof Element)) {
+                const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, path)
+                if (oldDomNodeToEdit instanceof Element) {
                     editDomModifiers(
+                        id,
                         oldDomNodeToEdit as (Element & ElementCSSInlineStyle),
                         { tag: replacement.tag, value: replacement.value },
                         sendToElm
                     )
+                } else {
+                    warn("the DOM element I wanted to edit has been replaced by text. Try to disable potential interfering extensions")
                 }
                 break
             }
@@ -448,36 +459,31 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
 
 //// state
 
-let geoLocationChangeListenId: number | null = null
-let runningAnimationFrameLoopId: number | null = null
-const localStorageRemoveOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
-const localStorageSetOnADifferentTabListenAbortControllers: Record<string, AbortController> = {}
-const timePeriodicallyListens: { [key: number]: number } = {}
-let gamepadsChangePollingIntervalId: number | null = null
-let gamepadsFromLastPoll: (Gamepad | null)[] | null = null
-const httpRequestAbortControllers: { [key: string]: AbortController } = {}
-let domListenAbortControllers: { domElement: Element, abortController: AbortController }[] = []
+
+const abortControllers: Map<string, AbortController> = new Map()
+const domListenAbortControllers: Map<string, AbortController[]> = new Map()
 
 const sockets: (WebSocket | null)[] = []
 
-const audioBuffers: { [key: string]: AudioBuffer } = {}
+const audioBuffers: Map<string, AudioBuffer> = new Map()
 const audioContext = new AudioContext()
-let audioPlaying: {
-    url: string,
-    startTime: number,
+let audioPlaying: Map<string, AudioPlaying> = new Map()
+
+const notifications: Record<string, Notification> = {}
+let gamepadsFromLastPoll: (Gamepad | null)[] | null = null
+
+type AudioPlaying = {
     sourceNode: AudioBufferSourceNode,
     gainNode: GainNode,
     stereoPanNode: StereoPannerNode,
     processingNodes: AudioNode[]
-}[] = []
-
-const notifications: Record<string, Notification> = {}
-
+}
 
 
 //// other helpers
 
 function editDomModifiers(
+    id: string,
     domElementToEdit: Element & ElementCSSInlineStyle,
     replacement: {
         tag: "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens",
@@ -526,31 +532,13 @@ function editDomModifiers(
             break
         }
         case "EventListens": {
-            domListenAbortControllers = domListenAbortControllers
-                .filter(eventListener => {
-                    if (eventListener.domElement === domElementToEdit) {
-                        eventListener.abortController.abort()
-                        return false
-                    }
-                    return true
-                })
-            domElementAddEventListens(domElementToEdit, replacement.value, sendToElm)
+            domListenAbortControllers.get(id)?.forEach(abortController => {
+                abortController.abort()
+            })
+            domListenAbortControllers.delete(id)
+            domElementAddEventListens(id, domElementToEdit, replacement.value, sendToElm)
             break
         }
-    }
-}
-
-function addTimePeriodicallyListen(intervalDuration: { milliSeconds: number }, sendToElm: (v: any) => void) {
-    timePeriodicallyListens[intervalDuration.milliSeconds] =
-        window.setInterval(
-            () => { sendToElm(Date.now()) },
-            intervalDuration.milliSeconds
-        )
-}
-function removeTimePeriodicallyListen(intervalDuration: { milliSeconds: number }) {
-    const maybeTimePeriodicallyListen = timePeriodicallyListens[intervalDuration.milliSeconds]
-    if (maybeTimePeriodicallyListen) {
-        window.clearInterval(maybeTimePeriodicallyListen)
     }
 }
 
@@ -558,26 +546,26 @@ function removeTimePeriodicallyListen(intervalDuration: { milliSeconds: number }
 function getTimezoneName(): string | number {
     try {
         return Intl.DateTimeFormat().resolvedOptions().timeZone
-    } catch (err) {
+    } catch (_error) {
         return new Date().getTimezoneOffset()
     }
 }
 
-function getMeta(name: string): HTMLMetaElement {
+function getOrAddMeta(name: string): HTMLMetaElement {
     const maybeExistingMeta: HTMLMetaElement | undefined =
-        Array.from(document.getElementsByTagName('meta'))
+        Array.from(document.getElementsByTagName("meta"))
             .find(meta => meta.name === name)
     if (maybeExistingMeta) {
         return maybeExistingMeta
     } else {
-        var meta = window.document.createElement('meta')
+        var meta = window.document.createElement("meta")
         meta.name = name
-        window.document.getElementsByTagName('head')[0]?.appendChild(meta)
+        window.document.getElementsByTagName('"head"')[0]?.appendChild(meta)
         return meta
     }
 }
 
-function createDomNode(node: { tag: "Text" | "Element", value: any }, subs: NodeListOf<ChildNode>, sendToElm: (v: any) => void): Element | Text {
+function createDomNode(id: string, node: { tag: "Text" | "Element", value: any }, subs: NodeListOf<ChildNode>, sendToElm: (v: any) => void): Element | Text {
     switch (node.tag) {
         case "Text": {
             return document.createTextNode(node.value)
@@ -601,7 +589,7 @@ function createDomNode(node: { tag: "Text" | "Element", value: any }, subs: Node
             if (node.value.scrollPositionRequest) {
                 domElementAddScrollPositionRequest(createdDomElement, sendToElm)
             }
-            domElementAddEventListens(createdDomElement, node.value.eventListens, sendToElm)
+            domElementAddEventListens(id, createdDomElement, node.value.eventListens, sendToElm)
             createdDomElement.append(...subs)
             return createdDomElement
         }
@@ -645,28 +633,31 @@ function domElementAddAttributesNamespaced(domElement: Element, attributesNamesp
     })
 }
 function domElementAddEventListens(
+    id: string,
     domElement: Element,
     eventListens: { name: string, defaultActionHandling: "DefaultActionPrevent" | "DefaultActionExecute" }[],
     sendToElm: (v: any) => void
 ) {
-    eventListens.forEach(eventListen => {
-        const abortController: AbortController = new AbortController()
-        domElement.addEventListener(
-            eventListen.name,
-            (triggeredEvent) => {
-                sendToElm({ tag: "EventListen", value: { name: eventListen.name, event: triggeredEvent } })
-                switch (eventListen.defaultActionHandling) {
-                    case "DefaultActionPrevent": {
-                        triggeredEvent.preventDefault()
-                        break
+    const elementAbortControllers =
+        eventListens.map(eventListen => {
+            const abortController: AbortController = new AbortController()
+            domElement.addEventListener(
+                eventListen.name,
+                (triggeredEvent) => {
+                    sendToElm({ tag: "EventListen", value: { name: eventListen.name, event: triggeredEvent } })
+                    switch (eventListen.defaultActionHandling) {
+                        case "DefaultActionPrevent": {
+                            triggeredEvent.preventDefault()
+                            break
+                        }
+                        case "DefaultActionExecute": { break }
                     }
-                    case "DefaultActionExecute": { break }
-                }
-            },
-            { signal: abortController.signal }
-        )
-        domListenAbortControllers.push({ domElement: domElement, abortController: abortController })
-    })
+                },
+                { signal: abortController.signal }
+            )
+            return abortController
+        })
+    domListenAbortControllers.set(id, elementAbortControllers)
 }
 
 // copied and edited from https://github.com/elm/virtual-dom/blob/master/src/Elm/Kernel/VirtualDom.js
@@ -687,63 +678,6 @@ function noScript(tag: string) {
 }
 function noOnOrFormAction(key: string) {
     return RE_on_formAction.test(key) ? "data-" + key : key
-}
-
-
-function windowEventListenAdd(eventName: string, sendToElm: (v: any) => void) {
-    (window as { [key: string]: any })["on" + eventName] = sendToElm
-}
-function windowEventListenRemove(eventName: string) {
-    (window as { [key: string]: any })["on" + eventName] = null
-}
-
-function documentEventListenAdd(eventName: string, sendToElm: (v: any) => void) {
-    (window.document as { [key: string]: any })["on" + eventName] = sendToElm
-}
-function documentEventListenRemove(eventName: string) {
-    (window.document as { [key: string]: any })["on" + eventName] = null
-}
-
-function go(urlSteps: number) {
-    history.go(urlSteps)
-}
-function pushUrl(appUrl: string) {
-    if (history.state === null || (history.state.appUrl !== appUrl)) {
-        history.pushState({ appUrl: appUrl }, "", window.location.origin + appUrl)
-    }
-}
-function replaceUrl(appUrl: string) {
-    history.replaceState({ appUrl: appUrl }, "", window.location.origin + appUrl)
-}
-
-function reload() {
-    document.location.reload()
-}
-function load(url: string) {
-    try {
-        window.location.href = url
-    } catch (err) {
-        // Only Firefox can throw a NS_ERROR_MALFORMED_URI exception here.
-        // Other browsers reload the page, so let's be consistent about that.
-        reload()
-    }
-}
-
-
-function addAnimationFrameListen(sendToElm: (v: any) => void) {
-    runningAnimationFrameLoopId =
-        window.requestAnimationFrame(_timestamp => {
-            if (runningAnimationFrameLoopId) {
-                sendToElm(Date.now())
-                addAnimationFrameListen(sendToElm)
-            }
-        })
-}
-function removeAnimationFrameListen() {
-    if (runningAnimationFrameLoopId) {
-        window.cancelAnimationFrame(runningAnimationFrameLoopId)
-        runningAnimationFrameLoopId = null
-    }
 }
 
 function fileDownloadBytes(config: { mimeType: string, name: string, content: number[] }) {
@@ -774,13 +708,15 @@ interface HttpRequest {
     timeout: number | null
     body: HttpRequestBody
 }
-type Expect = | "string" | "bytes" | "whatever"
+type Expect = | "String" | "Bytes" | "Whatever"
 type HttpRequestBody =
-    | { tag: "uint8Array", value: Uint8Array }
-    | { tag: "string", value: string }
-    | { tag: "empty" }
+    | { tag: "Uint8Array", value: Uint8Array }
+    | { tag: "String", value: string }
+    | { tag: "Empty", value: null }
 
-type HttpResponse = { ok: ResponseSuccess } | { err: any }
+type HttpResponse =
+    | { tag: "Success", value: ResponseSuccess }
+    | { tag: "Error", value: any }
 interface ResponseSuccess {
     body: Uint8Array | string | null
     url: string
@@ -791,15 +727,12 @@ interface ResponseSuccess {
 
 function httpRequestBodyForFetch(body: HttpRequestBody) {
     switch (body.tag) {
-        case "empty": return null
-        case "string": return body.value || null
-        case "uint8Array": return new Blob([body.value])
+        case "Empty": return null
+        case "String": return body.value
+        case "Uint8Array": return new Blob([body.value])
     }
 }
-function httpFetch(request: HttpRequest, abortController: AbortController): Promise<HttpResponse> {
-    if (request.timeout) {
-        setTimeout(() => abortController.abort(), request.timeout)
-    }
+function httpFetch(request: HttpRequest, abortSignal: AbortSignal): Promise<HttpResponse> {
     return fetch(request.url, {
         method: request.method,
         body: httpRequestBodyForFetch(request.body),
@@ -808,46 +741,51 @@ function httpFetch(request: HttpRequest, abortController: AbortController): Prom
             const tuple: [string, string] = [header.name, header.value]
             return tuple
         })),
-        signal: abortController.signal
+        signal:
+            request.timeout ?
+                AbortSignal.any([abortSignal, AbortSignal.timeout(request.timeout)])
+                : abortSignal
+
     })
-        .then((res: Response) => {
-            const headers = Object.fromEntries(res.headers.entries())
+        .then((response: Response) => {
+            const headers = Object.fromEntries(response.headers.entries())
             switch (request.expect) {
-                case "string":
-                    return res.text().then((x) => ({
-                        ok: {
-                            url: res.url,
+                case "String": return response.text()
+                    .then((x) => ({
+                        tag: "Success" as "Success", // without as it would be seen as string
+                        value: {
+                            url: response.url,
                             headers: headers,
-                            statusCode: res.status,
-                            statusText: res.statusText,
-                            body: x || null as (string | null | Uint8Array)
+                            statusCode: response.status,
+                            statusText: response.statusText,
+                            body: x as (string | null | Uint8Array) // without this as ts complains
                         }
                     }))
-                case "bytes":
-                    return res.blob()
-                        .then(blob => blob.arrayBuffer())
-                        .then((x) => ({
-                            ok: {
-                                url: res.url,
-                                headers: headers,
-                                statusCode: res.status,
-                                statusText: res.statusText,
-                                body: new Uint8Array(x)
-                            }
-                        }))
-                case "whatever":
-                    return {
-                        ok: {
-                            url: res.url,
+                case "Bytes": return response.blob()
+                    .then(blob => blob.arrayBuffer())
+                    .then((x) => ({
+                        tag: "Success" as "Success",
+                        value: {
+                            url: response.url,
                             headers: headers,
-                            statusCode: res.status,
-                            statusText: res.statusText,
-                            body: null
+                            statusCode: response.status,
+                            statusText: response.statusText,
+                            body: new Uint8Array(x)
                         }
+                    }))
+                case "Whatever": return {
+                    tag: "Success" as "Success",
+                    value: {
+                        url: response.url,
+                        headers: headers,
+                        statusCode: response.status,
+                        statusText: response.statusText,
+                        body: null
                     }
+                }
             }
         })
-        .catch((e) => { return { err: e } })
+        .catch((error) => { return { tag: "Error", value: error } })
 }
 
 
@@ -869,19 +807,17 @@ type AudioParameterTimeline = {
     keyFrames: { time: number, value: number }[]
 }
 
-function audioSourceLoad(url: string, sendToElm: (v: any) => void) {
-    fetch(url)
+function audioSourceLoad(url: string, sendToElm: (v: any) => void, abortSignal: AbortSignal) {
+    fetch(url, { signal: abortSignal })
         .then(data => data.arrayBuffer())
         .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
         .then(buffer => {
-            audioBuffers[url] = buffer
+            audioBuffers.set(url, buffer)
             sendToElm({
-                ok: {
-                    durationInSeconds: buffer.length / buffer.sampleRate
-                }
+                tag: "Success", value: { durationInSeconds: buffer.length / buffer.sampleRate }
             })
         })
-        .catch(error => { sendToElm({ err: error?.message ? error.message : "NetworkError" }) })
+        .catch(error => { sendToElm({ tag: "Error", value: error?.message ? error.message : "NetworkError" }) })
 }
 
 function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioParameterTimeline) {
@@ -909,15 +845,7 @@ function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioPa
     return audioParam
 }
 
-function addAudio(config: AudioInfo) {
-    const buffer = audioBuffers[config.url]
-    if (buffer) {
-        createAudio(config, buffer)
-    } else {
-        warn("tried to play audio from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
-    }
-}
-function createAudio(config: AudioInfo, buffer: AudioBuffer) {
+function createAudio(config: AudioInfo, buffer: AudioBuffer): AudioPlaying {
     const currentTime = new Date().getTime()
     const source = audioContext.createBufferSource()
     source.buffer = buffer
@@ -941,14 +869,12 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer) {
     } else {
         source.start(0, (currentTime - config.startTime) / 1000)
     }
-    audioPlaying.push({
-        url: config.url,
-        startTime: config.startTime,
+    return {
         sourceNode: source,
         gainNode: gainNode,
         stereoPanNode: stereoPannerNode,
         processingNodes: processingNodes,
-    })
+    }
 }
 function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): AudioNode[] {
     return processingFirstToLast
@@ -968,7 +894,7 @@ function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): Au
                 }
                 case "LinearConvolution": {
                     const convolverNode = new ConvolverNode(audioContext)
-                    const buffer = audioBuffers[processing.value.sourceUrl]
+                    const buffer = audioBuffers.get(processing.value.sourceUrl)
                     if (buffer) {
                         convolverNode.buffer = buffer
                     } else {
@@ -979,47 +905,34 @@ function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): Au
             }
         })
 }
-function removeAudio(config: { url: string, startTime: number }) {
-    audioPlaying = audioPlaying.filter(audio => {
-        if (audio.url === config.url && audio.startTime === config.startTime) {
-            audio.sourceNode.stop()
-            audio.sourceNode.disconnect()
-            audio.gainNode.disconnect()
-            audio.stereoPanNode.disconnect()
-            audio.processingNodes.forEach(node => { node.disconnect() })
-            return false
-        }
-        return true
-    })
-}
-function editAudio(config: { url: string, startTime: number, replacement: { tag: string, value: any } }) {
-    audioPlaying.forEach(value => {
-        if (value.url === config.url && value.startTime === config.startTime) {
-            switch (config.replacement.tag) {
-                case "Volume": {
-                    audioParameterTimelineApplyTo(value.gainNode.gain, config.replacement.value)
-                    break
-                } case "Speed": {
-                    audioParameterTimelineApplyTo(value.sourceNode.playbackRate, config.replacement.value)
-                    break
-                } case "StereoPan": {
-                    audioParameterTimelineApplyTo(value.stereoPanNode.pan, config.replacement.value)
-                    break
-                } case "Processing": {
-                    value.stereoPanNode.disconnect()
-                    value.processingNodes.forEach(node => { node.disconnect() })
 
-                    value.processingNodes = createProcessingNodes(config.replacement.value)
+function editAudio(id: string, config: { url: string, startTime: number, replacement: { tag: string, value: any } }) {
+    const audioPlayingToEdit = audioPlaying.get(id)
+    if (audioPlayingToEdit) {
+        switch (config.replacement.tag) {
+            case "Volume": {
+                audioParameterTimelineApplyTo(audioPlayingToEdit.gainNode.gain, config.replacement.value)
+                break
+            } case "Speed": {
+                audioParameterTimelineApplyTo(audioPlayingToEdit.sourceNode.playbackRate, config.replacement.value)
+                break
+            } case "StereoPan": {
+                audioParameterTimelineApplyTo(audioPlayingToEdit.stereoPanNode.pan, config.replacement.value)
+                break
+            } case "Processing": {
+                audioPlayingToEdit.stereoPanNode.disconnect()
+                audioPlayingToEdit.processingNodes.forEach(node => { node.disconnect() })
 
-                    forEachConsecutive(
-                        [value.stereoPanNode, ...value.processingNodes, audioContext.destination],
-                        pair => { pair.current.connect(pair.next) }
-                    )
-                    break
-                }
+                audioPlayingToEdit.processingNodes = createProcessingNodes(config.replacement.value)
+
+                forEachConsecutive(
+                    [audioPlayingToEdit.stereoPanNode, ...audioPlayingToEdit.processingNodes, audioContext.destination],
+                    pair => { pair.current.connect(pair.next) }
+                )
+                break
             }
         }
-    })
+    }
 }
 
 function askForNotificationPermissionIfNotAsked(): Promise<"granted" | "denied"> {

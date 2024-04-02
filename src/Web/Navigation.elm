@@ -32,8 +32,6 @@ Note: Uses [`window.location.href`](https://developer.mozilla.org/en-US/docs/Web
 urlRequest : Web.Interface AppUrl
 urlRequest =
     Web.NavigationUrlRequest identity
-        |> Web.Request
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -49,7 +47,6 @@ Replacement for [`Browser.Navigation.replaceUrl`](https://dark.elm.dmy.fr/packag
 replaceUrl : AppUrl -> Web.Interface future_
 replaceUrl appUrl =
     Web.NavigationReplaceUrl appUrl
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -63,7 +60,6 @@ Replacement for [`Browser.Navigation.pushUrl`](https://dark.elm.dmy.fr/packages/
 pushUrl : AppUrl -> Web.Interface future_
 pushUrl appUrl =
     Web.NavigationPushUrl appUrl
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -78,7 +74,6 @@ Replacement for [`Browser.Navigation.forward`](https://dark.elm.dmy.fr/packages/
 moveForward : Int -> Web.Interface future_
 moveForward urlSteps =
     Web.NavigationGo urlSteps
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -92,7 +87,6 @@ Replacement for [`Browser.Navigation.back`](https://dark.elm.dmy.fr/packages/elm
 moveBack : Int -> Web.Interface future_
 moveBack urlSteps =
     Web.NavigationGo urlSteps
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -109,7 +103,6 @@ Replacement for [`Browser.Navigation.load`](https://dark.elm.dmy.fr/packages/elm
 load : String -> Web.Interface future_
 load url =
     Web.NavigationLoad url
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -124,7 +117,6 @@ Replacement for [`Browser.Navigation.reload`](https://dark.elm.dmy.fr/packages/e
 reload : Web.Interface future_
 reload =
     Web.NavigationReload
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -151,6 +143,4 @@ movementListen =
                     ]
                 )
         }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton

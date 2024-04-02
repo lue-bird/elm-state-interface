@@ -1,4 +1,4 @@
-module Set.StructuredId exposing (Set, elementWithStructuredId, empty, fold2From, fromRope)
+module Set.StructuredId exposing (Set, elementWithStructuredIdAsString, empty, fold2From, fromRope)
 
 import FastDict
 import Rope exposing (Rope)
@@ -6,7 +6,7 @@ import StructuredId exposing (StructuredId)
 
 
 type alias Set element =
-    FastDict.Dict (List String) element
+    FastDict.Dict String element
 
 
 fromRope : (element -> StructuredId) -> (Rope element -> Set element)
@@ -28,7 +28,7 @@ insert elementToStructuredId element =
     \dict ->
         dict
             |> FastDict.insert
-                (element |> elementToStructuredId |> StructuredId.toComparable)
+                (element |> elementToStructuredId |> StructuredId.toString)
                 element
 
 
@@ -37,26 +37,26 @@ empty =
     FastDict.empty
 
 
-{-| Find the element with the same [`StructureId`](StructureId#StructureId) again
+{-| Find the element with the same comparable returned by `StructureId.toComparable` again
 -}
-elementWithStructuredId : StructuredId -> (Set element -> Maybe element)
-elementWithStructuredId structuredId =
+elementWithStructuredIdAsString : String -> (Set element -> Maybe element)
+elementWithStructuredIdAsString structuredIdAsString =
     \dict ->
-        dict |> FastDict.get (structuredId |> StructuredId.toComparable)
+        dict |> FastDict.get structuredIdAsString
 
 
 fold2From :
     result
-    -> (first -> (result -> result))
-    -> (( first, second ) -> (result -> result))
-    -> (second -> result -> result)
+    -> (String -> first -> (result -> result))
+    -> (String -> ( first, second ) -> (result -> result))
+    -> (String -> second -> result -> result)
     -> (( Set first, Set second ) -> result)
 fold2From initialFolded onlyFirstReduce bothReduce onlySecondReduce =
     \( firstDict, secondDict ) ->
         FastDict.merge
-            (\_ first soFar -> soFar |> onlyFirstReduce first)
-            (\_ first second soFar -> soFar |> bothReduce ( first, second ))
-            (\_ second soFar -> soFar |> onlySecondReduce second)
+            (\id first soFar -> soFar |> onlyFirstReduce id first)
+            (\id first second soFar -> soFar |> bothReduce id ( first, second ))
+            (\id second soFar -> soFar |> onlySecondReduce id second)
             firstDict
             secondDict
             initialFolded

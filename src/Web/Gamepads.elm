@@ -38,8 +38,6 @@ The given `Dict` keys uniquely identify each device for the whole session.
 request : Web.Interface (Dict Int Web.Gamepad)
 request =
     Web.GamepadsRequest identity
-        |> Web.Request
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -65,6 +63,4 @@ If you have issues with unresponsiveness, [open an issue](https://github.com/lue
 changeListen : Web.Interface (Dict Int Web.Gamepad)
 changeListen =
     Web.GamepadsChangeListen identity
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton

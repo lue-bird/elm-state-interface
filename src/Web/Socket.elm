@@ -48,7 +48,6 @@ And once it's disconnected, set your state's [`SocketId`](Web#SocketId) back to 
 connectTo : String -> Web.Interface Web.SocketConnectionEvent
 connectTo address =
     Web.SocketConnect { address = address, on = identity }
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -57,7 +56,6 @@ connectTo address =
 disconnect : Web.SocketId -> Web.Interface future_
 disconnect id =
     Web.SocketDisconnect id
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -70,7 +68,6 @@ to send json.
 message : Web.SocketId -> String -> Web.Interface future_
 message id data =
     Web.SocketMessage { id = id, data = data }
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -79,6 +76,4 @@ message id data =
 messageListen : Web.SocketId -> Web.Interface String
 messageListen id =
     Web.SocketMessageListen { id = id, on = identity }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton

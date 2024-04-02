@@ -1,5 +1,11 @@
 # change log
 
+# TODO
+
+  - look at all `Map` references in runner and either switch to `string`-indexed or switch to array.
+    `List String -> String = List.map (replace "\\" "\\\\" >> replace "," "\\,") |> join ","`
+  - redesign Web.Storage to automatically remove items if not part of the interface
+
 ## 2.0.0
 
   - rename ...map to ...futureMap
@@ -23,11 +29,11 @@
       - add `titleReplaceBy`, `authorSet`, `keywordsSet`, `descriptionSet`
   - `module Web`:
       - add `type alias Program` for results of `Web.program`
-      - internal: split off request, listen and action interface types
-      - internal: rename ...Receive to ...Future
-      - internal: switch from `KeysSet` and all its dependencies to `miniBill/elm-fast-dict`
-        and a simpler and more performant process of comparing elements
-      - internal: allow actual simulation using `interfaceAssociateFutureState` and `interfaceDiffs`
+      - internal: add `interfacesSingleEdits` to allow simulation
+      - internal: remove distinction between "...WithReceive" and "...WithoutReceive" as separate types
+      - internal: switch from `KeysSet` and all its dependencies to `miniBill/elm-fast-dict` by a structured id
+      - internal: simplify and speed up re-associating an interface, removal and dom diff
+      - internal: remove "id" types i favor of directly saving the structured id string
   - add `module Web.Audio` and `module Web.Audio.Parameter`
   - add `module Web.Socket`
   - add `module Web.LocalStorage`

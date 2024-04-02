@@ -45,8 +45,6 @@ Comes back with `Nothing` if that key doesn't exist.
 request : String -> Web.Interface (Maybe String)
 request key =
     Web.LocalStorageRequest { key = key, on = identity }
-        |> Web.Request
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -69,7 +67,6 @@ that can be listened to using [`setOnADifferentTabListen`](#setOnADifferentTabLi
 set : String -> String -> Web.Interface future_
 set key newOrReplacementValue =
     Web.LocalStorageSet { key = key, value = Just newOrReplacementValue }
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -82,7 +79,6 @@ that can be listened to using [`removeOnADifferentTabListen`](#removeOnADifferen
 remove : String -> Web.Interface future_
 remove key =
     Web.LocalStorageSet { key = key, value = Nothing }
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -92,8 +88,6 @@ when the local storage on a different tab with the same url origin is removed.
 removeOnADifferentTabListen : String -> Web.Interface AppUrl
 removeOnADifferentTabListen key =
     Web.LocalStorageRemoveOnADifferentTabListen { key = key, on = identity }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -106,6 +100,4 @@ When the `oldValue` is `Nothing`, no entry with that key existed.
 setOnADifferentTabListen : String -> Web.Interface { appUrl : AppUrl, oldValue : Maybe String, newValue : String }
 setOnADifferentTabListen key =
     Web.LocalStorageSetOnADifferentTabListen { key = key, on = identity }
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton

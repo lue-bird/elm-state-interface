@@ -16,8 +16,6 @@ import Web
 request : Web.Interface Web.GeoLocation
 request =
     Web.GeoLocationRequest identity
-        |> Web.Request
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
@@ -26,6 +24,4 @@ request =
 changeListen : Web.Interface Web.GeoLocation
 changeListen =
     Web.GeoLocationChangeListen identity
-        |> Web.Listen
-        |> Web.InterfaceWithFuture
         |> Rope.singleton

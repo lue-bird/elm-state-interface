@@ -2,7 +2,7 @@ module StructuredId exposing
     ( StructuredId(..)
     , ofInt, ofTimePosix, ofString
     , ofVariant, ofMaybe, ofList
-    , toComparable
+    , toListOfString, toString
     )
 
 {-| Assigning each unique value one "structured id"
@@ -21,7 +21,7 @@ which makes it possible to use as a key in a `Dict`
 You shouldn't use below helpers directly unless you want to build a library.
 Instead, use [`Set.StructuredId`](Set-StructuredId)
 
-@docs toComparable
+@docs toListOfString, toString
 
 -}
 
@@ -51,7 +51,7 @@ the list in the second tuple part should describe the **fields** of that value.
 ofVariant : ( String, List StructuredId ) -> StructuredId
 ofVariant =
     \( tag, attachmentFields ) ->
-        ofList (ofString tag :: attachmentFields)
+        ofString tag :: attachmentFields |> List
 
 
 ofMaybe : (value -> StructuredId) -> (Maybe value -> StructuredId)
@@ -73,31 +73,45 @@ ofTimePosix =
         timePosix |> Time.posixToMillis |> ofInt
 
 
-ofList : List StructuredId -> StructuredId
-ofList =
+ofList : (element -> StructuredId) -> (List element -> StructuredId)
+ofList elementMap =
     \structuredIds ->
-        List structuredIds
+        structuredIds |> List.map elementMap |> List
 
 
-toComparable : StructuredId -> List String
-toComparable =
+toListOfString : StructuredId -> List String
+toListOfString =
     \structuredId ->
-        structuredId |> toComparableRope |> Rope.toList
+        structuredId |> toRopeOfString |> Rope.toList
 
 
-toComparableRope : StructuredId -> Rope String
-toComparableRope =
+toRopeOfString : StructuredId -> Rope String
+toRopeOfString =
     \structuredId ->
         case structuredId of
             String string ->
                 String.cons ' ' string |> Rope.singleton
 
             List elements ->
-                Rope.append ")"
+                Rope.append "]"
                     (List.foldl
                         (\el soFar ->
-                            Rope.prependTo soFar (toComparableRope el)
+                            Rope.appendTo soFar (toRopeOfString el)
                         )
-                        (Rope.singleton "(")
+                        (Rope.singleton "[")
                         elements
                     )
+
+
+toString : StructuredId -> String
+toString =
+    \structuredId ->
+        structuredId |> toListOfString |> listOfStringToString
+
+
+listOfStringToString : List String -> String
+listOfStringToString =
+    \strings ->
+        strings
+            |> List.map (\part -> part |> String.replace "," ",,")
+            |> String.join " , "

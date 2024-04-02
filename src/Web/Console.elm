@@ -24,7 +24,6 @@ just like [`Debug.log`](https://dark.elm.dmy.fr/packages/elm/core/latest/Debug#l
 log : String -> Web.Interface future_
 log string =
     Web.ConsoleLog string
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -40,7 +39,6 @@ Note: uses [`console.warn`](https://developer.mozilla.org/en-US/docs/Web/API/con
 warn : String -> Web.Interface future_
 warn string =
     Web.ConsoleWarn string
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton
 
 
@@ -54,5 +52,4 @@ Note: uses [`console.error`](https://developer.mozilla.org/en-US/docs/Web/API/co
 error : String -> Web.Interface future_
 error string =
     Web.ConsoleError string
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton

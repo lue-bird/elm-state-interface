@@ -61,7 +61,7 @@ import Web.Audio.Parameter.Internal
 
 {-| Change the stereo panning with a given a signed percentage [parameter](Web#AudioParameterTimeline).
 
-For example `Web.Audio.pan -0.9` means that the sound is almost fully balanced towards the left speaker
+`Web.Audio.pan -0.9` for example means that the sound is almost fully balanced towards the left speaker
 
 -}
 stereoPan : AudioParameterTimeline -> (Audio -> Audio)
@@ -81,7 +81,8 @@ For example, `Web.Audio.speedScaleBy 0.5` means playback will take twice as long
 
 In general, to pitch by semitones:
 
-    Web.Audio.speedScaleBy (2 ^ (semitones / 12))
+    Web.Audio.speedScaleBy
+        (Web.Audio.Parameter.at (2 ^ (semitones / 12)))
 
 Note: It would be possible to modify the signal to compensate for the pitch change,
 see [Audio time stretching and pitch scaling](https://en.wikipedia.org/wiki/Audio_time_stretching_and_pitch_scaling).
@@ -184,11 +185,10 @@ and returning an [`AudioSource`](Web#AudioSource) to use with [`fromSource`](#fr
 sourceLoad : String -> Web.Interface (Result Web.AudioSourceLoadError Web.AudioSource)
 sourceLoad url =
     Web.AudioSourceLoad { url = url, on = identity }
-        |> Web.InterfaceWithFuture
         |> Rope.singleton
 
 
-{-| An [`Interface`](Web#Interface) for playing [`Audio`](Web#Audio) created with [`fromSource`](#fromSource).
+{-| An [`Interface`](Web#Interface) for playing [`Audio`](Web#Audio) created with [`Audio.fromSource`](#fromSource).
 
 To play multiple audios:
 
@@ -207,5 +207,4 @@ play audio =
             -- negative speed values are supported by some browsers
             -- https://stackoverflow.com/questions/9874167/how-can-i-play-audio-in-reverse-with-web-audio-api/9875011#9875011
         }
-        |> Web.InterfaceWithoutFuture
         |> Rope.singleton

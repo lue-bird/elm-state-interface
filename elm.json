@@ -37,5 +37,7 @@
         "miniBill/elm-fast-dict": "1.1.0 <= v < 2.0.0",
         "miniBill/elm-rope": "1.0.0 <= v < 2.0.0"
     },
-    "test-dependencies": {}
+    "test-dependencies": {
+        "elm-explorations/test": "2.2.0 <= v < 3.0.0"
+    }
 }
