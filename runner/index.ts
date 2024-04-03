@@ -542,13 +542,8 @@ function editDomModifiers(
     }
 }
 
-// Equivalent Elm Kernel code: https://github.com/elm/time/blob/1.0.0/src/Elm/Kernel/Time.js#L27-L35
 function getTimezoneName(): string | number {
-    try {
-        return Intl.DateTimeFormat().resolvedOptions().timeZone
-    } catch (_error) {
-        return new Date().getTimezoneOffset()
-    }
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
 function getOrAddMeta(name: string): HTMLMetaElement {

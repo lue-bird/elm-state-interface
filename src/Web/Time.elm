@@ -40,13 +40,14 @@ zoneRequest =
 
 
 {-| Intended for package authors.
-An [`Interface`](Web#Interface) for using `Intl.DateTimeFormat().resolvedOptions().timeZone` to try to get names like Europe/Moscow or America/Havana.
+An [`Interface`](Web#Interface) for using [`Intl.DateTimeFormat().resolvedOptions().timeZone`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/resolvedOptions#timezone)
+to get names like `Europe/Moscow` or `America/Havana`.
 From there you can look it up in any [IANA data](https://www.iana.org/time-zones) you loaded yourself.
 
 Replacement for [`elm/time`'s `Time.getZoneName`](https://package.elm-lang.org/packages/elm/time/latest/Time#getZoneName).
 
 -}
-zoneNameRequest : Web.Interface Time.ZoneName
+zoneNameRequest : Web.Interface String
 zoneNameRequest =
     Web.TimezoneNameRequest identity
         |> Rope.singleton

@@ -214,7 +214,7 @@ type InterfaceSingle future
     | TimePosixRequest (Time.Posix -> future)
     | TimezoneOffsetRequest (Int -> future)
     | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
-    | TimezoneNameRequest (Time.ZoneName -> future)
+    | TimezoneNameRequest (String -> future)
     | RandomUnsignedInt32sRequest { count : Int, on : List Int -> future }
     | WindowSizeRequest ({ width : Int, height : Int } -> future)
     | WindowPreferredLanguagesRequest (List String -> future)
@@ -1923,12 +1923,7 @@ interfaceSingleFutureJsonDecoder =
                     |> Just
 
             TimezoneNameRequest toFuture ->
-                Json.Decode.oneOf
-                    [ Json.Decode.map Time.Offset Json.Decode.int
-                    , Json.Decode.map Time.Name Json.Decode.string
-                    ]
-                    |> Json.Decode.map toFuture
-                    |> Just
+                Json.Decode.string |> Json.Decode.map toFuture |> Just
 
             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
                 Json.Decode.list Json.Decode.int
