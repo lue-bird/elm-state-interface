@@ -1893,25 +1893,25 @@ interfaceSingleFutureJsonDecoder =
 
             NavigationUrlRequest toFuture ->
                 Url.LocalExtra.jsonDecoder
-                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toFuture)
+                    |> Json.Decode.map AppUrl.fromUrl
+                    |> Json.Decode.map toFuture
                     |> Just
 
             ClipboardRequest toFuture ->
-                Json.Decode.map toFuture Json.Decode.string |> Just
+                Json.Decode.string |> Json.Decode.map toFuture |> Just
 
-            TimePosixRequest requestTimeNow ->
-                Json.Decode.map requestTimeNow Time.LocalExtra.posixJsonDecoder |> Just
+            TimePosixRequest toFuture ->
+                Time.LocalExtra.posixJsonDecoder |> Json.Decode.map toFuture |> Just
 
-            TimezoneOffsetRequest requestTimezoneOffset ->
-                Json.Decode.map requestTimezoneOffset Json.Decode.int |> Just
+            TimezoneOffsetRequest toFuture ->
+                Json.Decode.int |> Json.Decode.map toFuture |> Just
 
-            TimezoneNameRequest requestTimezoneName ->
-                Json.Decode.map requestTimezoneName
-                    (Json.Decode.oneOf
-                        [ Json.Decode.map Time.Offset Json.Decode.int
-                        , Json.Decode.map Time.Name Json.Decode.string
-                        ]
-                    )
+            TimezoneNameRequest toFuture ->
+                Json.Decode.oneOf
+                    [ Json.Decode.map Time.Offset Json.Decode.int
+                    , Json.Decode.map Time.Name Json.Decode.string
+                    ]
+                    |> Json.Decode.map toFuture
                     |> Just
 
             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
@@ -1919,24 +1919,20 @@ interfaceSingleFutureJsonDecoder =
                     |> Json.Decode.map randomUnsignedInt32sRequest.on
                     |> Just
 
-            GeoLocationRequest request ->
-                geoLocationJsonDecoder |> Json.Decode.map request |> Just
+            GeoLocationRequest toFuture ->
+                geoLocationJsonDecoder |> Json.Decode.map toFuture |> Just
 
-            GamepadsRequest request ->
-                gamepadsJsonDecoder |> Json.Decode.map request |> Just
+            GamepadsRequest toFuture ->
+                gamepadsJsonDecoder |> Json.Decode.map toFuture |> Just
 
             WindowEventListen listen ->
                 listen.on |> Just
 
             WindowVisibilityChangeListen toFuture ->
-                windowVisibilityJsonDecoder
-                    |> Json.Decode.map toFuture
-                    |> Just
+                windowVisibilityJsonDecoder |> Json.Decode.map toFuture |> Just
 
             WindowAnimationFrameListen toFuture ->
-                Time.LocalExtra.posixJsonDecoder
-                    |> Json.Decode.map toFuture
-                    |> Just
+                Time.LocalExtra.posixJsonDecoder |> Json.Decode.map toFuture |> Just
 
             WindowPreferredLanguagesChangeListen toFuture ->
                 Json.Decode.list Json.Decode.string
@@ -1966,7 +1962,8 @@ interfaceSingleFutureJsonDecoder =
 
             LocalStorageRemoveOnADifferentTabListen listen ->
                 Url.LocalExtra.jsonDecoder
-                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
+                    |> Json.Decode.map AppUrl.fromUrl
+                    |> Json.Decode.map listen.on
                     |> Just
 
             SocketMessageListen messageListen ->
