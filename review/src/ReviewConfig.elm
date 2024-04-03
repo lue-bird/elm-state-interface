@@ -193,6 +193,7 @@ config =
     , NoRecursiveUpdate.rule
     , NoUnoptimizedRecursion.optOutWithComment "IGNORE TCO"
         |> NoUnoptimizedRecursion.rule
+        |> Review.Rule.ignoreErrorsForDirectories [ "tests/" ]
     , NoSimpleLetBody.rule
     , NoUnnecessaryTrailingUnderscore.rule
     , Review.Pattern.Record.forbid
