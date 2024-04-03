@@ -1,4 +1,4 @@
-Now you can [define an elm app like this](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/):
+You can now [define an elm app like this](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/):
 ```elm
 { initialState : YourState
 , interface : YourState -> Interface YourState
@@ -8,7 +8,20 @@ Now you can [define an elm app like this](https://dark.elm.dmy.fr/packages/lue-b
 State is equivalent to "model" and `Interface` is all incoming and outgoing effects,
 with the ability to come back with a new state.
 
-A lot works the same as in TEA. The few changes make it declarative, safe and simple:
+Here's a simple app that shows a number which gets incremented every second
+```elm
+{ initialState = 0
+, interface =
+    \state ->
+        [ state |> String.fromInt |> Dom.text |> Dom.render
+        , Time.periodicallyListen Duration.second
+            |> interfaceFutureMap (\_ -> state + 1)
+        ]
+            |> interfaceBatch
+}
+```
+
+A lot works the same as in TEA. A few changes make it declarative, safe and simple:
 
 ### simple and beginner friendly
   - one `Interface` instead of `Sub`, `Cmd`, `Task`, init command and `view` 
@@ -16,7 +29,7 @@ A lot works the same as in TEA. The few changes make it declarative, safe and si
 
 ### safe
 Once an event ("msg") comes to your `update` in TEA, you don't have the latest state of the same kind it was fired in.
-This can get quite boilerplate-y once you add shared events and all that.
+This can get quite boilerplate-y if you have lots of branches (like in a story game) or add shared events and all that.
 
 in TEA
 ```elm
