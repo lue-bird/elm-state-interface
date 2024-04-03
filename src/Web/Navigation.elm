@@ -17,7 +17,7 @@ module Web.Navigation exposing
 -- elm/browser on "How do I manage URL from a Browser.element?" https://github.com/elm/browser/blob/master/notes/navigation-in-elements.md
 
 import AppUrl exposing (AppUrl)
-import AppUrl.Local
+import AppUrl.LocalExtra
 import Json.Decode
 import Rope
 import Web
@@ -138,7 +138,7 @@ movementListen =
         , on =
             Json.Decode.field "state"
                 (Json.Decode.oneOf
-                    [ Json.Decode.field "appUrl" AppUrl.Local.jsonDecoder
+                    [ Json.Decode.field "appUrl" AppUrl.LocalExtra.jsonDecoder
                     , Json.Decode.null () |> Json.Decode.map (\() -> AppUrl.fromPath [])
                     ]
                 )

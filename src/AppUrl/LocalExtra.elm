@@ -1,7 +1,8 @@
-module AppUrl.Local exposing (jsonDecoder)
+module AppUrl.LocalExtra exposing (jsonDecoder, toStructuredId)
 
 import AppUrl exposing (AppUrl)
 import Json.Decode
+import StructuredId exposing (StructuredId)
 import Url
 
 
@@ -29,3 +30,8 @@ fromString =
 
         else
             Nothing
+
+
+toStructuredId : AppUrl -> StructuredId
+toStructuredId =
+    \appUrl -> appUrl |> AppUrl.toString |> StructuredId.ofString

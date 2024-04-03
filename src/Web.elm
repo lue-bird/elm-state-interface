@@ -128,22 +128,27 @@ If you need more things like json encoders/decoders, [open an issue](https://git
 
 import Angle exposing (Angle)
 import AppUrl exposing (AppUrl)
+import AppUrl.LocalExtra
 import Bytes exposing (Bytes)
 import Bytes.LocalExtra
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import FastDict
 import Json.Decode
+import Json.Decode.LocalExtra
 import Json.Encode
+import Json.Encode.LocalExtra
 import Length exposing (Length)
 import List.LocalExtra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
+import Result.LocalExtra
 import Rope exposing (Rope)
 import Set exposing (Set)
 import Speed exposing (Speed)
 import StructuredId exposing (StructuredId)
 import Time
-import Url exposing (Url)
+import Time.LocalExtra
+import Url.LocalExtra
 
 
 {-| The "model" in a [`Web.program`](#program)
@@ -836,7 +841,7 @@ domElementHeaderDiff =
               else
                 ReplacementDomElementEventListens bElementEventListensId |> Just
             ]
-                |> List.filterMap identity
+                |> List.LocalExtra.justs
 
         else
             [ bElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
@@ -866,7 +871,7 @@ audioDiff =
           else
             new.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
         ]
-            |> List.filterMap identity
+            |> List.LocalExtra.justs
 
 
 {-| Determine which outgoing effects need to be executed based on the difference between old and updated interfaces
@@ -915,19 +920,10 @@ toJsToJson =
             ]
 
 
-tagValueToJson : ( String, Json.Encode.Value ) -> Json.Encode.Value
-tagValueToJson =
-    \( tag, value ) ->
-        Json.Encode.object
-            [ ( "tag", tag |> Json.Encode.string )
-            , ( "value", value )
-            ]
-
-
 interfaceSingleDiffToJson : InterfaceSingleDiff -> Json.Encode.Value
 interfaceSingleDiffToJson =
     \diff ->
-        tagValueToJson
+        Json.Encode.LocalExtra.variant
             (case diff of
                 Add interfaceSingleInfo ->
                     ( "Add", interfaceSingleInfo |> interfaceSingleToJson )
@@ -962,7 +958,7 @@ audioParameterTimelineToJson =
 audioProcessingToJson : AudioProcessing -> Json.Encode.Value
 audioProcessingToJson =
     \processing ->
-        tagValueToJson
+        Json.Encode.LocalExtra.variant
             (case processing of
                 AudioLinearConvolution linearConvolution ->
                     ( "LinearConvolution"
@@ -984,7 +980,7 @@ audioProcessingToJson =
 interfaceSingleEditToJson : InterfaceSingleEdit -> Json.Encode.Value
 interfaceSingleEditToJson =
     \edit ->
-        tagValueToJson
+        Json.Encode.LocalExtra.variant
             (case edit of
                 EditDom editDomDiff ->
                     ( "EditDom"
@@ -1000,7 +996,7 @@ interfaceSingleEditToJson =
                         [ ( "url", audioEdit.url |> Json.Encode.string )
                         , ( "startTime", audioEdit.startTime |> Time.posixToMillis |> Json.Encode.int )
                         , ( "replacement"
-                          , tagValueToJson
+                          , Json.Encode.LocalExtra.variant
                                 (case audioEdit.replacement of
                                     ReplacementAudioSpeed new ->
                                         ( "Speed", new |> audioParameterTimelineToJson )
@@ -1034,7 +1030,7 @@ interfaceSingleEditToJson =
 domTextOrElementHeaderInfoToJson : DomTextOrElementHeader () -> Json.Encode.Value
 domTextOrElementHeaderInfoToJson =
     \domNodeId ->
-        tagValueToJson
+        Json.Encode.LocalExtra.variant
             (case domNodeId of
                 DomText text ->
                     ( "Text", text |> Json.Encode.string )
@@ -1148,31 +1144,20 @@ domElementScrollPositionToJson =
             ]
 
 
-nullableToJson : (value -> Json.Encode.Value) -> (Maybe value -> Json.Encode.Value)
-nullableToJson valueToJson =
-    \maybe ->
-        case maybe of
-            Nothing ->
-                Json.Encode.null
-
-            Just value ->
-                value |> valueToJson
-
-
 domElementHeaderInfoToJson : DomElementHeader () -> Json.Encode.Value
 domElementHeaderInfoToJson =
     \header ->
         Json.Encode.object
-            [ ( "namespace", header.namespace |> nullableToJson Json.Encode.string )
+            [ ( "namespace", header.namespace |> Json.Encode.LocalExtra.nullable Json.Encode.string )
             , ( "tag", header.tag |> Json.Encode.string )
             , ( "styles", header.styles |> domElementStylesToJson )
             , ( "attributes", header.attributes |> domElementAttributesToJson )
             , ( "attributesNamespaced", header.attributesNamespaced |> domElementAttributesNamespacedToJson )
             , ( "scrollToPosition"
-              , header.scrollToPosition |> nullableToJson domElementScrollPositionToJson
+              , header.scrollToPosition |> Json.Encode.LocalExtra.nullable domElementScrollPositionToJson
               )
             , ( "scrollToShow"
-              , header.scrollToShow |> nullableToJson domElementVisibilityAlignmentsToJson
+              , header.scrollToShow |> Json.Encode.LocalExtra.nullable domElementVisibilityAlignmentsToJson
               )
             , ( "scrollPositionRequest"
               , case header.scrollPositionRequest of
@@ -1193,7 +1178,7 @@ domElementHeaderInfoToJson =
 editDomDiffToJson : DomEdit -> Json.Encode.Value
 editDomDiffToJson =
     \replacementInEditDomDiff ->
-        tagValueToJson
+        Json.Encode.LocalExtra.variant
             (case replacementInEditDomDiff of
                 ReplacementDomNode node ->
                     ( "Node", node |> domTextOrElementHeaderInfoToJson )
@@ -1209,12 +1194,12 @@ editDomDiffToJson =
 
                 ReplacementDomElementScrollToPosition maybePosition ->
                     ( "ScrollToPosition"
-                    , maybePosition |> nullableToJson domElementScrollPositionToJson
+                    , maybePosition |> Json.Encode.LocalExtra.nullable domElementScrollPositionToJson
                     )
 
                 ReplacementDomElementScrollToShow alignment ->
                     ( "ScrollToShow"
-                    , alignment |> nullableToJson domElementVisibilityAlignmentsToJson
+                    , alignment |> Json.Encode.LocalExtra.nullable domElementVisibilityAlignmentsToJson
                     )
 
                 ReplacementDomElementScrollPositionRequest ->
@@ -1228,7 +1213,7 @@ editDomDiffToJson =
 interfaceSingleToJson : InterfaceSingle () -> Json.Encode.Value
 interfaceSingleToJson =
     \add ->
-        tagValueToJson
+        Json.Encode.LocalExtra.variant
             (case add of
                 DocumentTitleReplaceBy replacement ->
                     ( "DocumentTitleReplaceBy", replacement |> Json.Encode.string )
@@ -1302,7 +1287,7 @@ interfaceSingleToJson =
                     ( "LocalStorageSet"
                     , Json.Encode.object
                         [ ( "key", set.key |> Json.Encode.string )
-                        , ( "value", set.value |> nullableToJson Json.Encode.string )
+                        , ( "value", set.value |> Json.Encode.LocalExtra.nullable Json.Encode.string )
                         ]
                     )
 
@@ -1463,7 +1448,7 @@ addContentTypeForBody body headers =
 httpBodyToJson : HttpBody -> Json.Encode.Value
 httpBodyToJson =
     \body ->
-        tagValueToJson
+        Json.Encode.LocalExtra.variant
             (case body of
                 HttpBodyString stringBodyInfo ->
                     ( "String"
@@ -1480,7 +1465,7 @@ httpBodyToJson =
 
 httpTimeoutToJson : Maybe Int -> Json.Encode.Value
 httpTimeoutToJson =
-    nullableToJson Json.Encode.int
+    Json.Encode.LocalExtra.nullable Json.Encode.int
 
 
 httpExpectInfoToJson : HttpExpect () -> Json.Encode.Value
@@ -1553,10 +1538,10 @@ interfaceSingleToStructuredId =
                     ( "ConsoleError", [ message |> StructuredId.ofString ] )
 
                 NavigationReplaceUrl appUrl ->
-                    ( "NavigationReplaceUrl", [ appUrl |> appUrlToStructuredId ] )
+                    ( "NavigationReplaceUrl", [ appUrl |> AppUrl.LocalExtra.toStructuredId ] )
 
                 NavigationPushUrl appUrl ->
-                    ( "NavigationPushUrl", [ appUrl |> appUrlToStructuredId ] )
+                    ( "NavigationPushUrl", [ appUrl |> AppUrl.LocalExtra.toStructuredId ] )
 
                 NavigationGo urlSteps ->
                     ( "NavigationGo", [ urlSteps |> StructuredId.ofInt ] )
@@ -1581,7 +1566,7 @@ interfaceSingleToStructuredId =
                 AudioPlay audio ->
                     ( "AudioPlay"
                     , [ audio.url |> StructuredId.ofString
-                      , audio.startTime |> StructuredId.ofTimePosix
+                      , audio.startTime |> Time.LocalExtra.posixToStructureId
                       ]
                     )
 
@@ -1729,11 +1714,6 @@ socketIdToStructuredId =
     \(SocketId raw) -> raw |> StructuredId.ofInt
 
 
-appUrlToStructuredId : AppUrl -> StructuredId
-appUrlToStructuredId =
-    \appUrl -> appUrl |> AppUrl.toString |> StructuredId.ofString
-
-
 insertInterface :
     InterfaceSingle future
     -> (FastDict.Dict String (InterfaceSingle future) -> FastDict.Dict String (InterfaceSingle future))
@@ -1794,297 +1774,266 @@ programSubscriptions appConfig =
                                 )
                             |> Json.Decode.map JsEventEnabledConstructionOfNewAppState
                         )
-                    |> resultValueOrOnError JsEventFailedToDecode
+                    |> Result.LocalExtra.valueOrOnError JsEventFailedToDecode
             )
-
-
-resultValueOrOnError : (error -> value) -> (Result error value -> value)
-resultValueOrOnError errorToValue =
-    \result ->
-        case result of
-            Ok value ->
-                value
-
-            Err error ->
-                error |> errorToValue
-
-
-onlyStringJsonDecoder : String -> Json.Decode.Decoder ()
-onlyStringJsonDecoder specificAllowedString =
-    Json.Decode.string
-        |> Json.Decode.andThen
-            (\str ->
-                if str == specificAllowedString then
-                    () |> Json.Decode.succeed
-
-                else
-                    ([ "expected only \"", specificAllowedString, "\"" ] |> String.concat)
-                        |> Json.Decode.fail
-            )
-
-
-tagValueJsonDecoder : String -> (Json.Decode.Decoder value -> Json.Decode.Decoder value)
-tagValueJsonDecoder name valueJsonDecoder =
-    Json.Decode.map2 (\() variantValue -> variantValue)
-        (Json.Decode.field "tag" (onlyStringJsonDecoder name))
-        (Json.Decode.field "value" valueJsonDecoder)
 
 
 {-| [json `Decoder`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Decoder)
 for the transformed event data coming back
 -}
 interfaceSingleFutureJsonDecoder : InterfaceSingle future -> Maybe (Json.Decode.Decoder future)
-interfaceSingleFutureJsonDecoder interface =
-    case interface of
-        DomNodeRender toRender ->
-            case toRender.node of
-                DomText _ ->
-                    Nothing
+interfaceSingleFutureJsonDecoder =
+    \interface ->
+        case interface of
+            DomNodeRender toRender ->
+                case toRender.node of
+                    DomText _ ->
+                        Nothing
 
-                DomElementHeader domElement ->
-                    Json.Decode.oneOf
-                        ([ tagValueJsonDecoder "EventListen"
-                            (Json.Decode.map2 (\eventListen event -> eventListen.on event)
-                                (Json.Decode.field "name"
-                                    (Json.Decode.string
-                                        |> Json.Decode.andThen
-                                            (\specificEventName ->
-                                                case domElement.eventListens |> Dict.get specificEventName of
-                                                    Nothing ->
-                                                        Json.Decode.fail "received event of a kind that isn't listened for"
+                    DomElementHeader domElement ->
+                        Json.Decode.oneOf
+                            ([ Json.Decode.LocalExtra.variant "EventListen"
+                                (Json.Decode.map2 (\eventListen event -> eventListen.on event)
+                                    (Json.Decode.field "name"
+                                        (Json.Decode.string
+                                            |> Json.Decode.andThen
+                                                (\specificEventName ->
+                                                    case domElement.eventListens |> Dict.get specificEventName of
+                                                        Nothing ->
+                                                            Json.Decode.fail "received event of a kind that isn't listened for"
 
-                                                    Just eventListen ->
-                                                        eventListen |> Json.Decode.succeed
-                                            )
+                                                        Just eventListen ->
+                                                            eventListen |> Json.Decode.succeed
+                                                )
+                                        )
                                     )
+                                    (Json.Decode.field "event" Json.Decode.value)
                                 )
-                                (Json.Decode.field "event" Json.Decode.value)
+                                |> Just
+                             , case domElement.scrollPositionRequest of
+                                Nothing ->
+                                    Nothing
+
+                                Just request ->
+                                    Json.Decode.LocalExtra.variant "ScrollPositionRequest"
+                                        domElementScrollPositionJsonDecoder
+                                        |> Json.Decode.map request
+                                        |> Just
+                             ]
+                                |> List.LocalExtra.justs
                             )
                             |> Just
-                         , case domElement.scrollPositionRequest of
-                            Nothing ->
-                                Nothing
 
-                            Just request ->
-                                tagValueJsonDecoder "ScrollPositionRequest"
-                                    domElementScrollPositionJsonDecoder
-                                    |> Json.Decode.map request
-                                    |> Just
-                         ]
-                            |> List.filterMap identity
-                        )
-                        |> Just
-
-        AudioSourceLoad load ->
-            Json.Decode.oneOf
-                [ Json.Decode.map (\duration -> Ok { url = load.url, duration = duration })
-                    (tagValueJsonDecoder "Success"
-                        (Json.Decode.field "durationInSeconds"
-                            (Json.Decode.map Duration.seconds Json.Decode.float)
-                        )
-                    )
-                , tagValueJsonDecoder "Error"
-                    (Json.Decode.string
-                        |> Json.Decode.map
-                            (\errorMessage ->
-                                Err
-                                    (case errorMessage of
-                                        "NetworkError" ->
-                                            AudioSourceLoadNetworkError
-
-                                        "MediaDecodeAudioDataUnknownContentType" ->
-                                            AudioSourceLoadDecodeError
-
-                                        "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
-                                            AudioSourceLoadDecodeError
-
-                                        unknownMessage ->
-                                            AudioSourceLoadUnknownError unknownMessage
-                                    )
+            AudioSourceLoad load ->
+                Json.Decode.oneOf
+                    [ Json.Decode.map (\duration -> Ok { url = load.url, duration = duration })
+                        (Json.Decode.LocalExtra.variant "Success"
+                            (Json.Decode.field "durationInSeconds"
+                                (Json.Decode.map Duration.seconds Json.Decode.float)
                             )
-                    )
-                ]
-                |> Json.Decode.map load.on
-                |> Just
+                        )
+                    , Json.Decode.LocalExtra.variant "Error"
+                        (Json.Decode.string
+                            |> Json.Decode.map
+                                (\errorMessage ->
+                                    Err
+                                        (case errorMessage of
+                                            "NetworkError" ->
+                                                AudioSourceLoadNetworkError
 
-        SocketConnect connect ->
-            socketConnectionEventJsonDecoder
-                |> Json.Decode.map connect.on
-                |> Just
+                                            "MediaDecodeAudioDataUnknownContentType" ->
+                                                AudioSourceLoadDecodeError
 
-        NotificationShow show ->
-            notificationResponseJsonDecoder
-                |> Json.Decode.map show.on
-                |> Just
+                                            "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
+                                                AudioSourceLoadDecodeError
 
-        HttpRequest httpRequest ->
-            Json.Decode.oneOf
-                [ tagValueJsonDecoder "Success" (httpExpectJsonDecoder httpRequest.expect)
-                , tagValueJsonDecoder "Error" (httpErrorJsonDecoder httpRequest)
-                    |> Json.Decode.map (httpExpectOnError httpRequest.expect)
-                ]
-                |> Just
-
-        LocalStorageRequest request ->
-            Json.Decode.nullable Json.Decode.string
-                |> Json.Decode.map request.on
-                |> Just
-
-        WindowSizeRequest toFuture ->
-            Json.Decode.map2 (\width height -> { width = width, height = height })
-                (Json.Decode.field "width" Json.Decode.int)
-                (Json.Decode.field "height" Json.Decode.int)
-                |> Json.Decode.map toFuture
-                |> Just
-
-        WindowPreferredLanguagesRequest toFuture ->
-            Json.Decode.list Json.Decode.string
-                |> Json.Decode.map toFuture
-                |> Just
-
-        NavigationUrlRequest toFuture ->
-            urlJsonDecoder
-                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toFuture)
-                |> Just
-
-        ClipboardRequest toFuture ->
-            Json.Decode.map toFuture Json.Decode.string |> Just
-
-        TimePosixRequest requestTimeNow ->
-            Json.Decode.map requestTimeNow timePosixJsonDecoder |> Just
-
-        TimezoneOffsetRequest requestTimezoneOffset ->
-            Json.Decode.map requestTimezoneOffset Json.Decode.int |> Just
-
-        TimezoneNameRequest requestTimezoneName ->
-            Json.Decode.map requestTimezoneName
-                (Json.Decode.oneOf
-                    [ Json.Decode.map Time.Offset Json.Decode.int
-                    , Json.Decode.map Time.Name Json.Decode.string
+                                            unknownMessage ->
+                                                AudioSourceLoadUnknownError unknownMessage
+                                        )
+                                )
+                        )
                     ]
-                )
-                |> Just
+                    |> Json.Decode.map load.on
+                    |> Just
 
-        RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
-            Json.Decode.list Json.Decode.int
-                |> Json.Decode.map randomUnsignedInt32sRequest.on
-                |> Just
+            SocketConnect connect ->
+                socketConnectionEventJsonDecoder
+                    |> Json.Decode.map connect.on
+                    |> Just
 
-        GeoLocationRequest request ->
-            geoLocationJsonDecoder |> Json.Decode.map request |> Just
+            NotificationShow show ->
+                notificationResponseJsonDecoder
+                    |> Json.Decode.map show.on
+                    |> Just
 
-        GamepadsRequest request ->
-            gamepadsJsonDecoder |> Json.Decode.map request |> Just
+            HttpRequest httpRequest ->
+                Json.Decode.oneOf
+                    [ Json.Decode.LocalExtra.variant "Success" (httpExpectJsonDecoder httpRequest.expect)
+                    , Json.Decode.LocalExtra.variant "Error" (httpErrorJsonDecoder httpRequest)
+                        |> Json.Decode.map (httpExpectOnError httpRequest.expect)
+                    ]
+                    |> Just
 
-        WindowEventListen listen ->
-            listen.on |> Just
+            LocalStorageRequest request ->
+                Json.Decode.nullable Json.Decode.string
+                    |> Json.Decode.map request.on
+                    |> Just
 
-        WindowVisibilityChangeListen toFuture ->
-            windowVisibilityJsonDecoder
-                |> Json.Decode.map toFuture
-                |> Just
+            WindowSizeRequest toFuture ->
+                Json.Decode.map2 (\width height -> { width = width, height = height })
+                    (Json.Decode.field "width" Json.Decode.int)
+                    (Json.Decode.field "height" Json.Decode.int)
+                    |> Json.Decode.map toFuture
+                    |> Just
 
-        WindowAnimationFrameListen toFuture ->
-            timePosixJsonDecoder
-                |> Json.Decode.map toFuture
-                |> Just
+            WindowPreferredLanguagesRequest toFuture ->
+                Json.Decode.list Json.Decode.string
+                    |> Json.Decode.map toFuture
+                    |> Just
 
-        WindowPreferredLanguagesChangeListen toFuture ->
-            Json.Decode.list Json.Decode.string
-                |> Json.Decode.map toFuture
-                |> Just
+            NavigationUrlRequest toFuture ->
+                Url.LocalExtra.jsonDecoder
+                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> toFuture)
+                    |> Just
 
-        DocumentEventListen listen ->
-            listen.on |> Just
+            ClipboardRequest toFuture ->
+                Json.Decode.map toFuture Json.Decode.string |> Just
 
-        TimePeriodicallyListen timePeriodicallyListen ->
-            timePosixJsonDecoder
-                |> Json.Decode.map timePeriodicallyListen.on
-                |> Just
+            TimePosixRequest requestTimeNow ->
+                Json.Decode.map requestTimeNow Time.LocalExtra.posixJsonDecoder |> Just
 
-        LocalStorageSetOnADifferentTabListen listen ->
-            Json.Decode.map3
-                (\appUrl oldValue newValue ->
-                    { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
-                )
-                (Json.Decode.field "url"
-                    (urlJsonDecoder |> Json.Decode.map AppUrl.fromUrl)
-                )
-                (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
-                (Json.Decode.field "newValue" Json.Decode.string)
-                |> Json.Decode.map listen.on
-                |> Just
+            TimezoneOffsetRequest requestTimezoneOffset ->
+                Json.Decode.map requestTimezoneOffset Json.Decode.int |> Just
 
-        LocalStorageRemoveOnADifferentTabListen listen ->
-            urlJsonDecoder
-                |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
-                |> Just
+            TimezoneNameRequest requestTimezoneName ->
+                Json.Decode.map requestTimezoneName
+                    (Json.Decode.oneOf
+                        [ Json.Decode.map Time.Offset Json.Decode.int
+                        , Json.Decode.map Time.Name Json.Decode.string
+                        ]
+                    )
+                    |> Just
 
-        SocketMessageListen messageListen ->
-            Json.Decode.string |> Json.Decode.map messageListen.on |> Just
+            RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
+                Json.Decode.list Json.Decode.int
+                    |> Json.Decode.map randomUnsignedInt32sRequest.on
+                    |> Just
 
-        GeoLocationChangeListen toFuture ->
-            geoLocationJsonDecoder |> Json.Decode.map toFuture |> Just
+            GeoLocationRequest request ->
+                geoLocationJsonDecoder |> Json.Decode.map request |> Just
 
-        GamepadsChangeListen toFuture ->
-            gamepadsJsonDecoder |> Json.Decode.map toFuture |> Just
+            GamepadsRequest request ->
+                gamepadsJsonDecoder |> Json.Decode.map request |> Just
 
-        DocumentTitleReplaceBy _ ->
-            Nothing
+            WindowEventListen listen ->
+                listen.on |> Just
 
-        DocumentAuthorSet _ ->
-            Nothing
+            WindowVisibilityChangeListen toFuture ->
+                windowVisibilityJsonDecoder
+                    |> Json.Decode.map toFuture
+                    |> Just
 
-        DocumentKeywordsSet _ ->
-            Nothing
+            WindowAnimationFrameListen toFuture ->
+                Time.LocalExtra.posixJsonDecoder
+                    |> Json.Decode.map toFuture
+                    |> Just
 
-        DocumentDescriptionSet _ ->
-            Nothing
+            WindowPreferredLanguagesChangeListen toFuture ->
+                Json.Decode.list Json.Decode.string
+                    |> Json.Decode.map toFuture
+                    |> Just
 
-        ConsoleLog _ ->
-            Nothing
+            DocumentEventListen listen ->
+                listen.on |> Just
 
-        ConsoleWarn _ ->
-            Nothing
+            TimePeriodicallyListen timePeriodicallyListen ->
+                Time.LocalExtra.posixJsonDecoder
+                    |> Json.Decode.map timePeriodicallyListen.on
+                    |> Just
 
-        ConsoleError _ ->
-            Nothing
+            LocalStorageSetOnADifferentTabListen listen ->
+                Json.Decode.map3
+                    (\appUrl oldValue newValue ->
+                        { appUrl = appUrl, oldValue = oldValue, newValue = newValue }
+                    )
+                    (Json.Decode.field "url"
+                        (Url.LocalExtra.jsonDecoder |> Json.Decode.map AppUrl.fromUrl)
+                    )
+                    (Json.Decode.field "oldValue" (Json.Decode.nullable Json.Decode.string))
+                    (Json.Decode.field "newValue" Json.Decode.string)
+                    |> Json.Decode.map listen.on
+                    |> Just
 
-        NavigationReplaceUrl _ ->
-            Nothing
+            LocalStorageRemoveOnADifferentTabListen listen ->
+                Url.LocalExtra.jsonDecoder
+                    |> Json.Decode.map (\url -> url |> AppUrl.fromUrl |> listen.on)
+                    |> Just
 
-        NavigationPushUrl _ ->
-            Nothing
+            SocketMessageListen messageListen ->
+                Json.Decode.string |> Json.Decode.map messageListen.on |> Just
 
-        NavigationGo _ ->
-            Nothing
+            GeoLocationChangeListen toFuture ->
+                geoLocationJsonDecoder |> Json.Decode.map toFuture |> Just
 
-        NavigationLoad _ ->
-            Nothing
+            GamepadsChangeListen toFuture ->
+                gamepadsJsonDecoder |> Json.Decode.map toFuture |> Just
 
-        NavigationReload ->
-            Nothing
+            DocumentTitleReplaceBy _ ->
+                Nothing
 
-        FileDownloadUnsignedInt8s _ ->
-            Nothing
+            DocumentAuthorSet _ ->
+                Nothing
 
-        ClipboardReplaceBy _ ->
-            Nothing
+            DocumentKeywordsSet _ ->
+                Nothing
 
-        AudioPlay _ ->
-            Nothing
+            DocumentDescriptionSet _ ->
+                Nothing
 
-        SocketMessage _ ->
-            Nothing
+            ConsoleLog _ ->
+                Nothing
 
-        SocketDisconnect _ ->
-            Nothing
+            ConsoleWarn _ ->
+                Nothing
 
-        LocalStorageSet _ ->
-            Nothing
+            ConsoleError _ ->
+                Nothing
 
-        NotificationAskForPermission ->
-            Nothing
+            NavigationReplaceUrl _ ->
+                Nothing
+
+            NavigationPushUrl _ ->
+                Nothing
+
+            NavigationGo _ ->
+                Nothing
+
+            NavigationLoad _ ->
+                Nothing
+
+            NavigationReload ->
+                Nothing
+
+            FileDownloadUnsignedInt8s _ ->
+                Nothing
+
+            ClipboardReplaceBy _ ->
+                Nothing
+
+            AudioPlay _ ->
+                Nothing
+
+            SocketMessage _ ->
+                Nothing
+
+            SocketDisconnect _ ->
+                Nothing
+
+            LocalStorageSet _ ->
+                Nothing
+
+            NotificationAskForPermission ->
+                Nothing
 
 
 domElementScrollPositionJsonDecoder : Json.Decode.Decoder { fromLeft : Float, fromTop : Float }
@@ -2096,15 +2045,15 @@ domElementScrollPositionJsonDecoder =
 
 notificationResponseJsonDecoder : Json.Decode.Decoder NotificationClicked
 notificationResponseJsonDecoder =
-    Json.Decode.map (\() -> NotificationClicked) (onlyStringJsonDecoder "Clicked")
+    Json.Decode.map (\() -> NotificationClicked) (Json.Decode.LocalExtra.onlyString "Clicked")
 
 
 socketConnectionEventJsonDecoder : Json.Decode.Decoder SocketConnectionEvent
 socketConnectionEventJsonDecoder =
     Json.Decode.oneOf
-        [ Json.Decode.map SocketConnected (tagValueJsonDecoder "SocketConnected" socketIdJsonDecoder)
+        [ Json.Decode.map SocketConnected (Json.Decode.LocalExtra.variant "SocketConnected" socketIdJsonDecoder)
         , Json.Decode.map SocketDisconnected
-            (tagValueJsonDecoder "SocketDisconnected"
+            (Json.Decode.LocalExtra.variant "SocketDisconnected"
                 (Json.Decode.map2 (\code reason -> { code = code, reason = reason })
                     (Json.Decode.field "code" Json.Decode.int)
                     (Json.Decode.field "reason" Json.Decode.string)
@@ -2116,25 +2065,6 @@ socketConnectionEventJsonDecoder =
 socketIdJsonDecoder : Json.Decode.Decoder SocketId
 socketIdJsonDecoder =
     Json.Decode.map SocketId Json.Decode.int
-
-
-timePosixJsonDecoder : Json.Decode.Decoder Time.Posix
-timePosixJsonDecoder =
-    Json.Decode.map Time.millisToPosix Json.Decode.int
-
-
-urlJsonDecoder : Json.Decode.Decoder Url
-urlJsonDecoder =
-    Json.Decode.andThen
-        (\urlString ->
-            case urlString |> Url.fromString of
-                Nothing ->
-                    "invalid URL" |> Json.Decode.fail
-
-                Just url ->
-                    url |> Json.Decode.succeed
-        )
-        Json.Decode.string
 
 
 geoLocationJsonDecoder : Json.Decode.Decoder GeoLocation
@@ -2269,7 +2199,7 @@ maybeGamepadJsonDecoder =
                                                 |> Set.fromList
                                     in
                                     buttons
-                                        |> List.indexedMap
+                                        |> List.LocalExtra.justsMapIndexed
                                             (\index button ->
                                                 if mappedButtonIndexes |> Set.member index then
                                                     Nothing
@@ -2277,7 +2207,6 @@ maybeGamepadJsonDecoder =
                                                 else
                                                     button |> Just
                                             )
-                                        |> List.filterMap identity
                                 , kindId = kindId
                                 , thumbstickLeft = thumbsticks.left
                                 , thumbstickRight = thumbsticks.right
@@ -2691,8 +2620,8 @@ httpNetworkErrorCodes =
 windowVisibilityJsonDecoder : Json.Decode.Decoder WindowVisibility
 windowVisibilityJsonDecoder =
     Json.Decode.oneOf
-        [ Json.Decode.map (\() -> WindowShown) (onlyStringJsonDecoder "visible")
-        , Json.Decode.map (\() -> WindowHidden) (onlyStringJsonDecoder "hidden")
+        [ Json.Decode.map (\() -> WindowShown) (Json.Decode.LocalExtra.onlyString "visible")
+        , Json.Decode.map (\() -> WindowHidden) (Json.Decode.LocalExtra.onlyString "hidden")
         ]
 
 

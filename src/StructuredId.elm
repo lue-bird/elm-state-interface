@@ -1,29 +1,22 @@
 module StructuredId exposing
-    ( StructuredId(..)
-    , ofInt, ofTimePosix, ofString
+    ( StructuredId(..), toString
+    , ofInt, ofString
     , ofVariant, ofMaybe, ofList
-    , toString
     )
 
 {-| Assigning each unique value one "structured id"
 (a tree with just comparable values at the leaves).
-This "structured id" can be compared or converted to a `comparable`
+This "structured id" can be compared or converted to a `comparable` (`String`)
 which makes it possible to use as a key in a `Dict`
 
-@docs StructuredId
+@docs StructuredId, toString
 
-@docs ofInt, ofTimePosix, ofString
+@docs ofInt, ofString
 @docs ofVariant, ofMaybe, ofList
-
-
-## use
-
-@docs toString
 
 -}
 
 import Rope exposing (Rope)
-import Time
 
 
 type StructuredId
@@ -62,12 +55,6 @@ ofMaybe valueToStructuredId =
                 Just value ->
                     ( "Just", [ value |> valueToStructuredId ] )
             )
-
-
-ofTimePosix : Time.Posix -> StructuredId
-ofTimePosix =
-    \timePosix ->
-        timePosix |> Time.posixToMillis |> ofInt
 
 
 ofList : (element -> StructuredId) -> (List element -> StructuredId)
