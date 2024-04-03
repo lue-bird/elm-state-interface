@@ -1,29 +1,30 @@
 #!/usr/bin/env node
 
-// inspired by https://github.com/jfmengels/node-elm-review/blob/2651aa4cc53726bbf9107a42f0756b849db3e1e7/new-package/maintenance/update-examples-from-preview.js
-
 const path = require("path")
 const fs = require("fs")
+// inspired by https://github.com/jfmengels/node-elm-review/blob/2651aa4cc53726bbf9107a42f0756b849db3e1e7/new-package/maintenance/update-examples-from-preview.js
 
-module.exports = function () {
-    fs.readdir(
-        path.resolve(__dirname, "example-development"),
-        files => files.forEach(copyExampleDevelopmentToExample)
-    )
-}
+fs.readdir(
+    path.resolve(__dirname),
+    (_errors, files) => files.forEach(sub => {
+        if (sub !== "README.md" && sub !== "update-example.js") {
+            copyExampleDevelopmentToExample(sub)
+        }
+    })
+)
 
 function copyExampleDevelopmentToExample(sub) {
-    const packageElmJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, "elm.json")))
-    const packageSrcPath = path.resolve(__dirname, "src")
-    const exampleElmJsonPath = path.resolve(__dirname, "example", sub, "elm.json")
+    const packageElmJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "elm.json")))
+    const packageSrcPath = path.resolve(__dirname, "..", "src")
+    const exampleElmJsonPath = path.resolve(__dirname, "..", "example", sub, "elm.json")
 
     fs.cpSync(
-        path.resolve(__dirname, "example-development", sub, "src"),
-        path.resolve(__dirname, "example", sub, "src"),
+        path.resolve(__dirname, sub, "src"),
+        path.resolve(__dirname, "..", "example", sub, "src"),
         { recursive: true, filter: (source, _) => !source.endsWith(".js") }
     )
     fs.cpSync(
-        path.resolve(__dirname, "example-development", sub, "elm.json"),
+        path.resolve(__dirname, sub, "elm.json"),
         exampleElmJsonPath,
         { recursive: true }
     )
@@ -33,7 +34,7 @@ function copyExampleDevelopmentToExample(sub) {
     // Remove the source directory pointing to the package's src/
     exampleElmJson['source-directories'] = exampleElmJson['source-directories'].filter(
         (sourceDirectory) =>
-            path.resolve(__dirname, "example", sub, sourceDirectory) !== packageSrcPath
+            path.resolve(__dirname, "..", "example", sub, sourceDirectory) !== packageSrcPath
     )
     exampleElmJson.dependencies.direct[packageElmJson.name] = packageElmJson.version
     moveFromDirectToIndirect(exampleElmJson, "miniBill/elm-fast-dict")
