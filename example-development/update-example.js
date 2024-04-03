@@ -25,8 +25,11 @@ function copyExampleDevelopmentToExample(sub) {
     )
     fs.cpSync(
         path.resolve(__dirname, sub, "elm.json"),
-        exampleElmJsonPath,
-        { recursive: true }
+        exampleElmJsonPath
+    )
+    fs.cpSync(
+        path.resolve(__dirname, sub, "vite.config.js"),
+        path.resolve(__dirname, "..", "example", sub, "vite.config.js")
     )
 
     const exampleElmJson = JSON.parse(fs.readFileSync(exampleElmJsonPath))
@@ -41,6 +44,29 @@ function copyExampleDevelopmentToExample(sub) {
     moveFromDirectToIndirect(exampleElmJson, "miniBill/elm-rope")
     moveFromDirectToIndirect(exampleElmJson, "elm/bytes")
     fs.writeFileSync(exampleElmJsonPath, JSON.stringify(exampleElmJson, null, 4))
+
+    fs.writeFileSync(
+        path.resolve(__dirname, "..", "example", sub, "src", "index.js"),
+        `import * as Web from "@lue-bird/elm-state-interface"
+import Main from "./Main.elm"
+
+const elmApp = Main.init()
+Web.programStart({ ports: elmApp.ports, domElement: document.getElementById("app") })
+`
+    )
+
+    fs.writeFileSync(
+        path.resolve(__dirname, "..", "example", sub, "package.json"),
+        `{
+    "type": "module",
+    "main": "index.js",
+    "dependencies": {
+        "@lue-bird/elm-state-interface": "^2.0.0",
+        "vite": "^5.1.2",
+        "vite-plugin-elm-watch": "^1.3.2"
+    }
+}`
+    )
 }
 function moveFromDirectToIndirect(elmJson, dependencyName) {
     elmJson.dependencies.indirect[dependencyName] =

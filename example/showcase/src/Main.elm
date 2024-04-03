@@ -1,14 +1,16 @@
 port module Main exposing (main)
 
+import Angle
 import AppUrl exposing (AppUrl)
-import Codec exposing (Codec)
-import Color
+import Color exposing (Color)
 import Dict exposing (Dict)
 import Duration
 import Json.Decode
 import Json.Encode
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
+import Serialize
 import Set
+import Svg.LocalExtra
 import Time
 import Url
 import Web
@@ -171,30 +173,41 @@ startingRoomInterface =
                             |> MouseMovedTo
                     )
             ]
-            [ "You find yourself trapped in a state-interface. The old clock on the wall shows " |> Web.Dom.text
+            [ "Your gaze drifts towards a clock on the wall " |> Web.Dom.text
             , clockUi { posix = state.posix, timezone = state.timezone }
-            , ". Countless questions rush through your head:" |> Web.Dom.text
+            , " and with a shiver you realize. You're trapped in a state-interface. Countless questions rush in:" |> Web.Dom.text
             , Web.Dom.element "ul"
                 []
                 [ Web.Dom.element "li"
                     []
-                    [ "\"How did you get here?\"" |> Web.Dom.text ]
-                , Web.Dom.element "li"
-                    []
-                    [ "\"Why do I know that you're exactly at "
-                        ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
-                        ++ "?\""
-                        |> Web.Dom.text
+                    [ Web.Dom.element "q"
+                        []
+                        [ "How did you get here?" |> Web.Dom.text ]
                     ]
                 , Web.Dom.element "li"
                     []
-                    [ "\"How do I know your name " |> Web.Dom.text
-                    , textInputUi state.name |> Web.Dom.futureMap NameChanged
-                    , "?\"" |> Web.Dom.text
+                    [ Web.Dom.element "q"
+                        []
+                        [ "Why do I know that you're exactly at "
+                            ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
+                            ++ "?"
+                            |> Web.Dom.text
+                        ]
                     ]
                 , Web.Dom.element "li"
                     []
-                    [ "Why is there a tutl?" |> Web.Dom.text
+                    [ Web.Dom.element "q"
+                        []
+                        [ "How did I know your name is " |> Web.Dom.text
+                        , textInputUi state.name |> Web.Dom.futureMap NameChanged
+                        , "?" |> Web.Dom.text
+                        ]
+                    ]
+                , Web.Dom.element "li"
+                    []
+                    [ Web.Dom.element "q"
+                        []
+                        [ "Why is there a tutl?" |> Web.Dom.text ]
                     , Web.Svg.element "svg"
                         [ Web.Dom.attribute "viewBox" "0 12 96 40"
                         , Web.Dom.attribute "width" "96"
@@ -209,18 +222,33 @@ startingRoomInterface =
                         ]
                     ]
                 ]
-            , "\"Don't worry\", I say. \"I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3\"" |> Web.Dom.text
-            , Web.Dom.element "br" [] []
-            , "The voice repeats: \"Don't worry. Here,  take a couple 💎 if you want"
-                ++ (case state.name of
-                        Nothing ->
-                            ""
+            , Web.Dom.element "p"
+                []
+                [ Web.Dom.element "q"
+                    []
+                    [ "Don't worry" |> Web.Dom.text ]
+                , Web.Dom.text ", I say. "
+                , Web.Dom.element "q"
+                    []
+                    [ "I know how we can get out. See this little bird on the sign over there? It will give us a map for 💎3" |> Web.Dom.text ]
+                ]
+            , Web.Dom.element "p"
+                []
+                [ "The voice repeats: " |> Web.Dom.text
+                , Web.Dom.element "q"
+                    []
+                    [ "Don't worry. Here,  take a couple 💎 if you want"
+                        ++ (case state.name of
+                                Nothing ->
+                                    ""
 
-                        Just name ->
-                            ", " ++ name
-                   )
-                ++ ":\""
-                |> Web.Dom.text
+                                Just name ->
+                                    ", " ++ name
+                           )
+                        ++ ":"
+                        |> Web.Dom.text
+                    ]
+                ]
             , Web.Dom.element "div"
                 [ Web.Dom.style "padding-top" "30px"
                 , Web.Dom.style "padding-bottom" "30px"
@@ -345,7 +373,10 @@ atSignInterface =
         [ narrativeUiFrame []
             [ Web.Dom.element "p"
                 []
-                [ "\"And there we are, " ++ state.name ++ "!\"" |> Web.Dom.text ]
+                [ Web.Dom.element "q"
+                    []
+                    [ "And there we are, " ++ state.name ++ "!" |> Web.Dom.text ]
+                ]
             , Web.Dom.element "div"
                 [ Web.Dom.style "text-align" "center"
                 , Web.Dom.style "width" "50%"
@@ -358,16 +389,17 @@ atSignInterface =
                 [ "🎏" |> Web.Dom.text ]
             , Web.Dom.element "p"
                 []
-                [ (case state.appleCount of
+                [ case state.appleCount of
                     0 ->
-                        "\"Don't you think the bird looks a bit hungry...\""
+                        Web.Dom.element "q"
+                            []
+                            [ "Don't you think the bird looks a bit hungry..." |> Web.Dom.text ]
 
                     non0AppleCount ->
                         "You've already picked "
                             ++ (non0AppleCount |> String.fromInt)
                             ++ " 🍎s"
-                  )
-                    |> Web.Dom.text
+                            |> Web.Dom.text
                 ]
             , case state.birdConversationState of
                 WaitingForTalk ->
@@ -394,9 +426,15 @@ atSignInterface =
                 GreetingAndAskingForWhatYouWant ->
                     Web.Dom.element "div"
                         []
-                        [ "\"chirp chirp. Thanks for coming by!"
-                            ++ " I usually sell for 💎 but since your new here, a couple of 🍎s would make me happy as well :)\" "
-                            |> Web.Dom.text
+                        [ Web.Dom.element "p"
+                            []
+                            [ Web.Dom.element "q"
+                                []
+                                [ "chirp chirp. Thanks for coming by!"
+                                    ++ " I usually sell for 💎 but since your new here, a couple of 🍎s would make me happy as well :)"
+                                    |> Web.Dom.text
+                                ]
+                            ]
                         , buttonUi []
                             [ "Ask for an introduction" |> Web.Dom.text
                             ]
@@ -411,9 +449,12 @@ atSignInterface =
                 BirdTellAboutItself ->
                     Web.Dom.element "div"
                         []
-                        [ "Jo jo. I'm the map and info dealer in this village since I fly around a lot."
-                            ++ " If you want to catch me to suggest some offers I could make you, write me a "
-                            |> Web.Dom.text
+                        [ Web.Dom.element "q"
+                            []
+                            [ "Jo jo. I'm the map and info dealer in this village since I fly around a lot."
+                                ++ " If you want to catch me to suggest some offers I could make you, write me a "
+                                |> Web.Dom.text
+                            ]
                         , Web.Dom.element "a"
                             [ Web.Dom.attribute "href" "https://github.com/lue-bird/elm-state-interface/discussions/new/choose"
                             , Web.Dom.style "color" "inherit"
@@ -428,8 +469,13 @@ atSignInterface =
                 AskedBirdForMap ->
                     Web.Dom.element "div"
                         []
-                        [ "\"Hope you'll come by again!\" says the bird, looking a bit down"
-                            |> Web.Dom.text
+                        [ Web.Dom.element "p"
+                            []
+                            [ Web.Dom.element "q"
+                                []
+                                [ "Hope you'll come by again!" |> Web.Dom.text ]
+                            , " says the bird, looking a bit down" |> Web.Dom.text
+                            ]
                         , buttonUi []
                             [ "Open the map" |> Web.Dom.text
                             ]
@@ -439,8 +485,9 @@ atSignInterface =
                 TooHungryToSell ->
                     Web.Dom.element "div"
                         []
-                        [ "\"Nah, I'm hungry, I will need more of these fresh 🍎s\""
-                            |> Web.Dom.text
+                        [ Web.Dom.element "q"
+                            []
+                            [ "Nah, I'm hungry, I will need more of these fresh 🍎s" |> Web.Dom.text ]
                         , buttonUi []
                             [ "pick 🍎s" |> Web.Dom.text
                             ]
@@ -475,19 +522,29 @@ atSignInterface =
 
                         PickApplesClicked ->
                             PickingApples
-                                { name = state.name
-                                , gemCount = state.gemCount
-                                , windowSize = dummyWindowSize
-                                , headDirection = Right
-                                , headLocation = { x = 4, y = 5 }
-                                , tailSegments = [ { x = 3, y = 5 } ]
-                                , appleLocation = { x = 3, y = 2 }
-                                , appleCountBefore = state.appleCount
-                                , pickedAppleCount = 0
-                                , eatAppleAudio = Nothing
-                                , eatAppleTimes = []
-                                }
+                                ({ name = state.name
+                                 , gemCount = state.gemCount
+                                 , appleCountBefore = state.appleCount
+                                 }
+                                    |> initialPickingApplesState
+                                )
                 )
+
+
+initialPickingApplesState : { name : String, gemCount : Int, appleCountBefore : Int } -> PickApplesState
+initialPickingApplesState state =
+    { name = state.name
+    , gemCount = state.gemCount
+    , windowSize = dummyWindowSize
+    , headDirection = Right
+    , headLocation = { x = 4, y = 5 }
+    , tailSegments = [ { x = 3, y = 5 }, { x = 3, y = 6 } ]
+    , appleLocation = { x = 3, y = 2 }
+    , appleCountBefore = state.appleCountBefore
+    , pickedAppleCount = 0
+    , eatAppleAudio = Nothing
+    , eatAppleTimes = []
+    }
 
 
 dummyWindowSize : { width : Int, height : Int }
@@ -561,7 +618,7 @@ pickApplesInterface state =
         _ ->
             Web.Audio.sourceLoad "eat-apple.mp3"
                 |> Web.interfaceFutureMap EatAppleAudioReceived
-    , Web.Time.periodicallyListen (Duration.milliseconds 125)
+    , Web.Time.periodicallyListen (Duration.milliseconds 110)
         |> Web.interfaceFutureMap PickApplesSimulationTick
     , [ Web.Window.sizeRequest, Web.Window.resizeListen ]
         |> Web.interfaceBatch
@@ -582,10 +639,10 @@ pickApplesInterface state =
                     (gamepads |> Dict.foldr (\_ gamepad _ -> gamepad |> Just) Nothing)
             )
     , let
-        rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.DomNode state_
+        rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.Dom.Node state_
         rectangleAtCellLocation fill cellLocation =
             Web.Svg.element "rect"
-                [ Web.Dom.style "fill" (fill |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform fill
                 , Web.Dom.attribute "width" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
                 , Web.Dom.attribute "height" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
                 , Web.Dom.attribute "x" (((cellSideLength * 0.05 + toFloat cellLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
@@ -593,57 +650,314 @@ pickApplesInterface state =
                 ]
                 []
 
-        worldUi : Web.DomNode state_
+        worldUi : Web.Dom.Node state_
         worldUi =
             Web.Svg.element "rect"
-                [ Web.Dom.style "fill" (Color.black |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform Color.black
                 , Web.Dom.attribute "width" "100%"
                 , Web.Dom.attribute "height" "100%"
                 ]
                 []
 
-        headTailUi : Web.DomNode state_
+        splitIntoSegmentsThatDoNotWrapAround : List { x : Int, y : Int } -> List (List { x : Int, y : Int })
+        splitIntoSegmentsThatDoNotWrapAround =
+            \points ->
+                case points of
+                    [] ->
+                        []
+
+                    head :: tail ->
+                        let
+                            segmented : { previousPoint : { x : Int, y : Int }, currentSegment : List { x : Int, y : Int }, finishedSegments : List (List { x : Int, y : Int }) }
+                            segmented =
+                                tail
+                                    |> List.foldl
+                                        (\point soFar ->
+                                            if
+                                                (((point.x - soFar.previousPoint.x) |> abs) >= 2)
+                                                    || (((point.y - soFar.previousPoint.y) |> abs) >= 2)
+                                            then
+                                                { previousPoint = point
+                                                , currentSegment = [ point ]
+                                                , finishedSegments = soFar.currentSegment :: soFar.finishedSegments
+                                                }
+
+                                            else
+                                                { previousPoint = point
+                                                , currentSegment = point :: soFar.currentSegment
+                                                , finishedSegments = soFar.finishedSegments
+                                                }
+                                        )
+                                        { previousPoint = head, currentSegment = [ head ], finishedSegments = [] }
+                        in
+                        segmented.currentSegment :: segmented.finishedSegments
+
+        headTailUi : Web.Dom.Node future_
         headTailUi =
-            Web.Svg.element "g"
-                []
-                (state.headLocation
-                    :: state.tailSegments
-                    |> List.map (rectangleAtCellLocation Color.lightGrey)
-                )
+            let
+                segments : List (List { x : Int, y : Int })
+                segments =
+                    (state.headLocation :: state.tailSegments)
+                        |> splitIntoSegmentsThatDoNotWrapAround
 
-        appleUi : Web.DomNode state_
+                legsUi : Web.Dom.Node future_
+                legsUi =
+                    segments
+                        |> List.concat
+                        |> listTakeEveryAndEnds 4
+                        |> List.map
+                            (\point ->
+                                [ Svg.LocalExtra.line
+                                    { start =
+                                        { x = 0.1 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.9 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    , end =
+                                        { x = 0.9 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.1 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    }
+                                    [ Svg.LocalExtra.strokeUniform (Color.rgb 0.5 0.7 0.7)
+                                    , Svg.LocalExtra.strokeWidth (cellSideLength * 0.3)
+                                    , Web.Dom.attribute "stroke-linecap" "round"
+                                    ]
+                                , Svg.LocalExtra.line
+                                    { start =
+                                        { x = 0.9 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.9 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    , end =
+                                        { x = 0.1 * cellSideLength + cellSideLength * (point.x |> Basics.toFloat)
+                                        , y = 0.1 * cellSideLength + cellSideLength * (point.y |> Basics.toFloat)
+                                        }
+                                    }
+                                    [ Svg.LocalExtra.strokeUniform (Color.rgb 0.5 0.7 0.7)
+                                    , Svg.LocalExtra.strokeWidth (cellSideLength * 0.3)
+                                    , Web.Dom.attribute "stroke-linecap" "round"
+                                    ]
+                                ]
+                                    |> Web.Svg.element "g" []
+                            )
+                        |> Web.Svg.element "g" []
+
+                warpAnimationUi : Web.Dom.Node future_
+                warpAnimationUi =
+                    case segments |> List.reverse of
+                        (lastPoint :: beforeLastPoint) :: _ ->
+                            case beforeLastPoint of
+                                _ :: _ :: _ ->
+                                    Web.Dom.text ""
+
+                                [ _ ] ->
+                                    [ Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 2.5
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.01)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 1)
+                                        ]
+                                    , Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 0.4
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.075)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.7)
+                                        ]
+                                    ]
+                                        |> Web.Svg.element "g" []
+
+                                [] ->
+                                    [ Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 3.5
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.01)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 2)
+                                        ]
+                                    , Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 1.8
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.015)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.5)
+                                        ]
+                                    , Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 0.4
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.2)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.7)
+                                        ]
+                                    ]
+                                        |> Web.Svg.element "g" []
+
+                        _ ->
+                            Web.Dom.text ""
+
+                facePoints : { x : Int, y : Int } -> Float -> List { x : Float, y : Float }
+                facePoints head size =
+                    [ { x = cellSideLength * ((head.x |> Basics.toFloat) + (1 - size) / 2)
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      }
+                    , { x = cellSideLength * ((head.x |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + ((1 - size) / 2 + size))
+                      }
+                    , { x = cellSideLength * ((head.x |> Basics.toFloat) + ((1 - size) / 2 + size))
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      }
+                    , { x = cellSideLength * ((head.x |> Basics.toFloat) + ((1 - size) / 2 + 0.5 * size))
+                      , y = cellSideLength * ((head.y |> Basics.toFloat) + (1 - size) / 2)
+                      }
+                    ]
+
+                headUi : Web.Dom.Node future_
+                headUi =
+                    [ Svg.LocalExtra.polygon (facePoints state.headLocation 0.8)
+                        [ Svg.LocalExtra.fillUniform (Color.rgba 0 0.5 1 0.5)
+                        ]
+                    , Svg.LocalExtra.polygon (facePoints state.headLocation 0.4)
+                        [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 1)
+                        ]
+                    ]
+                        |> Web.Svg.element "g" []
+            in
+            [ legsUi
+            , warpAnimationUi
+            , segments
+                |> List.map
+                    (\segmentPoints ->
+                        Svg.LocalExtra.polyline
+                            (segmentPoints
+                                |> List.map
+                                    (\location ->
+                                        { x = cellSideLength * 0.5 + cellSideLength * (location.x |> Basics.toFloat)
+                                        , y = cellSideLength * 0.5 + cellSideLength * (location.y |> Basics.toFloat)
+                                        }
+                                    )
+                            )
+                            [ Svg.LocalExtra.strokeUniform (Color.rgb 0.9 0.9 0.9)
+                            , Svg.LocalExtra.fillUniform colorInvisible
+                            , Web.Dom.attribute "stroke-linecap" "round"
+                            , Web.Dom.attribute "stroke-linejoin" "round"
+                            , Svg.LocalExtra.strokeWidth cellSideLength
+                            ]
+                    )
+                |> Web.Svg.element "g" []
+            , headUi
+            ]
+                |> Web.Svg.element "g" []
+
+        appleUi : Web.Dom.Node future_
         appleUi =
-            Web.Svg.element "g"
-                []
-                [ Web.Svg.element "circle"
-                    [ Web.Dom.style "fill" (Color.rgb 0.9 0.1 0.05 |> Color.toCssString)
-                    , Web.Dom.attribute "r" (((cellSideLength * 0.45) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.5 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
-                    ]
-                    []
-                , Web.Svg.element "ellipse"
-                    [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.24) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.12) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.7 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.1 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
-                    ]
-                    []
-                , Web.Svg.element "ellipse"
-                    [ Web.Dom.style "fill" (Color.rgb 0.1 0.5 0 |> Color.toCssString)
-                    , Web.Dom.attribute "rx" (((cellSideLength * 0.2) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "ry" (((cellSideLength * 0.1) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cx" (((cellSideLength * 0.3 + toFloat state.appleLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                    , Web.Dom.attribute "cy" (((cellSideLength * 0.12 + toFloat state.appleLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
-                    ]
-                    []
+            [ Svg.LocalExtra.circle
+                { radius = cellSideLength * 0.45
+                , position =
+                    { x = cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.5 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgb 0.8 0.1 0.03)
                 ]
+            , Svg.LocalExtra.line
+                { start =
+                    { x = cellSideLength * 0.5 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.17 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                , end =
+                    { x = cellSideLength * 0.39 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * -0.05 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                }
+                [ Svg.LocalExtra.strokeUniform (Color.rgb 0.34 0.19 0.01)
+                , Svg.LocalExtra.strokeWidth (cellSideLength * 0.16)
+                , Web.Dom.attribute "stroke-linecap" "round"
+                ]
+            , Svg.LocalExtra.line
+                { start =
+                    { x = cellSideLength * 0.44 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                , end =
+                    { x = cellSideLength * 0.56 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.94 + toFloat state.appleLocation.y * cellSideLength
+                    }
+                }
+                [ Svg.LocalExtra.strokeUniform (Color.rgba 0.2 0.12 0 0.7)
+                , Svg.LocalExtra.strokeWidth (cellSideLength * 0.07)
+                , Web.Dom.attribute "stroke-linecap" "round"
+                ]
+            , let
+                position : { x : Float, y : Float }
+                position =
+                    { x = cellSideLength * 0.82 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.08 + toFloat state.appleLocation.y * cellSideLength
+                    }
+              in
+              Svg.LocalExtra.ellipse
+                { radiusX = cellSideLength * 0.34
+                , radiusY = cellSideLength * 0.12
+                , position = position
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgb 0.1 0.5 0)
+                , Svg.LocalExtra.rotated { center = position, angle = Angle.turns -0.042 }
+                ]
+            , let
+                position : { x : Float, y : Float }
+                position =
+                    { x = cellSideLength * 0.68 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
+                    }
+              in
+              Svg.LocalExtra.ellipse
+                { radiusX = cellSideLength * 0.2
+                , radiusY = cellSideLength * 0.1
+                , position = position
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgba 0.1 0.5 0 0.5)
+                , Svg.LocalExtra.rotated { center = position, angle = Angle.turns 0.083 }
+                ]
+            , let
+                position : { x : Float, y : Float }
+                position =
+                    { x = cellSideLength * 0.25 + toFloat state.appleLocation.x * cellSideLength
+                    , y = cellSideLength * 0.2 + toFloat state.appleLocation.y * cellSideLength
+                    }
+              in
+              Svg.LocalExtra.ellipse
+                { radiusX = cellSideLength * 0.13
+                , radiusY = cellSideLength * 0.05
+                , position = position
+                }
+                [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 0.2)
+                , Svg.LocalExtra.rotated { center = position, angle = Angle.turns -0.083 }
+                ]
+            ]
+                |> Web.Svg.element "g" []
 
-        pickedAppleCountUi : Web.DomNode state_
+        pickedAppleCountUi : Web.Dom.Node future_
         pickedAppleCountUi =
             Web.Svg.element "text"
-                [ Web.Dom.style "fill" (Color.rgba 0.3 1 0.5 0.13 |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform (Color.rgba 0.3 1 0.5 0.13)
                 , Web.Dom.style "font-size" "30em"
                 , Web.Dom.attribute "text-anchor" "middle"
                 , Web.Dom.attribute "dominant-baseline" "middle"
@@ -655,16 +969,16 @@ pickApplesInterface state =
                 ]
                 [ state.pickedAppleCount |> String.fromInt |> Web.Dom.text ]
 
-        controlsUi : Web.DomNode state_
+        controlsUi : Web.Dom.Node state_
         controlsUi =
             Web.Svg.element "text"
-                [ Web.Dom.style "fill" (Color.rgba 0.3 1 0.5 0.13 |> Color.toCssString)
+                [ Svg.LocalExtra.fillUniform (Color.rgb 0.3 0.7 0.5)
                 , Web.Dom.style "font-size" "3em"
                 , Web.Dom.attribute "text-anchor" "middle"
                 , Web.Dom.attribute "dominant-baseline" "middle"
                 , Web.Dom.attribute "font-weight" "bolder"
                 , Web.Dom.attribute "x" "50%"
-                , Web.Dom.attribute "y" "10%"
+                , Web.Dom.attribute "y" "8%"
                 , Web.Dom.attribute "width" "50%"
                 , Web.Dom.attribute "height" "50%"
                 ]
@@ -841,6 +1155,33 @@ pickApplesInterface state =
             )
 
 
+colorInvisible : Color
+colorInvisible =
+    Color.rgba 0 0 0 0
+
+
+listTakeEveryAndEnds : Int -> (List a -> List a)
+listTakeEveryAndEnds step =
+    \list ->
+        case list of
+            [] ->
+                []
+
+            head :: tail ->
+                tail
+                    |> List.foldr
+                        (\element soFar ->
+                            if soFar.dropCount <= 0 then
+                                { dropCount = step, result = soFar.result |> (::) element }
+
+                            else
+                                { dropCount = soFar.dropCount - 1, result = soFar.result }
+                        )
+                        { result = [], dropCount = 0 }
+                    |> .result
+                    |> (::) head
+
+
 snakeDirectionFromKeyboardKey : Dict String SnakeDirection
 snakeDirectionFromKeyboardKey =
     Dict.fromList
@@ -896,21 +1237,14 @@ directionToXYOffset direction =
 
 mapWithExitInterface : Web.Interface future_
 mapWithExitInterface =
-    Web.Navigation.load
-        { protocol = Url.Https
-        , host = "dark.elm.dmy.fr"
-        , port_ = Nothing
-        , path = "/packages/lue-bird/elm-state-interface/latest/"
-        , query = Nothing
-        , fragment = Nothing
-        }
+    Web.Navigation.load "https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/"
 
 
 
 -- Ui
 
 
-uiFrame : List (Web.Dom.Modifier state) -> List (Web.DomNode state) -> Web.DomNode state
+uiFrame : List (Web.Dom.Modifier state) -> List (Web.Dom.Node state) -> Web.Dom.Node state
 uiFrame modifiers subs =
     Web.Dom.element "div"
         ([ Web.Dom.style "font-size" "2em"
@@ -929,7 +1263,7 @@ uiFrame modifiers subs =
         subs
 
 
-narrativeUiFrame : List (Web.Dom.Modifier state_) -> List (Web.DomNode state_) -> Web.DomNode state_
+narrativeUiFrame : List (Web.Dom.Modifier state_) -> List (Web.Dom.Node state_) -> Web.Dom.Node state_
 narrativeUiFrame modifiers subs =
     uiFrame
         modifiers
@@ -941,7 +1275,7 @@ narrativeUiFrame modifiers subs =
         ]
 
 
-buttonUi : List (Web.Dom.Modifier ()) -> List (Web.DomNode ()) -> Web.DomNode ()
+buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
 buttonUi modifiers subs =
     Web.Dom.element "button"
         ([ Web.Dom.listenTo "click"
@@ -962,7 +1296,7 @@ buttonUi modifiers subs =
         subs
 
 
-textInputUi : Maybe String -> Web.DomNode (Result Json.Decode.Error String)
+textInputUi : Maybe String -> Web.Dom.Node (Result Json.Decode.Error String)
 textInputUi currentInputValue =
     Web.Dom.element "input"
         [ Web.Dom.attribute "type" "text"
@@ -991,7 +1325,7 @@ textInputUi currentInputValue =
         []
 
 
-clockUi : { posix : Time.Posix, timezone : Time.Zone } -> Web.DomNode state_
+clockUi : { posix : Time.Posix, timezone : Time.Zone } -> Web.Dom.Node state_
 clockUi state =
     let
         hour : Int
@@ -1011,38 +1345,39 @@ clockUi state =
         , Web.Dom.attribute "width" "60"
         , Web.Dom.attribute "height" "60"
         ]
-        [ Web.Svg.element "circle"
-            [ Web.Dom.attribute "cx" "30"
-            , Web.Dom.attribute "cy" "30"
-            , Web.Dom.attribute "r" "30"
-            , Web.Dom.attribute "fill" (Color.rgba 1 1 1 0.15 |> Color.toCssString)
+        [ Svg.LocalExtra.circle
+            { radius = 30
+            , position =
+                { x = 30
+                , y = 30
+                }
+            }
+            [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 0.15)
             ]
-            []
         , clockHandUi { width = 4, length = 15, turns = (hour |> Basics.toFloat) / 12 }
         , clockHandUi { width = 3, length = 20, turns = (minute |> Basics.toFloat) / 60 }
         , clockHandUi { width = 2, length = 22, turns = (second |> Basics.toFloat) / 60 }
         ]
 
 
-clockHandUi : { width : Int, length : Float, turns : Float } -> Web.DomNode state_
+clockHandUi : { width : Int, length : Float, turns : Float } -> Web.Dom.Node state_
 clockHandUi config =
     let
         clockTurns : Float
         clockTurns =
             config.turns - 0.25
     in
-    Web.Svg.element "line"
-        [ Web.Dom.attribute "x1" "30"
-        , Web.Dom.attribute "y1" "30"
-        , Web.Dom.attribute "x2"
-            (30 + config.length * cos (Basics.turns clockTurns) |> String.fromFloat)
-        , Web.Dom.attribute "y2"
-            (30 + config.length * sin (Basics.turns clockTurns) |> String.fromFloat)
-        , Web.Dom.attribute "stroke" "white"
-        , Web.Dom.attribute "stroke-width" (String.fromInt config.width)
+    Svg.LocalExtra.line
+        { start = { x = 30, y = 30 }
+        , end =
+            { x = 30 + config.length * cos (Basics.turns clockTurns)
+            , y = 30 + config.length * sin (Basics.turns clockTurns)
+            }
+        }
+        [ Svg.LocalExtra.strokeUniform (Color.rgb 1 1 1)
+        , Svg.LocalExtra.strokeWidth (config.width |> Basics.toFloat)
         , Web.Dom.attribute "stroke-linecap" "round"
         ]
-        []
 
 
 
@@ -1053,14 +1388,14 @@ stateToAppUrl : InitializedState -> AppUrl
 stateToAppUrl =
     \state ->
         { path = []
-        , queryParameters = Dict.singleton "" [ state |> Codec.encodeToString 0 stateCodec ]
+        , queryParameters = Dict.singleton "" [ state |> Serialize.encodeToString stateCodec ]
         , fragment = Nothing
         }
 
 
-stateCodec : Codec InitializedState
+stateCodec : Serialize.Codec error_ InitializedState
 stateCodec =
-    Codec.custom
+    Serialize.customType
         (\startingRoomStateVariant atSignStateVariant pickApplesStateVariant showingMapWithExitVariant state ->
             case state of
                 StartingRoom startingRoomState ->
@@ -1075,11 +1410,11 @@ stateCodec =
                 ShowingMapWithExit ->
                     showingMapWithExitVariant
         )
-        |> Codec.variant1 "StartingRoom" StartingRoom startingRoomStateCodec
-        |> Codec.variant1 "AtSign" AtSign atSignStateCodec
-        |> Codec.variant1 "PickingApples" PickingApples pickApplesStateCodec
-        |> Codec.variant0 "ShowingMapWithExit" ShowingMapWithExit
-        |> Codec.buildCustom
+        |> Serialize.variant1 StartingRoom startingRoomStateCodec
+        |> Serialize.variant1 AtSign atSignStateCodec
+        |> Serialize.variant1 PickingApples pickApplesStateCodec
+        |> Serialize.variant0 ShowingMapWithExit
+        |> Serialize.finishCustomType
 
 
 appUrlToState : AppUrl -> Maybe InitializedState
@@ -1088,12 +1423,12 @@ appUrlToState =
         appUrl.queryParameters
             |> Dict.get ""
             |> Maybe.andThen List.head
-            |> Maybe.andThen (\str -> str |> Codec.decodeString stateCodec |> Result.toMaybe)
+            |> Maybe.andThen (\str -> str |> Serialize.decodeFromString stateCodec |> Result.toMaybe)
 
 
-startingRoomStateCodec : Codec StartingRoomState
+startingRoomStateCodec : Serialize.Codec error_ StartingRoomState
 startingRoomStateCodec =
-    Codec.object
+    Serialize.record
         (\name gemCount ->
             { name = name
             , gemCount = gemCount
@@ -1102,14 +1437,14 @@ startingRoomStateCodec =
             , posix = Time.millisToPosix 0
             }
         )
-        |> Codec.field "name" .name (Codec.nullable Codec.string)
-        |> Codec.field "gemCount" .gemCount Codec.int
-        |> Codec.buildObject
+        |> Serialize.field .name (Serialize.maybe Serialize.string)
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.finishRecord
 
 
-atSignStateCodec : Codec AtSignState
+atSignStateCodec : Serialize.Codec error_ AtSignState
 atSignStateCodec =
-    Codec.object
+    Serialize.record
         (\name gemCount appleCount birdConversationState ->
             { name = name
             , gemCount = gemCount
@@ -1117,16 +1452,16 @@ atSignStateCodec =
             , birdConversationState = birdConversationState
             }
         )
-        |> Codec.field "name" .name Codec.string
-        |> Codec.field "gemCount" .gemCount Codec.int
-        |> Codec.field "appleCount" .gemCount Codec.int
-        |> Codec.field "birdConversationState" .birdConversationState birdConversationStateCodec
-        |> Codec.buildObject
+        |> Serialize.field .name Serialize.string
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.field .birdConversationState birdConversationStateCodec
+        |> Serialize.finishRecord
 
 
-birdConversationStateCodec : Codec BirdConversationState
+birdConversationStateCodec : Serialize.Codec error_ BirdConversationState
 birdConversationStateCodec =
-    Codec.custom
+    Serialize.customType
         (\waitingForTalk greetingAndAskingForWhatYouWant birdTellAboutItself askedBirdForMap tooHungryToSell birdConversationState ->
             case birdConversationState of
                 WaitingForTalk ->
@@ -1144,72 +1479,29 @@ birdConversationStateCodec =
                 TooHungryToSell ->
                     tooHungryToSell
         )
-        |> Codec.variant0 "WaitingForTalk" WaitingForTalk
-        |> Codec.variant0 "GreetingAndAskingForWhatYouWant" GreetingAndAskingForWhatYouWant
-        |> Codec.variant0 "BirdTellAboutItself" BirdTellAboutItself
-        |> Codec.variant0 "AskedBirdForMap" AskedBirdForMap
-        |> Codec.variant0 "TooHungryToSell" TooHungryToSell
-        |> Codec.buildCustom
+        |> Serialize.variant0 WaitingForTalk
+        |> Serialize.variant0 GreetingAndAskingForWhatYouWant
+        |> Serialize.variant0 BirdTellAboutItself
+        |> Serialize.variant0 AskedBirdForMap
+        |> Serialize.variant0 TooHungryToSell
+        |> Serialize.finishCustomType
 
 
-pickApplesStateCodec : Codec PickApplesState
+pickApplesStateCodec : Serialize.Codec error_ PickApplesState
 pickApplesStateCodec =
-    Codec.object
-        (\name gemCount appleCountBefore pickedAppleCount headDirection headLocation tailSegments appleLocation ->
-            { name = name
-            , gemCount = gemCount
-            , appleCountBefore = appleCountBefore
-            , pickedAppleCount = pickedAppleCount
-            , headDirection = headDirection
-            , headLocation = headLocation
-            , tailSegments = tailSegments
-            , appleLocation = appleLocation
-            , windowSize = dummyWindowSize
-            , eatAppleAudio = Nothing
-            , eatAppleTimes = []
-            }
+    Serialize.record
+        (\name gemCount appleCountBefore pickedAppleCount ->
+            initialPickingApplesState
+                { name = name
+                , gemCount = gemCount
+                , appleCountBefore = appleCountBefore + pickedAppleCount
+                }
         )
-        |> Codec.field "name" .name Codec.string
-        |> Codec.field "gemCount" .gemCount Codec.int
-        |> Codec.field "appleCountBefore" .appleCountBefore Codec.int
-        |> Codec.field "pickedAppleCount" .pickedAppleCount Codec.int
-        |> Codec.field "headDirection" .headDirection directionCodec
-        |> Codec.field "headLocation" .headLocation pickApplesLocationCodec
-        |> Codec.field "tailSegments" .tailSegments (Codec.list pickApplesLocationCodec)
-        |> Codec.field "appleLocation" .appleLocation pickApplesLocationCodec
-        |> Codec.buildObject
-
-
-pickApplesLocationCodec : Codec PickApplesLocation
-pickApplesLocationCodec =
-    Codec.object (\x y -> { x = x, y = y })
-        |> Codec.field "x" .x Codec.int
-        |> Codec.field "y" .y Codec.int
-        |> Codec.buildObject
-
-
-directionCodec : Codec SnakeDirection
-directionCodec =
-    Codec.custom
-        (\left right up down direction ->
-            case direction of
-                Left ->
-                    left
-
-                Right ->
-                    right
-
-                Up ->
-                    up
-
-                Down ->
-                    down
-        )
-        |> Codec.variant0 "Left" Left
-        |> Codec.variant0 "Right" Right
-        |> Codec.variant0 "Up" Up
-        |> Codec.variant0 "Down" Down
-        |> Codec.buildCustom
+        |> Serialize.field .name Serialize.string
+        |> Serialize.field .gemCount Serialize.int
+        |> Serialize.field .appleCountBefore Serialize.int
+        |> Serialize.field .pickedAppleCount Serialize.int
+        |> Serialize.finishRecord
 
 
 port toJs : Json.Encode.Value -> Cmd event_
