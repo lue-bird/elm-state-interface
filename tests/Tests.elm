@@ -2,21 +2,43 @@ module Tests exposing (tests)
 
 import Expect
 import Fuzz exposing (Fuzzer)
+import List.LocalExtra
 import StructuredId exposing (StructuredId)
 import Test exposing (Test)
 
 
 tests : Test
 tests =
-    Test.describe "StructuredId"
-        [ Test.fuzz (Fuzz.pair treeFuzz treeFuzz)
-            "== equivalent to on toString =="
-            (\( tree0, tree1 ) ->
-                (tree0 |> exampleTreeToStructuredId |> StructuredId.toString)
-                    == (tree1 |> exampleTreeToStructuredId |> StructuredId.toString)
-                    |> Expect.equal
-                        (tree0 == tree1)
-            )
+    Test.describe "elm-state-interface"
+        [ Test.describe "StructuredId"
+            [ Test.fuzz (Fuzz.pair treeFuzz treeFuzz)
+                "== equivalent to on toString =="
+                (\( tree0, tree1 ) ->
+                    (tree0 |> exampleTreeToStructuredId |> StructuredId.toString)
+                        == (tree1 |> exampleTreeToStructuredId |> StructuredId.toString)
+                        |> Expect.equal
+                            (tree0 == tree1)
+                )
+            ]
+        , Test.describe "List.LocalExtra"
+            [ Test.fuzz (Fuzz.list (Fuzz.maybe Fuzz.int))
+                "justsMapIndexed"
+                (\list ->
+                    list
+                        |> List.LocalExtra.justsMapIndexed
+                            (\index maybe ->
+                                maybe |> Maybe.map (\just -> { just = just, index = index })
+                            )
+                        |> Expect.equalLists
+                            (list
+                                |> List.indexedMap Tuple.pair
+                                |> List.filterMap
+                                    (\( index, maybe ) ->
+                                        maybe |> Maybe.map (\just -> { just = just, index = index })
+                                    )
+                            )
+                )
+            ]
         ]
 
 
