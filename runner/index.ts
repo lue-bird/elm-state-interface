@@ -367,18 +367,14 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 editAudio(id, config)
             }
             case "EditNotification": return (config: { id: string, message: string, details: string }) => {
-                const oldNotification = notifications[config.id]
-                if (oldNotification) {
-                    const newNotification = new Notification(
-                        config.message,
-                        {
-                            body: config.details,
-                            tag: config.id
-                        }
-                    )
-                    newNotification.onclick = oldNotification.onclick
-                    notifications[config.id] = newNotification
-                }
+                const newNotification = new Notification(
+                    config.message,
+                    {
+                        body: config.details,
+                        tag: config.id
+                    }
+                )
+                newNotification.onclick = _event => { sendToElm("Clicked") }
             }
             default: return (_config: any) => {
                 notifyOfUnknownMessageKind("Edit." + tag)
@@ -463,21 +459,12 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
 
 const abortControllers: Map<string, AbortController> = new Map()
 const domListenAbortControllers: Map<string, AbortController[]> = new Map()
-
-const sockets: (WebSocket | null)[] = []
+const audioPlaying: Map<string, AudioPlaying> = new Map()
 
 const audioBuffers: Map<string, AudioBuffer> = new Map()
 const audioContext = new AudioContext()
-let audioPlaying: Map<string, AudioPlaying> = new Map()
 
-const notifications: Record<string, Notification> = {}
-
-type AudioPlaying = {
-    sourceNode: AudioBufferSourceNode,
-    gainNode: GainNode,
-    stereoPanNode: StereoPannerNode,
-    processingNodes: AudioNode[]
-}
+const sockets: (WebSocket | null)[] = []
 
 
 //// other helpers
@@ -840,8 +827,13 @@ function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioPa
     return audioParam
 }
 
+type AudioPlaying = {
+    sourceNode: AudioBufferSourceNode,
+    gainNode: GainNode,
+    stereoPanNode: StereoPannerNode,
+    processingNodes: AudioNode[]
+}
 function createAudio(config: AudioInfo, buffer: AudioBuffer): AudioPlaying {
-    const currentTime = new Date().getTime()
     const source = audioContext.createBufferSource()
     source.buffer = buffer
     audioParameterTimelineApplyTo(source.playbackRate, config.speed)
@@ -859,6 +851,7 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer): AudioPlaying {
         pair => { pair.current.connect(pair.next) }
     )
 
+    const currentTime = new Date().getTime()
     if (config.startTime >= currentTime) {
         source.start(posixToContextTime(config.startTime, currentTime), 0)
     } else {
