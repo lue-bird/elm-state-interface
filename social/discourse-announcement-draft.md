@@ -183,6 +183,6 @@ menuInterface state =
 ```
 [The state-interface documentation](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/) has examples and explanations so you can develop an intuition.
 
-### bonus: a few web APIs not part of `elm/`
+### web APIs
 Basically all `elm/` browser effects have equivalents in the [state-interface package](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/).
 And audio, localstorage, gamepads, websockets, geo location, notification and more are also included.
