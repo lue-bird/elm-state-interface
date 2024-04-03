@@ -151,6 +151,49 @@ import Time.LocalExtra
 import Url.LocalExtra
 
 
+
+{- Hey! Here's how to add a new interface:
+
+
+     - choose a name with roughly the shape `DomainSubjectVerb`
+
+     - to `Web.InterfaceSingle`, add a variant `| [YourName] ..additional info (and future handles)..`
+
+     - inside `Web.interfaceSingleFutureJsonDecoder`, specify what js values you expect to decode
+
+     - inside `Web.interfaceSingleToStructuredId`, assign a unique identifier to your interface
+
+       This helps recognize when interfaces have been added, have changed or have been deleted.
+       Unless you want to allow your interface to be edited while it's running,
+       it usually contains all the info from the `DomainSubjectVerb` variant (not including functions)
+
+     - in `runner/index.ts` inside `interfaceAddImplementation`, add
+       ```javascript
+       case "[YourName]": return (yourInput) => {
+           // perform your stuff
+
+           // in case you want to send something to elm, use
+           sendToElm({- your value -})
+
+           // in case you want to do something once the interface gets removed,
+           // either use the `abortSignal` directly or add
+           abortSignal.addEventListener("abort", _event => {
+               // remove your stuff
+           })
+       }
+       ```
+
+   Sometimes, removing + adding the new interface would not be the same as editing the existing one or would at least perform worse.
+   For example, changing the volume of an audio should not require removing and and re-adding all audio nodes.
+
+   If you also want to enable editing a running interface:
+
+    - to `Web.InterfaceSingleEdit`, add a variant `| Edit[YourName] ..your diff info..`
+    - inside `Web.interfaceSingleEdits`, add a case `( [YourName] old, [YourName] new ) -> Edit[YourName] ..the diff..`
+    - in `runner/index.ts` inside `interfaceEditImplementation`, add a `case "Edit[YourName]" : return (yourInput) => { ... }`
+-}
+
+
 {-| The "model" in a [`Web.program`](#program)
 -}
 type ProgramState appState
