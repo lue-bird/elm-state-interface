@@ -5,7 +5,7 @@ export interface ElmPorts {
     fromJs: { send: (toElm: any) => void }
 }
 
-export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLElement }) {
+export function programStart(appConfig: { ports: ElmPorts, domElement: Element }) {
     appConfig.ports.toJs.subscribe(function (fromElm: { id: string, diff: { tag: "Add" | "Edit" | "Remove", value: any } }) {
         // console.log("elm → js: ", fromElm)
         function sendToElm(eventData: void) {
