@@ -1,8 +1,12 @@
 zombie/
 elm.json
+docs.json
 src/
+tests/
 example/
+example-development/
 review/
+social/
 elm-stuff/
 .vscode/
 .github/
