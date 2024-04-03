@@ -223,31 +223,29 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
             case "WindowPreferredLanguagesChangeListen": return (_config: null) => {
                 window.addEventListener(
                     "languagechange",
-                    _event => { sendToElm(window.navigator.languages) }
-                    , { signal: abortSignal }
+                    _event => { sendToElm(window.navigator.languages) },
+                    { signal: abortSignal }
                 )
             }
             case "SocketConnect": return (config: { address: string }) => {
                 const createdSocket = new WebSocket(config.address)
                 sockets.push(createdSocket)
                 const socketId = sockets.length
-                createdSocket.onopen = _event => {
-                    sendToElm({ tag: "SocketConnected", value: socketId })
-                    createdSocket.onopen = null
-                }
-                createdSocket.onclose = (event) => {
-                    sendToElm({ tag: "SocketDisconnected", value: { code: event.code, reason: event.reason } })
-                    sockets[socketId] = null
-                }
-                abortSignal.addEventListener("abort", _event => {
-                    sockets
-                        .flatMap(socket => socket ? [socket] : [])
-                        .filter(socket => socket.url == config.address)
-                        .forEach(socketToStopFromConnecting => {
-                            socketToStopFromConnecting.onopen = null
-                            socketToStopFromConnecting.onclose = null
-                        })
-                })
+                createdSocket.addEventListener(
+                    "open",
+                    _event => {
+                        sendToElm({ tag: "SocketConnected", value: socketId })
+                    },
+                    { signal: abortSignal }
+                )
+                createdSocket.addEventListener(
+                    "close",
+                    event => {
+                        sendToElm({ tag: "SocketDisconnected", value: { code: event.code, reason: event.reason } })
+                        sockets[socketId] = null
+                    },
+                    { signal: abortSignal }
+                )
             }
             case "SocketMessage": return (config: { id: number, data: string }) => {
                 const socketToDisconnect = sockets.at(config.id)
