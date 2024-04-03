@@ -338,6 +338,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                 sendToElm(window.navigator.getGamepads())
             }
             case "GamepadsChangeListen": return (_config: null) => {
+                let gamepadsFromLastPoll: (Gamepad | null)[] | null = null
                 const gamepadsChangePollingIntervalId = window.setInterval(
                     function () {
                         const newGamepads = window.navigator.getGamepads()
@@ -470,7 +471,6 @@ const audioContext = new AudioContext()
 let audioPlaying: Map<string, AudioPlaying> = new Map()
 
 const notifications: Record<string, Notification> = {}
-let gamepadsFromLastPoll: (Gamepad | null)[] | null = null
 
 type AudioPlaying = {
     sourceNode: AudioBufferSourceNode,
