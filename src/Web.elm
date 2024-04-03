@@ -1844,19 +1844,22 @@ interfaceSingleFutureJsonDecoder interface =
                 DomElementHeader domElement ->
                     Json.Decode.oneOf
                         ([ tagValueJsonDecoder "EventListen"
-                            (Json.Decode.map2 (\name event -> { name = name, event = event })
-                                (Json.Decode.field "name" Json.Decode.string)
+                            (Json.Decode.map2 (\eventListen event -> eventListen.on event)
+                                (Json.Decode.field "name"
+                                    (Json.Decode.string
+                                        |> Json.Decode.andThen
+                                            (\specificEventName ->
+                                                case domElement.eventListens |> Dict.get specificEventName of
+                                                    Nothing ->
+                                                        Json.Decode.fail "received event of a kind that isn't listened for"
+
+                                                    Just eventListen ->
+                                                        eventListen |> Json.Decode.succeed
+                                            )
+                                    )
+                                )
                                 (Json.Decode.field "event" Json.Decode.value)
                             )
-                            |> Json.Decode.andThen
-                                (\specificEvent ->
-                                    case domElement.eventListens |> Dict.get specificEvent.name of
-                                        Nothing ->
-                                            Json.Decode.fail "received event of a kind that isn't listened for"
-
-                                        Just eventListen ->
-                                            eventListen.on specificEvent.event |> Json.Decode.succeed
-                                )
                             |> Just
                          , case domElement.scrollPositionRequest of
                             Nothing ->
