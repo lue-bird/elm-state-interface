@@ -153,7 +153,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                                     tag: config.id
                                 }
                             )
-                            newNotification.onclick = _event => { sendToElm("Clicked") }
+                            newNotification.addEventListener("click", _event => { sendToElm("Clicked") })
                             abortSignal.addEventListener("abort", _event => {
                                 newNotification.close()
                             })
@@ -372,7 +372,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: HTMLEleme
                         tag: config.id
                     }
                 )
-                newNotification.onclick = _event => { sendToElm("Clicked") }
+                newNotification.addEventListener("click", _event => { sendToElm("Clicked") })
             }
             default: return (_config: any) => {
                 notifyOfUnknownMessageKind("Edit." + tag)
