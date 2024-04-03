@@ -153,7 +153,7 @@ update msg state =
         AudioLoaded loaded ->
             ( { state | audio = loaded |> Just }, Cmd.none )
 ```
-same with effects like starting and stopping audio.
+same with effects like starting and stopping audio etc.
 
 in state-interface, we can list those effects very similar to `subscriptions` or `view`
 ```elm
