@@ -1785,6 +1785,77 @@ interfaceSingleFutureJsonDecoder : InterfaceSingle future -> Maybe (Json.Decode.
 interfaceSingleFutureJsonDecoder =
     \interface ->
         case interface of
+            DocumentTitleReplaceBy _ ->
+                Nothing
+
+            DocumentAuthorSet _ ->
+                Nothing
+
+            DocumentKeywordsSet _ ->
+                Nothing
+
+            DocumentDescriptionSet _ ->
+                Nothing
+
+            ConsoleLog _ ->
+                Nothing
+
+            ConsoleWarn _ ->
+                Nothing
+
+            ConsoleError _ ->
+                Nothing
+
+            DocumentEventListen listen ->
+                listen.on |> Just
+
+            NavigationReplaceUrl _ ->
+                Nothing
+
+            NavigationPushUrl _ ->
+                Nothing
+
+            NavigationGo _ ->
+                Nothing
+
+            NavigationLoad _ ->
+                Nothing
+
+            NavigationReload ->
+                Nothing
+
+            NavigationUrlRequest toFuture ->
+                Url.LocalExtra.jsonDecoder
+                    |> Json.Decode.map AppUrl.fromUrl
+                    |> Json.Decode.map toFuture
+                    |> Just
+
+            FileDownloadUnsignedInt8s _ ->
+                Nothing
+
+            ClipboardReplaceBy _ ->
+                Nothing
+
+            ClipboardRequest toFuture ->
+                Json.Decode.string |> Json.Decode.map toFuture |> Just
+
+            AudioSourceLoad load ->
+                Json.Decode.oneOf
+                    [ Json.Decode.map (\duration -> Ok { url = load.url, duration = duration })
+                        (Json.Decode.LocalExtra.variant "Success"
+                            (Json.Decode.field "durationInSeconds"
+                                (Json.Decode.map Duration.seconds Json.Decode.float)
+                            )
+                        )
+                    , Json.Decode.LocalExtra.variant "Error"
+                        (Json.Decode.map Err audioSourceLoadErrorJsonDecoder)
+                    ]
+                    |> Json.Decode.map load.on
+                    |> Just
+
+            AudioPlay _ ->
+                Nothing
+
             DomNodeRender toRender ->
                 case toRender.node of
                     DomText _ ->
@@ -1824,42 +1895,8 @@ interfaceSingleFutureJsonDecoder =
                             )
                             |> Just
 
-            AudioSourceLoad load ->
-                Json.Decode.oneOf
-                    [ Json.Decode.map (\duration -> Ok { url = load.url, duration = duration })
-                        (Json.Decode.LocalExtra.variant "Success"
-                            (Json.Decode.field "durationInSeconds"
-                                (Json.Decode.map Duration.seconds Json.Decode.float)
-                            )
-                        )
-                    , Json.Decode.LocalExtra.variant "Error"
-                        (Json.Decode.string
-                            |> Json.Decode.map
-                                (\errorMessage ->
-                                    Err
-                                        (case errorMessage of
-                                            "NetworkError" ->
-                                                AudioSourceLoadNetworkError
-
-                                            "MediaDecodeAudioDataUnknownContentType" ->
-                                                AudioSourceLoadDecodeError
-
-                                            "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
-                                                AudioSourceLoadDecodeError
-
-                                            unknownMessage ->
-                                                AudioSourceLoadUnknownError unknownMessage
-                                        )
-                                )
-                        )
-                    ]
-                    |> Json.Decode.map load.on
-                    |> Just
-
-            SocketConnect connect ->
-                socketConnectionEventJsonDecoder
-                    |> Json.Decode.map connect.on
-                    |> Just
+            NotificationAskForPermission ->
+                Nothing
 
             NotificationShow show ->
                 notificationResponseJsonDecoder
@@ -1874,37 +1911,16 @@ interfaceSingleFutureJsonDecoder =
                     ]
                     |> Just
 
-            LocalStorageRequest request ->
-                Json.Decode.nullable Json.Decode.string
-                    |> Json.Decode.map request.on
-                    |> Just
-
-            WindowSizeRequest toFuture ->
-                Json.Decode.map2 (\width height -> { width = width, height = height })
-                    (Json.Decode.field "width" Json.Decode.int)
-                    (Json.Decode.field "height" Json.Decode.int)
-                    |> Json.Decode.map toFuture
-                    |> Just
-
-            WindowPreferredLanguagesRequest toFuture ->
-                Json.Decode.list Json.Decode.string
-                    |> Json.Decode.map toFuture
-                    |> Just
-
-            NavigationUrlRequest toFuture ->
-                Url.LocalExtra.jsonDecoder
-                    |> Json.Decode.map AppUrl.fromUrl
-                    |> Json.Decode.map toFuture
-                    |> Just
-
-            ClipboardRequest toFuture ->
-                Json.Decode.string |> Json.Decode.map toFuture |> Just
-
             TimePosixRequest toFuture ->
                 Time.LocalExtra.posixJsonDecoder |> Json.Decode.map toFuture |> Just
 
             TimezoneOffsetRequest toFuture ->
                 Json.Decode.int |> Json.Decode.map toFuture |> Just
+
+            TimePeriodicallyListen timePeriodicallyListen ->
+                Time.LocalExtra.posixJsonDecoder
+                    |> Json.Decode.map timePeriodicallyListen.on
+                    |> Just
 
             TimezoneNameRequest toFuture ->
                 Json.Decode.oneOf
@@ -1919,11 +1935,17 @@ interfaceSingleFutureJsonDecoder =
                     |> Json.Decode.map randomUnsignedInt32sRequest.on
                     |> Just
 
-            GeoLocationRequest toFuture ->
-                geoLocationJsonDecoder |> Json.Decode.map toFuture |> Just
+            WindowSizeRequest toFuture ->
+                Json.Decode.map2 (\width height -> { width = width, height = height })
+                    (Json.Decode.field "width" Json.Decode.int)
+                    (Json.Decode.field "height" Json.Decode.int)
+                    |> Json.Decode.map toFuture
+                    |> Just
 
-            GamepadsRequest toFuture ->
-                gamepadsJsonDecoder |> Json.Decode.map toFuture |> Just
+            WindowPreferredLanguagesRequest toFuture ->
+                Json.Decode.list Json.Decode.string
+                    |> Json.Decode.map toFuture
+                    |> Just
 
             WindowEventListen listen ->
                 listen.on |> Just
@@ -1939,12 +1961,32 @@ interfaceSingleFutureJsonDecoder =
                     |> Json.Decode.map toFuture
                     |> Just
 
-            DocumentEventListen listen ->
-                listen.on |> Just
+            SocketConnect connect ->
+                socketConnectionEventJsonDecoder
+                    |> Json.Decode.map connect.on
+                    |> Just
 
-            TimePeriodicallyListen timePeriodicallyListen ->
-                Time.LocalExtra.posixJsonDecoder
-                    |> Json.Decode.map timePeriodicallyListen.on
+            SocketMessage _ ->
+                Nothing
+
+            SocketDisconnect _ ->
+                Nothing
+
+            SocketMessageListen messageListen ->
+                Json.Decode.string |> Json.Decode.map messageListen.on |> Just
+
+            LocalStorageSet _ ->
+                Nothing
+
+            LocalStorageRequest request ->
+                Json.Decode.nullable Json.Decode.string
+                    |> Json.Decode.map request.on
+                    |> Just
+
+            LocalStorageRemoveOnADifferentTabListen listen ->
+                Url.LocalExtra.jsonDecoder
+                    |> Json.Decode.map AppUrl.fromUrl
+                    |> Json.Decode.map listen.on
                     |> Just
 
             LocalStorageSetOnADifferentTabListen listen ->
@@ -1960,77 +2002,37 @@ interfaceSingleFutureJsonDecoder =
                     |> Json.Decode.map listen.on
                     |> Just
 
-            LocalStorageRemoveOnADifferentTabListen listen ->
-                Url.LocalExtra.jsonDecoder
-                    |> Json.Decode.map AppUrl.fromUrl
-                    |> Json.Decode.map listen.on
-                    |> Just
-
-            SocketMessageListen messageListen ->
-                Json.Decode.string |> Json.Decode.map messageListen.on |> Just
+            GeoLocationRequest toFuture ->
+                geoLocationJsonDecoder |> Json.Decode.map toFuture |> Just
 
             GeoLocationChangeListen toFuture ->
                 geoLocationJsonDecoder |> Json.Decode.map toFuture |> Just
 
+            GamepadsRequest toFuture ->
+                gamepadsJsonDecoder |> Json.Decode.map toFuture |> Just
+
             GamepadsChangeListen toFuture ->
                 gamepadsJsonDecoder |> Json.Decode.map toFuture |> Just
 
-            DocumentTitleReplaceBy _ ->
-                Nothing
 
-            DocumentAuthorSet _ ->
-                Nothing
+audioSourceLoadErrorJsonDecoder : Json.Decode.Decoder AudioSourceLoadError
+audioSourceLoadErrorJsonDecoder =
+    Json.Decode.string
+        |> Json.Decode.map
+            (\errorMessage ->
+                case errorMessage of
+                    "NetworkError" ->
+                        AudioSourceLoadNetworkError
 
-            DocumentKeywordsSet _ ->
-                Nothing
+                    "MediaDecodeAudioDataUnknownContentType" ->
+                        AudioSourceLoadDecodeError
 
-            DocumentDescriptionSet _ ->
-                Nothing
+                    "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
+                        AudioSourceLoadDecodeError
 
-            ConsoleLog _ ->
-                Nothing
-
-            ConsoleWarn _ ->
-                Nothing
-
-            ConsoleError _ ->
-                Nothing
-
-            NavigationReplaceUrl _ ->
-                Nothing
-
-            NavigationPushUrl _ ->
-                Nothing
-
-            NavigationGo _ ->
-                Nothing
-
-            NavigationLoad _ ->
-                Nothing
-
-            NavigationReload ->
-                Nothing
-
-            FileDownloadUnsignedInt8s _ ->
-                Nothing
-
-            ClipboardReplaceBy _ ->
-                Nothing
-
-            AudioPlay _ ->
-                Nothing
-
-            SocketMessage _ ->
-                Nothing
-
-            SocketDisconnect _ ->
-                Nothing
-
-            LocalStorageSet _ ->
-                Nothing
-
-            NotificationAskForPermission ->
-                Nothing
+                    unknownMessage ->
+                        AudioSourceLoadUnknownError unknownMessage
+            )
 
 
 domElementScrollPositionJsonDecoder : Json.Decode.Decoder { fromLeft : Float, fromTop : Float }
