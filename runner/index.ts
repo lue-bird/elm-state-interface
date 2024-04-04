@@ -172,7 +172,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                 sendToElm(new Date().getTimezoneOffset())
             }
             case "TimezoneNameRequest": return (_config: null) => {
-                sendToElm(getTimezoneName())
+                sendToElm(Intl.DateTimeFormat().resolvedOptions().timeZone)
             }
             case "TimePeriodicallyListen": return (config: { milliSeconds: number }) => {
                 const timePeriodicallyListenId =
@@ -525,10 +525,6 @@ function editDomModifiers(
             break
         }
     }
-}
-
-function getTimezoneName(): string | number {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
 function getOrAddMeta(name: string): HTMLMetaElement {
