@@ -460,12 +460,21 @@ const domListenAbortControllers: Map<string, AbortController[]> = new Map()
 const audioPlaying: Map<string, AudioPlaying> = new Map()
 
 const audioBuffers: Map<string, AudioBuffer> = new Map()
-const audioContext = new AudioContext()
+let audioContext: AudioContext | null = null
 
 const sockets: (WebSocket | null)[] = []
 
 
 //// other helpers
+
+function getOrInitializeAudioContext(): AudioContext {
+    if (audioContext) {
+        return audioContext
+    } else {
+        audioContext = new AudioContext()
+        return audioContext
+    }
+}
 
 function editDomModifiers(
     id: string,
@@ -784,6 +793,7 @@ type AudioParameterTimeline = {
 }
 
 function audioSourceLoad(url: string, sendToElm: (v: any) => void, abortSignal: AbortSignal) {
+    const audioContext = getOrInitializeAudioContext()
     fetch(url, { signal: abortSignal })
         .then(data => data.arrayBuffer())
         .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
@@ -797,6 +807,7 @@ function audioSourceLoad(url: string, sendToElm: (v: any) => void, abortSignal: 
 }
 
 function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioParameterTimeline) {
+    const audioContext = getOrInitializeAudioContext()
     const currentTime = audioContext.currentTime
     audioParam.cancelScheduledValues(currentTime)
     audioParam.setValueAtTime(timeline.startValue, 0)
@@ -828,6 +839,7 @@ type AudioPlaying = {
     processingNodes: AudioNode[]
 }
 function createAudio(config: AudioInfo, buffer: AudioBuffer): AudioPlaying {
+    const audioContext = getOrInitializeAudioContext()
     const source = audioContext.createBufferSource()
     source.buffer = buffer
     audioParameterTimelineApplyTo(source.playbackRate, config.speed)
@@ -859,6 +871,7 @@ function createAudio(config: AudioInfo, buffer: AudioBuffer): AudioPlaying {
     }
 }
 function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): AudioNode[] {
+    const audioContext = getOrInitializeAudioContext()
     return processingFirstToLast
         .map(processing => {
             switch (processing.tag) {
@@ -902,6 +915,7 @@ function editAudio(id: string, config: { url: string, startTime: number, replace
                 audioParameterTimelineApplyTo(audioPlayingToEdit.stereoPanNode.pan, config.replacement.value)
                 break
             } case "Processing": {
+                const audioContext = getOrInitializeAudioContext()
                 audioPlayingToEdit.stereoPanNode.disconnect()
                 audioPlayingToEdit.processingNodes.forEach(node => { node.disconnect() })
 
@@ -947,6 +961,7 @@ function notifyOfBug(bugDescription: string) {
 }
 
 function posixToContextTime(posix: number, currentTimePosix: number) {
+    const audioContext = getOrInitializeAudioContext()
     return (posix - currentTimePosix) / 1000 + audioContext.currentTime
 }
 
