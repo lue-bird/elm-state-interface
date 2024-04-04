@@ -1,5 +1,9 @@
 # change log
 
+# TODO
+
+  - from elm, send which attributes, attributes namespaced and styles have been fully removed (instead of removing all before re-adding some)
+
 ## 2.0.0
 
   - rename ...map to ...futureMap
