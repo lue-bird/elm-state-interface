@@ -31,6 +31,10 @@ function copyExampleDevelopmentToExample(sub) {
         path.resolve(__dirname, sub, "vite.config.js"),
         path.resolve(__dirname, "..", "example", sub, "vite.config.js")
     )
+    fs.cpSync(
+        path.resolve(__dirname, sub, "index.html"),
+        path.resolve(__dirname, "..", "example", sub, "index.html")
+    )
 
     const exampleElmJson = JSON.parse(fs.readFileSync(exampleElmJsonPath))
 
