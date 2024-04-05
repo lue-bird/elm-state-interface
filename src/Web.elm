@@ -18,7 +18,7 @@ module Web exposing
 
 @docs program, Program
 
-You can also [embed](#embed) a state-interface program as part of an existing app that uses The Elm Architecture
+You can also [embed](#embed) a state-interface program as part of an existing app that uses The Elm Architecture.
 
 
 # interface
@@ -3114,8 +3114,7 @@ type DomEdit
     | ReplacementDomElementEventListens (Dict String DefaultActionHandling)
 
 
-{-| Create an elm [`Program`](https://dark.elm.dmy.fr/packages/elm/core/latest/Platform#Program)
-with
+{-| Create a [`Program`](#Program):
 
   - The state is everything the program knows (what The Elm Architecture calls model).
     And it always starts with a given `initialState`
