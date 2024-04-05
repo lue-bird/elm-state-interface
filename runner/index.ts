@@ -185,7 +185,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                 })
             }
             case "RandomUnsignedInt32sRequest": return (config: number) => {
-                sendToElm(crypto.getRandomValues(new Uint32Array(config)))
+                sendToElm(Array.from(window.crypto.getRandomValues(new Uint32Array(config))))
             }
             case "WindowSizeRequest": return (_config: null) => {
                 sendToElm({ width: window.innerWidth, height: window.innerHeight })
