@@ -1,27 +1,33 @@
 module Web.Dom exposing
-    ( text
-    , element, elementNamespaced
-    , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style, boolProperty, stringProperty
+    ( Node(..), text
+    , Element, element, elementNamespaced
+    , futureMap, render
+    , Modifier, modifierFutureMap, modifierBatch, modifierNone
+    , attribute, attributeNamespaced, style, boolProperty, stringProperty
     , listenTo, listenToPreventingDefaultAction
     , scrollToShow, scrollPositionRequest, scrollToPosition
-    , modifierFutureMap, modifierBatch, modifierNone
-    , futureMap, render
-    , Node(..), Element
+    , ModifierSingle(..)
     )
 
 {-| Helpers for [DOM nodes](#Node) as part of an [`Interface`](Web#Interface).
 
-These are primitives used for svg and html.
-Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/)
+These are primitives used for [svg](Web-Svg) and html
+(filling the same role as [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-dom/latest/))
 
-@docs text
-@docs element, elementNamespaced
-@docs Modifier, ModifierSingle, attribute, attributeNamespaced, style, boolProperty, stringProperty
+@docs Node, text
+@docs Element, element, elementNamespaced
+@docs futureMap, render
+@docs Modifier, modifierFutureMap, modifierBatch, modifierNone
+@docs attribute, attributeNamespaced, style, boolProperty, stringProperty
 @docs listenTo, listenToPreventingDefaultAction
 @docs scrollToShow, scrollPositionRequest, scrollToPosition
-@docs modifierFutureMap, modifierBatch, modifierNone
-@docs futureMap, render
-@docs Node, Element
+
+
+## internals, safe to ignore for users
+
+Exposed so can for example simulate it more easily in tests, add a debugger etc.
+
+@docs ModifierSingle
 
 -}
 
@@ -33,7 +39,7 @@ import Rope exposing (Rope)
 import Web
 
 
-{-| An [`Interface`](Web#Interface) for displaying a given [`Web.Dom.Node`](Web-Dom#Node).
+{-| An [`Interface`](Web#Interface) for displaying a given [`Web.Dom.Node`](Web-Dom#Node)
 -}
 render : Node future -> Web.Interface future
 render =
@@ -311,8 +317,8 @@ elementNamespaced namespace tag modifiers subs =
     elementWithMaybeNamespace (namespace |> Just) tag modifiers subs
 
 
-{-| Set the behavior of a [`Web.Dom.element`](Web-Dom#element).
-To create one, use [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo).
+{-| Setting of a [`Web.Dom.Element`](Web-Dom#Element).
+To create one, use [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo) etc.
 To combine multiple, use [`Web.Dom.modifierBatch`](#modifierBatch) and [`Web.Dom.modifierNone`](#modifierNone)
 
 For example to get `<a href="https://elm-lang.org">elm</a>`
@@ -328,7 +334,7 @@ please [open an issue](https://github.com/lue-bird/elm-state-interface/issues/ne
 ## attribute vs property
 
   - attribute: part of the HTML itself. E.g. `class` in `<div class="greeting"></div>`
-  - property: an actual field on that js DOM object. E.g. `className` in `div.className = 'greeting'`
+  - property: an actual field on that js DOM object. E.g. `className` in `div.className = "greeting"`
 
 But don't be surprised: There are cases where
 
@@ -389,7 +395,7 @@ modifierNone =
 
 
 {-| An individual [`Modifier`](#Modifier).
-Create using [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo).
+Create using [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenTo) etc.
 -}
 type ModifierSingle future
     = Attribute { namespace : Maybe String, key : String, value : String }

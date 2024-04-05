@@ -12,7 +12,7 @@ import Web.Dom
 
 
 {-| Create an SVG element [`Web.Dom.Node`](Web-Dom#Node).
-with a given tag, [`Modifier`](Web-Dom#Modifier)s and sub-nodes.
+with a given tag, [`Modifier`](Web-Dom#Modifier)s and sub-nodes
 -}
 element : String -> List (Web.Dom.Modifier future) -> List (Web.Dom.Node future) -> Web.Dom.Node future
 element tag modifiers subs =
