@@ -2,15 +2,14 @@
 
 ## 2.0.0
 
-  - rename ...map to ...futureMap
+  - rename ...map to ...futureMap thanks to feedback from [@a-teammate](https://github.com/a-teammate)
       - `Web.Dom.map` name → `Web.Dom.futureMap`
       - `Web.Dom.modifierMap` name → `Web.Dom.modifierFutureMap`
       - `Web.interfaceMap` name → `Web.interfaceFutureMap`
-      - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
   - `module Web.Dom`:
       - `documentEventListen` move into `Web.Window` as `documentListenTo`
       - add `stringProperty`, `boolProperty`
-      - add `scrollToShow`, `scrollPositionRequest`, `scrollToPosition`
+      - add `scrollToShow`, `scrollPositionRequest`, `scrollToPosition` thanks to feedback from [@a-teammate](https://github.com/a-teammate)
   - `module Web.Navigation`
       - `load` argument change from `Url` to `String` for convenience
   - `module Web.Http`:
@@ -33,4 +32,5 @@
   - add `module Web.Socket`
   - add `module Web.LocalStorage`
   - add `module Web.GeoLocation`
-  - add `module Web.Notification`
+  - add `module Web.Notification` thanks to feedback from [@a-teammate](https://github.com/a-teammate)
+  - make documentation more friendly to beginners thanks to feedback from [@a-teammate](https://github.com/a-teammate)
