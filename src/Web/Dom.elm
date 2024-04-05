@@ -1,7 +1,7 @@
 module Web.Dom exposing
     ( text
     , element, elementNamespaced
-    , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style
+    , Modifier, ModifierSingle(..), attribute, attributeNamespaced, style, boolProperty, stringProperty
     , listenTo, listenToPreventingDefaultAction
     , scrollToShow, scrollPositionRequest, scrollToPosition
     , modifierFutureMap, modifierBatch, modifierNone
@@ -16,7 +16,7 @@ Compare with [`elm/virtual-dom`](https://dark.elm.dmy.fr/packages/elm/virtual-do
 
 @docs text
 @docs element, elementNamespaced
-@docs Modifier, ModifierSingle, attribute, attributeNamespaced, style
+@docs Modifier, ModifierSingle, attribute, attributeNamespaced, style, boolProperty, stringProperty
 @docs listenTo, listenToPreventingDefaultAction
 @docs scrollToShow, scrollPositionRequest, scrollToPosition
 @docs modifierFutureMap, modifierBatch, modifierNone
@@ -122,6 +122,8 @@ domElementHeaderFutureMap futureChange =
         , styles = domElementToMap.styles
         , attributes = domElementToMap.attributes
         , attributesNamespaced = domElementToMap.attributesNamespaced
+        , stringProperties = domElementToMap.stringProperties
+        , boolProperties = domElementToMap.boolProperties
         , scrollToPosition = domElementToMap.scrollToPosition
         , scrollToShow = domElementToMap.scrollToShow
         , scrollPositionRequest =
@@ -217,6 +219,30 @@ elementWithMaybeNamespace maybeNamespace tag modifiers subs =
                                 Nothing
                     )
                 |> Dict.fromList
+        , stringProperties =
+            modifierList
+                |> List.filterMap
+                    (\modifier ->
+                        case modifier of
+                            StringProperty keyValue ->
+                                ( keyValue.key, keyValue.value ) |> Just
+
+                            _ ->
+                                Nothing
+                    )
+                |> Dict.fromList
+        , boolProperties =
+            modifierList
+                |> List.filterMap
+                    (\modifier ->
+                        case modifier of
+                            BoolProperty keyValue ->
+                                ( keyValue.key, keyValue.value ) |> Just
+
+                            _ ->
+                                Nothing
+                    )
+                |> Dict.fromList
         , attributes =
             modifierList
                 |> List.filterMap
@@ -296,7 +322,41 @@ For example to get `<a href="https://elm-lang.org">elm</a>`
         [ Web.Dom.text "elm" ]
 
 Btw: If you can think of a nicer name for this like "customization", "characteristic" or "aspect",
-please [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new)!
+please [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new).
+
+
+## attribute vs property
+
+  - attribute: part of the HTML itself. E.g. `class` in `<div class="greeting"></div>`
+  - property: an actual field on that js DOM object. E.g. `className` in `div.className = 'greeting'`
+
+But don't be surprised: There are cases where
+
+  - only a property _or_ an attribute of a name exists
+  - both exist but they have different effects
+
+For example, trying to reset the text inside a a text input with
+
+    Web.Dom.attribute "value" "user input"
+
+    -- then later replace it with
+    Web.Dom.attribute "value" ""
+
+will only provide a _default value_ and has no effect on the currently written text,
+so you'll have to use
+
+    Web.Dom.stringProperty "value" ""
+
+Similarly for checkboxes:
+
+    Web.Dom.boolProperty "checked" False
+
+Maybe a rule of thumb is:
+Use properties to set anything related to interactivity
+and attributes for everything else.
+
+If you have some opinions or better explanations,
+please [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new).
 
 -}
 type alias Modifier future =
@@ -333,6 +393,8 @@ Create using [`attribute`](#attribute), [`style`](#style), [`listenTo`](#listenT
 -}
 type ModifierSingle future
     = Attribute { namespace : Maybe String, key : String, value : String }
+    | StringProperty { key : String, value : String }
+    | BoolProperty { key : String, value : Bool }
     | Style { key : String, value : String }
     | ScrollToPosition { fromLeft : Float, fromTop : Float }
     | ScrollToShow { x : Web.DomElementVisibilityAlignment, y : Web.DomElementVisibilityAlignment }
@@ -349,6 +411,20 @@ type ModifierSingle future
 attribute : String -> String -> Modifier future_
 attribute key value =
     { namespace = Nothing, key = key, value = value } |> Attribute |> Rope.singleton
+
+
+{-| A key-string value DOM property [`Modifier`](#Modifier)
+-}
+stringProperty : String -> String -> Modifier future_
+stringProperty key value =
+    { key = key, value = value } |> StringProperty |> Rope.singleton
+
+
+{-| A key-bool value DOM property [`Modifier`](#Modifier)
+-}
+boolProperty : String -> Bool -> Modifier future_
+boolProperty key value =
+    { key = key, value = value } |> BoolProperty |> Rope.singleton
 
 
 {-| A namespaced key-value attribute [`Modifier`](#Modifier).
@@ -423,6 +499,12 @@ modifierSingleMap futureChange =
 
             Style keyValue ->
                 keyValue |> Style
+
+            StringProperty keyValue ->
+                keyValue |> StringProperty
+
+            BoolProperty keyValue ->
+                keyValue |> BoolProperty
 
             ScrollToPosition position ->
                 position |> ScrollToPosition

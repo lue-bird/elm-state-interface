@@ -333,7 +333,7 @@ textInputUi :
 textInputUi toFuture inputValue modifiers =
     Web.Dom.element "input"
         ([ Web.Dom.attribute "type" "text"
-         , Web.Dom.attribute "value" inputValue
+         , Web.Dom.stringProperty "value" inputValue
          , Web.Dom.listenTo "input"
             |> Web.Dom.modifierFutureMap
                 (Json.Decode.decodeValue

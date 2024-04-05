@@ -422,7 +422,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
     function editDom(
         id: string,
         path: number[],
-        replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens", value: any },
+        replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "StringProperties" | "BoolProperties" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens", value: any },
         sendToElm: (v: any) => void
     ) {
         switch (replacement.tag) {
@@ -432,7 +432,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                 oldDomNodeToEdit.parentElement?.replaceChild(newDomNode, oldDomNodeToEdit)
                 break
             }
-            case "Styles": case "Attributes": case "AttributesNamespaced": case "ScrollToPosition": case "ScrollToShow": case "ScrollPositionRequest": case "EventListens": {
+            case "Styles": case "Attributes": case "AttributesNamespaced": case "StringProperties": case "BoolProperties": case "ScrollToPosition": case "ScrollToShow": case "ScrollPositionRequest": case "EventListens": {
                 const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, path)
                 if (oldDomNodeToEdit instanceof Element) {
                     editDomModifiers(
@@ -480,33 +480,45 @@ function editDomModifiers(
     id: string,
     domElementToEdit: Element & ElementCSSInlineStyle,
     replacement: {
-        tag: "Styles" | "Attributes" | "AttributesNamespaced" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens",
+        tag: "Styles" | "Attributes" | "AttributesNamespaced" | "StringProperties" | "BoolProperties" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens",
         value: any
     },
     sendToElm: (v: any) => void
 ) {
     switch (replacement.tag) {
         case "Styles": {
-            domElementToEdit.removeAttribute("style")
-            domElementAddStyles(domElementToEdit, replacement.value)
+            replacement.value.remove.forEach((styleKey: string) => {
+                domElementToEdit?.style.removeProperty(styleKey)
+            })
+            domElementAddStyles(domElementToEdit, replacement.value.edit)
             break
         }
         case "Attributes": {
-            for (const attribute of domElementToEdit.attributes) {
-                if (attribute.name !== "style" && attribute.namespaceURI === null) {
-                    domElementToEdit.removeAttribute(attribute.name)
-                }
-            }
-            domElementAddAttributes(domElementToEdit, replacement.value)
+            replacement.value.remove.forEach((attributeKey: string) => {
+                domElementToEdit.removeAttribute(attributeKey)
+            })
+            domElementAddAttributes(domElementToEdit, replacement.value.edit)
             break
         }
         case "AttributesNamespaced": {
-            for (const attribute of domElementToEdit.attributes) {
-                if (attribute.name !== "style" && attribute.namespaceURI) {
-                    domElementToEdit.removeAttributeNS(attribute.namespaceURI, attribute.name)
-                }
-            }
-            domElementAddAttributesNamespaced(domElementToEdit, replacement.value)
+            replacement.value.remove.forEach((attributeNamespacedId: { namespace: string, key: string }) => {
+                domElementToEdit.removeAttributeNS(attributeNamespacedId.namespace, attributeNamespacedId.key)
+            })
+            domElementAddAttributesNamespaced(domElementToEdit, replacement.value.edit)
+            break
+        }
+        case "StringProperties": {
+            replacement.value.remove.forEach((propertyKey: string) => {
+                (domElementToEdit as { [key: string]: any })[propertyKey] = ""
+            })
+            domElementSetProperties(domElementToEdit, replacement.value.edit)
+            break
+        }
+        case "BoolProperties": {
+            replacement.value.remove.forEach((propertyKey: string) => {
+                (domElementToEdit as { [key: string]: any })[propertyKey] = null
+            })
+            domElementSetProperties(domElementToEdit, replacement.value.edit)
             break
         }
         case "ScrollToPosition": {
@@ -565,6 +577,8 @@ function createDomNode(id: string, node: { tag: "Text" | "Element", value: any }
             domElementAddAttributes(createdDomElement, node.value.attributes)
             domElementAddAttributesNamespaced(createdDomElement, node.value.attributesNamespaced)
             domElementAddStyles(createdDomElement, node.value.styles)
+            domElementSetProperties(createdDomElement, node.value.stringProperties)
+            domElementSetProperties(createdDomElement, node.value.boolProperties)
             if (node.value.scrollToPosition) {
                 node.value.scrollTo({ top: node.value.scrollToPosition.fromTop, left: node.value.scrollToPosition.fromLeft })
             }
@@ -594,6 +608,19 @@ function domElementAddScrollPositionRequest(domElement: Element, sendToElm: (v: 
 function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles: { key: string, value: string }[]) {
     styles.forEach(styleSingle => {
         domElement?.style.setProperty(styleSingle.key, styleSingle.value)
+    })
+}
+function domElementSetProperties(domElement: Element, stringProperties: { key: string, value: any }[]) {
+    stringProperties.forEach(stringProperty => {
+        if (RE_js_html.test(stringProperty.value)) {
+            console.error("This is an XSS vector. Please use an interface instead.")
+        } else if (stringProperty.key === "src" && RE_js_html.test(stringProperty.value)) {
+            console.error("This is an XSS vector. Please use an interface instead.")
+        } else if (stringProperty.key === "action" || stringProperty.key === "href" && RE_js.test(stringProperty.value)) {
+            console.error("This is an XSS vector. Please use an interface instead.")
+        } else {
+            (domElement as { [key: string]: any })[stringProperty.key] = stringProperty.value
+        }
     })
 }
 function domElementAddAttributes(domElement: Element, attributes: { key: string, value: string }[]) {

@@ -2,7 +2,7 @@
 
 # TODO
 
-  - from elm, send which attributes, attributes namespaced and styles have been fully removed (instead of removing all before re-adding some)
+  - from elm, send which attributes, attributes namespaced and styles have been fully removed (instead of removing all before re-adding some) (elm side finished, only index.ts to go)
 
 ## 2.0.0
 
@@ -13,6 +13,7 @@
       - thanks to feedback from [@a-teammate](https://github.com/a-teammate)
   - `module Web.Dom`:
       - `documentEventListen` move into `Web.Window` as `documentListenTo`
+      - add `stringProperty`, `boolProperty`
       - add `scrollToShow`, `scrollPositionRequest`, `scrollToPosition`
   - `module Web.Navigation`
       - `load` argument change from `Url` to `String` for convenience

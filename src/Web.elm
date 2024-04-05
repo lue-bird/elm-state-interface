@@ -417,6 +417,8 @@ type alias DomElementHeader future =
         , styles : Dict String String
         , attributes : Dict String String
         , attributesNamespaced : Dict ( String, String ) String
+        , stringProperties : Dict String String
+        , boolProperties : Dict String Bool
         , scrollToPosition : Maybe { fromLeft : Float, fromTop : Float }
         , scrollToShow : Maybe { x : DomElementVisibilityAlignment, y : DomElementVisibilityAlignment }
         , scrollPositionRequest : Maybe ({ fromLeft : Float, fromTop : Float } -> future)
@@ -654,6 +656,8 @@ domElementHeaderFutureMap futureChange =
         , styles = domElementToMap.styles
         , attributes = domElementToMap.attributes
         , attributesNamespaced = domElementToMap.attributesNamespaced
+        , stringProperties = domElementToMap.stringProperties
+        , boolProperties = domElementToMap.boolProperties
         , scrollToPosition = domElementToMap.scrollToPosition
         , scrollToShow = domElementToMap.scrollToShow
         , scrollPositionRequest =
@@ -833,21 +837,28 @@ domElementHeaderDiff : ( DomElementHeader future, DomElementHeader future ) -> L
 domElementHeaderDiff =
     \( aElement, bElement ) ->
         if aElement.tag == bElement.tag then
-            [ if aElement.styles == bElement.styles then
-                Nothing
-
-              else
-                ReplacementDomElementStyles bElement.styles |> Just
-            , if aElement.attributes == bElement.attributes then
-                Nothing
-
-              else
-                ReplacementDomElementAttributes bElement.attributes |> Just
-            , if aElement.attributesNamespaced == bElement.attributesNamespaced then
-                Nothing
-
-              else
-                ReplacementDomElementAttributesNamespaced bElement.attributesNamespaced |> Just
+            [ ( aElement.styles, bElement.styles )
+                |> dictEditAndRemoveDiff
+                    { remove = identity, edit = \key value -> { key = key, value = value } }
+                |> Maybe.map ReplacementDomElementStyles
+            , ( aElement.attributes, bElement.attributes )
+                |> dictEditAndRemoveDiff
+                    { remove = identity, edit = \key value -> { key = key, value = value } }
+                |> Maybe.map ReplacementDomElementAttributes
+            , ( aElement.attributesNamespaced, bElement.attributesNamespaced )
+                |> dictEditAndRemoveDiff
+                    { remove = \( namespace, key ) -> { namespace = namespace, key = key }
+                    , edit = \( namespace, key ) value -> { namespace = namespace, key = key, value = value }
+                    }
+                |> Maybe.map ReplacementDomElementAttributesNamespaced
+            , ( aElement.stringProperties, bElement.stringProperties )
+                |> dictEditAndRemoveDiff
+                    { remove = identity, edit = \key value -> { key = key, value = value } }
+                |> Maybe.map ReplacementDomElementStringProperties
+            , ( aElement.boolProperties, bElement.boolProperties )
+                |> dictEditAndRemoveDiff
+                    { remove = identity, edit = \key value -> { key = key, value = value } }
+                |> Maybe.map ReplacementDomElementBoolProperties
             , if aElement.scrollToPosition == bElement.scrollToPosition then
                 Nothing
 
@@ -888,6 +899,46 @@ domElementHeaderDiff =
 
         else
             [ bElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
+
+
+dictEditAndRemoveDiff :
+    { remove : comparableKey -> removeSingle, edit : comparableKey -> value -> editSingle }
+    ->
+        (( Dict comparableKey value, Dict comparableKey value )
+         -> Maybe { remove : List removeSingle, edit : List editSingle }
+        )
+dictEditAndRemoveDiff asDiffSingle =
+    \( oldDict, updatedDict ) ->
+        let
+            diff : { remove : List removeSingle, edit : List editSingle }
+            diff =
+                Dict.merge
+                    (\key _ soFar ->
+                        { soFar | remove = soFar.remove |> (::) (asDiffSingle.remove key) }
+                    )
+                    (\key old updated soFar ->
+                        if old == updated then
+                            soFar
+
+                        else
+                            { soFar | edit = soFar.edit |> (::) (asDiffSingle.edit key updated) }
+                    )
+                    (\key updated soFar ->
+                        { soFar | edit = soFar.edit |> (::) (asDiffSingle.edit key updated) }
+                    )
+                    oldDict
+                    updatedDict
+                    { remove = [], edit = [] }
+        in
+        case ( diff.remove, diff.edit ) of
+            ( [], [] ) ->
+                Nothing
+
+            ( remove0 :: remove1Up, edit ) ->
+                { remove = remove0 :: remove1Up, edit = edit } |> Just
+
+            ( remove, edit0 :: edit0Up ) ->
+                { remove = remove, edit = edit0 :: edit0Up } |> Just
 
 
 audioDiff : ( Audio, Audio ) -> List AudioEdit
@@ -1083,49 +1134,6 @@ domTextOrElementHeaderInfoToJson =
             )
 
 
-domElementAttributesNamespacedToJson : Dict ( String, String ) String -> Json.Encode.Value
-domElementAttributesNamespacedToJson =
-    \attributes ->
-        attributes
-            |> Dict.toList
-            |> Json.Encode.list
-                (\( ( namespace, key ), value ) ->
-                    Json.Encode.object
-                        [ ( "namespace", namespace |> Json.Encode.string )
-                        , ( "key", key |> Json.Encode.string )
-                        , ( "value", value |> Json.Encode.string )
-                        ]
-                )
-
-
-domElementAttributesToJson : Dict String String -> Json.Encode.Value
-domElementAttributesToJson =
-    \attributes ->
-        attributes
-            |> Dict.toList
-            |> Json.Encode.list
-                (\( key, value ) ->
-                    Json.Encode.object
-                        [ ( "key", key |> Json.Encode.string )
-                        , ( "value", value |> Json.Encode.string )
-                        ]
-                )
-
-
-domElementStylesToJson : Dict String String -> Json.Encode.Value
-domElementStylesToJson =
-    \styles ->
-        styles
-            |> Dict.toList
-            |> Json.Encode.list
-                (\( key, value ) ->
-                    Json.Encode.object
-                        [ ( "key", key |> Json.Encode.string )
-                        , ( "value", value |> Json.Encode.string )
-                        ]
-                )
-
-
 domElementEventListensInfoToJson : Dict String DefaultActionHandling -> Json.Encode.Value
 domElementEventListensInfoToJson =
     \listens ->
@@ -1196,6 +1204,8 @@ domElementHeaderInfoToJson =
             , ( "styles", header.styles |> domElementStylesToJson )
             , ( "attributes", header.attributes |> domElementAttributesToJson )
             , ( "attributesNamespaced", header.attributesNamespaced |> domElementAttributesNamespacedToJson )
+            , ( "stringProperties", header.stringProperties |> domElementStringPropertiesToJson )
+            , ( "boolProperties", header.boolProperties |> domElementBoolPropertiesToJson )
             , ( "scrollToPosition"
               , header.scrollToPosition |> Json.Encode.LocalExtra.nullable domElementScrollPositionToJson
               )
@@ -1218,6 +1228,77 @@ domElementHeaderInfoToJson =
             ]
 
 
+domElementAttributesNamespacedToJson : Dict ( String, String ) String -> Json.Encode.Value
+domElementAttributesNamespacedToJson =
+    \attributes ->
+        attributes
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( ( namespace, key ), value ) ->
+                    Json.Encode.object
+                        [ ( "namespace", namespace |> Json.Encode.string )
+                        , ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
+domElementAttributesToJson : Dict String String -> Json.Encode.Value
+domElementAttributesToJson =
+    \attributes ->
+        attributes
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( key, value ) ->
+                    Json.Encode.object
+                        [ ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
+domElementStylesToJson : Dict String String -> Json.Encode.Value
+domElementStylesToJson =
+    \styles ->
+        styles
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( key, value ) ->
+                    Json.Encode.object
+                        [ ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
+domElementBoolPropertiesToJson : Dict String Bool -> Json.Encode.Value
+domElementBoolPropertiesToJson =
+    \boolProperties ->
+        boolProperties
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( key, value ) ->
+                    Json.Encode.object
+                        [ ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.bool )
+                        ]
+                )
+
+
+domElementStringPropertiesToJson : Dict String String -> Json.Encode.Value
+domElementStringPropertiesToJson =
+    \stringProperties ->
+        stringProperties
+            |> Dict.toList
+            |> Json.Encode.list
+                (\( key, value ) ->
+                    Json.Encode.object
+                        [ ( "key", key |> Json.Encode.string )
+                        , ( "value", value |> Json.Encode.string )
+                        ]
+                )
+
+
 editDomDiffToJson : DomEdit -> Json.Encode.Value
 editDomDiffToJson =
     \replacementInEditDomDiff ->
@@ -1227,13 +1308,99 @@ editDomDiffToJson =
                     ( "Node", node |> domTextOrElementHeaderInfoToJson )
 
                 ReplacementDomElementStyles styles ->
-                    ( "Styles", styles |> domElementStylesToJson )
+                    ( "Styles"
+                    , Json.Encode.object
+                        [ ( "remove", styles.remove |> Json.Encode.list Json.Encode.string )
+                        , ( "edit"
+                          , styles.edit
+                                |> Json.Encode.list
+                                    (\editSingle ->
+                                        Json.Encode.object
+                                            [ ( "key", editSingle.key |> Json.Encode.string )
+                                            , ( "value", editSingle.value |> Json.Encode.string )
+                                            ]
+                                    )
+                          )
+                        ]
+                    )
 
                 ReplacementDomElementAttributes attributes ->
-                    ( "Attributes", attributes |> domElementAttributesToJson )
+                    ( "Attributes"
+                    , Json.Encode.object
+                        [ ( "remove", attributes.remove |> Json.Encode.list Json.Encode.string )
+                        , ( "edit"
+                          , attributes.edit
+                                |> Json.Encode.list
+                                    (\editSingle ->
+                                        Json.Encode.object
+                                            [ ( "key", editSingle.key |> Json.Encode.string )
+                                            , ( "value", editSingle.value |> Json.Encode.string )
+                                            ]
+                                    )
+                          )
+                        ]
+                    )
 
                 ReplacementDomElementAttributesNamespaced attributesNamespaced ->
-                    ( "AttributesNamespaced", attributesNamespaced |> domElementAttributesNamespacedToJson )
+                    ( "AttributesNamespaced"
+                    , Json.Encode.object
+                        [ ( "remove"
+                          , attributesNamespaced.remove
+                                |> Json.Encode.list
+                                    (\removeSingle ->
+                                        Json.Encode.object
+                                            [ ( "namespace", removeSingle.namespace |> Json.Encode.string )
+                                            , ( "key", removeSingle.key |> Json.Encode.string )
+                                            ]
+                                    )
+                          )
+                        , ( "edit"
+                          , attributesNamespaced.edit
+                                |> Json.Encode.list
+                                    (\editSingle ->
+                                        Json.Encode.object
+                                            [ ( "namespace", editSingle.namespace |> Json.Encode.string )
+                                            , ( "key", editSingle.key |> Json.Encode.string )
+                                            , ( "value", editSingle.value |> Json.Encode.string )
+                                            ]
+                                    )
+                          )
+                        ]
+                    )
+
+                ReplacementDomElementStringProperties stringProperties ->
+                    ( "StringProperties"
+                    , Json.Encode.object
+                        [ ( "remove", stringProperties.remove |> Json.Encode.list Json.Encode.string )
+                        , ( "edit"
+                          , stringProperties.edit
+                                |> Json.Encode.list
+                                    (\editSingle ->
+                                        Json.Encode.object
+                                            [ ( "key", editSingle.key |> Json.Encode.string )
+                                            , ( "value", editSingle.value |> Json.Encode.string )
+                                            ]
+                                    )
+                          )
+                        ]
+                    )
+
+                ReplacementDomElementBoolProperties boolProperties ->
+                    ( "StringProperties"
+                    , Json.Encode.object
+                        [ ( "remove", boolProperties.remove |> Json.Encode.list Json.Encode.string )
+                        , ( "edit"
+                          , boolProperties.edit
+                                |> Json.Encode.list
+                                    (\editSingle ->
+                                        Json.Encode.object
+                                            [ ( "key", editSingle.key |> Json.Encode.string )
+                                            , ( "value", editSingle.value |> Json.Encode.bool )
+                                            ]
+                                    )
+                          )
+                        ]
+                    )
 
                 ReplacementDomElementScrollToPosition maybePosition ->
                     ( "ScrollToPosition"
@@ -2936,9 +3103,11 @@ type alias AudioParameterTimeline =
 -}
 type DomEdit
     = ReplacementDomNode (DomTextOrElementHeader ())
-    | ReplacementDomElementStyles (Dict String String)
-    | ReplacementDomElementAttributes (Dict String String)
-    | ReplacementDomElementAttributesNamespaced (Dict ( String, String ) String)
+    | ReplacementDomElementStyles { edit : List { key : String, value : String }, remove : List String }
+    | ReplacementDomElementAttributes { edit : List { key : String, value : String }, remove : List String }
+    | ReplacementDomElementAttributesNamespaced { edit : List { namespace : String, key : String, value : String }, remove : List { namespace : String, key : String } }
+    | ReplacementDomElementStringProperties { edit : List { key : String, value : String }, remove : List String }
+    | ReplacementDomElementBoolProperties { edit : List { key : String, value : Bool }, remove : List String }
     | ReplacementDomElementScrollToPosition (Maybe { fromLeft : Float, fromTop : Float })
     | ReplacementDomElementScrollToShow (Maybe { x : DomElementVisibilityAlignment, y : DomElementVisibilityAlignment })
     | ReplacementDomElementScrollPositionRequest

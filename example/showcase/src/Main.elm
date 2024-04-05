@@ -1300,7 +1300,7 @@ textInputUi : Maybe String -> Web.Dom.Node (Result Json.Decode.Error String)
 textInputUi currentInputValue =
     Web.Dom.element "input"
         [ Web.Dom.attribute "type" "text"
-        , Web.Dom.attribute "value"
+        , Web.Dom.stringProperty "value"
             (case currentInputValue of
                 Nothing ->
                     ""
