@@ -5,6 +5,7 @@ Not familiar with random "generators"? [`elm/random`](https://package.elm-lang.o
 explains it nicely!
 
 Here's an example showing a number between 1 and 6 and a button to reroll
+using [NoRedInk/elm-random-pcg-extended](https://dark.elm.dmy.fr/packages/NoRedInk/elm-random-pcg-extended/latest/)
 
     import Random.Pcg.Extended
     import Web.Dom
