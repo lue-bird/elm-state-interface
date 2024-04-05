@@ -28,20 +28,15 @@ Here's an example showing a number between 1 and 6 and a button to reroll
                     Web.Random.unsignedInt32s 4
                         |> Web.futureMap
                             (\unsignedInt32s ->
-                                case unsignedIn32s of
-                                    firstUint32 :: afterFirstUint32 ->
-                                        let
-                                            initialSeed : Random.Pcg.Extended.Seed
-                                            initialSeed =
-                                                Random.Pcg.Extended.initialSeed firstUint32 afterFirstUint32
+                                let
+                                    initialSeed : Random.Pcg.Extended.Seed
+                                    initialSeed =
+                                        Random.Pcg.Extended.initialSeed (unsignedInt32s |> List.head |> Maybe.withDefault 0) (unsignedInt32s |> List.drop 1)
 
-                                            ( diceEyes, newSeed ) =
-                                                Random.Pcg.Extended.step diceEyesRandomGenerator initialSeed
-                                        in
-                                        DiceUiState { diceEyes = diceEyes, seed = newSeed }
-
-                                    [] ->
-                                        WaitingForInitialRandomness
+                                    ( diceEyes, newSeed ) =
+                                        Random.Pcg.Extended.step diceEyesRandomGenerator initialSeed
+                                in
+                                DiceUiState { diceEyes = diceEyes, seed = newSeed }
                             )
 
                 DiceUiState randomStuff ->
@@ -58,12 +53,8 @@ Here's an example showing a number between 1 and 6 and a button to reroll
                         |> Web.interfaceFutureMap
                             (\RerollClicked ->
                                 let
-                                    initialSeed : Random.Pcg.Extended.Seed
-                                    initialSeed =
-                                        Random.Pcg.Extended.initialSeed firstUnsignedInt32 afterFirstUnsignedInt32
-
                                     ( diceEyes, newSeed ) =
-                                        Random.Pcg.Extended.step diceEyesRandomGenerator initialSeed
+                                        Random.Pcg.Extended.step diceEyesRandomGenerator randomStuff.seed
                                 in
                                 DiceUiState { diceEyes = diceEyes, seed = newSeed }
                             )
