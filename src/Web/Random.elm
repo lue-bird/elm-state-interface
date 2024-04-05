@@ -27,7 +27,7 @@ using [NoRedInk/elm-random-pcg-extended](https://dark.elm.dmy.fr/packages/NoRedI
             case state of
                 WaitingForInitialRandomness ->
                     Web.Random.unsignedInt32s 4
-                        |> Web.futureMap
+                        |> Web.interfaceFutureMap
                             (\unsignedInt32s ->
                                 let
                                     initialSeed : Random.Pcg.Extended.Seed
@@ -48,7 +48,7 @@ using [NoRedInk/elm-random-pcg-extended](https://dark.elm.dmy.fr/packages/NoRedI
                             [ Web.Dom.listenTo "click"
                                 |> Web.Dom.modifierFutureMap (\_ -> RerollClicked)
                             ]
-                            [ "roll the dice" ]
+                            [ Web.Dom.text "roll the dice" ]
                         ]
                         |> Web.Dom.render
                         |> Web.interfaceFutureMap
