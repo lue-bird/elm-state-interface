@@ -610,3 +610,13 @@ The module and interface structure is also not equipped to support multiple plat
   - [MartinSStewart for `elm-audio`](https://dark.elm.dmy.fr/packages/MartinSStewart/elm-audio/latest/) which inspired the audio API
   - [noordstar for `elm-gamepad`](https://dark.elm.dmy.fr/packages/noordstar/elm-gamepad/latest) which inspired the gamepads API
   - [kageurufu for `elm-websockets`](https://dark.elm.dmy.fr/packages/kageurufu/elm-websockets/latest/) which inspired me to also provide a websocket API
+
+## where's X?
+To not be blocked on missing interfaces, you have the option of [custom elements](https://guide.elm-lang.org/interop/custom_elements), custom events and [data attributes](https://developer.mozilla.org/en-US/docs/Learn/HTML/Howto/Use_data_attributes) at least.
+
+If that would only work short term: Fork it!
+And if you think everyone would profit, [opening a PR](https://github.com/lue-bird/elm-state-interface/pulls) would be awesome.
+
+I don't believe I will add the ability to provide custom interfaces
+for simplicity reasons alone (I aggressively don't want state-interface to become like an elm-review in terms of complexity).
+If you have a different vision for this project, fork and adapt it all you want 👨‍🍳.
