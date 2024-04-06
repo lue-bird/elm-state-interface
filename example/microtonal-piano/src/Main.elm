@@ -139,15 +139,15 @@ interface =
                 , Web.Dom.style "position" "absolute"
                 , Web.Dom.style "z-index" "1"
                 ]
-                (List.range 0 31
+                (List.range 0 35
                     |> List.map
                         (\i ->
                             Web.Dom.element "tr"
                                 [ Web.Dom.style "background"
-                                    (Color.rgba 0
-                                        1
-                                        1
+                                    (Color.hsl
                                         ((i |> Basics.remainderBy 12 |> Basics.toFloat) / 12)
+                                        1
+                                        0.5
                                         |> Color.toCssString
                                     )
                                 ]
