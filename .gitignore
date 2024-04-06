@@ -4,6 +4,5 @@ node_modules
 zombie
 .vscode
 runner-compiled
-example/*/package-lock.json
-example-development/*/package-lock.json
+package-lock.json
 2d-game/
