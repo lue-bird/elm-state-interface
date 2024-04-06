@@ -1,5 +1,9 @@
 # change log
 
+#### 2.0.1
+
+  - readme discourse link correct
+
 ## 2.0.0
 
   - rename ...map to ...futureMap thanks to feedback from [@a-teammate](https://github.com/a-teammate)

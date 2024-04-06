@@ -490,7 +490,7 @@ If you're not familiar with The Elm Architecture, skip to ["future"](#future)
 
 ## comparison to The Elm Architecture
 
-[This discourse post](https://discourse.elm-lang.org/t/define-an-app-in-a-simple-safe-and-declarative-way) goes a bit more into detail but in short:
+[This discourse post](https://discourse.elm-lang.org/t/define-an-app-in-a-simple-safe-and-declarative-way-using-state-interface/9748) goes a bit more into detail but in short:
 The Elm Architecture with its model, view, msg, update, sub, cmd, task
 can be reduced down to a state and a view/subscriptions-like `state -> Interface state` function that combines what you'd use cmds, tasks, subs and view for.
 This means
