@@ -2123,8 +2123,8 @@ interfaceSingleFutureJsonDecoder =
 
             HttpRequest httpRequest ->
                 Json.Decode.oneOf
-                    [ Json.Decode.LocalExtra.variant "Success" (httpExpectJsonDecoder httpRequest.expect)
-                    , Json.Decode.LocalExtra.variant "Error" (httpErrorJsonDecoder httpRequest)
+                    [ Json.Decode.LocalExtra.variant "Success" (httpSuccessResponseJsonDecoder httpRequest.expect)
+                    , Json.Decode.LocalExtra.variant "Error" httpErrorJsonDecoder
                         |> Json.Decode.map (httpExpectOnError httpRequest.expect)
                     ]
                     |> Just
@@ -2727,8 +2727,8 @@ httpExpectOnError =
                 \e -> e |> Err |> toFuture
 
 
-httpExpectJsonDecoder : HttpExpect future -> Json.Decode.Decoder future
-httpExpectJsonDecoder expect =
+httpSuccessResponseJsonDecoder : HttpExpect future -> Json.Decode.Decoder future
+httpSuccessResponseJsonDecoder expect =
     httpMetadataJsonDecoder
         |> Json.Decode.andThen
             (\meta ->
@@ -2792,46 +2792,15 @@ httpMetadataJsonDecoder =
         (Json.Decode.field "headers" (Json.Decode.dict Json.Decode.string))
 
 
-httpErrorJsonDecoder : HttpRequest future_ -> Json.Decode.Decoder HttpError
-httpErrorJsonDecoder httpRequest =
-    Json.Decode.field "cause" (Json.Decode.field "code" Json.Decode.string)
-        |> Json.Decode.andThen
-            (\code ->
-                if httpNetworkErrorCodes |> Set.member code then
-                    Json.Decode.succeed HttpNetworkError
-
-                else
-                    case code of
-                        "BAD_URL" ->
-                            Json.Decode.succeed (HttpBadUrl httpRequest.url)
-
-                        _ ->
-                            Json.Decode.field "name" Json.Decode.string
-                                |> Json.Decode.andThen
-                                    (\name ->
-                                        case name of
-                                            "AbortError" ->
-                                                Json.Decode.succeed HttpTimeout
-
-                                            _ ->
-                                                Json.Decode.value
-                                                    |> Json.Decode.andThen
-                                                        (\errorValue ->
-                                                            Json.Decode.fail
-                                                                ([ "Unknown HTTP fetch error: "
-                                                                 , errorValue |> Json.Encode.encode 0
-                                                                 , ". consider submitting an issue for adding it as an explicit case to https://github.com/lue-bird/elm-state-interface/"
-                                                                 ]
-                                                                    |> String.concat
-                                                                )
-                                                        )
-                                    )
+httpErrorJsonDecoder : Json.Decode.Decoder HttpError
+httpErrorJsonDecoder =
+    Json.Decode.oneOf
+        [ Json.Decode.map (\() -> HttpBadUrl)
+            (Json.Decode.field "cause"
+                (Json.Decode.field "code" (Json.Decode.LocalExtra.onlyString "BAD_URL"))
             )
-
-
-httpNetworkErrorCodes : Set String
-httpNetworkErrorCodes =
-    Set.fromList [ "EAGAIN", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "UND_ERR", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_OVERFLOW", "UND_ERR_BODY_TIMEOUT", "UND_ERR_RESPONSE_STATUS_CODE", "UND_ERR_INVALID_ARG", "UND_ERR_INVALID_RETURN_VALUE", "UND_ERR_ABORTED", "UND_ERR_DESTROYED", "UND_ERR_CLOSED", "UND_ERR_SOCKET", "UND_ERR_NOT_SUPPORTED", "UND_ERR_REQ_CONTENT_LENGTH_MISMATCH", "UND_ERR_RES_CONTENT_LENGTH_MISMATCH", "UND_ERR_INFO", "UND_ERR_RES_EXCEEDED_MAX_SIZE" ]
+        , Json.Decode.succeed HttpNetworkError
+        ]
 
 
 windowVisibilityJsonDecoder : Json.Decode.Decoder WindowVisibility
@@ -2992,17 +2961,17 @@ programUpdate appConfig =
 
 {-| A Request can fail in a couple ways:
 
-  - `BadUrl` means you did not provide a valid URL.
-  - `Timeout` means it took too long to get a response.
+  - `BadUrl` means you did not provide a valid URL
   - `NetworkError` means the user turned off their wifi, went in a cave, etc.
+    or the server CORS is misconfigured.
+    Note: A 404 for example does not constitute a network error
   - `BadStatus` means you got a response back, but the status code indicates failure. Contains:
       - The response `Metadata`.
       - The raw response body as a `Json.Decode.Value`.
 
 -}
 type HttpError
-    = HttpBadUrl String
-    | HttpTimeout
+    = HttpBadUrl
     | HttpNetworkError
     | HttpBadStatus { metadata : HttpMetadata, body : Json.Decode.Value }
 
