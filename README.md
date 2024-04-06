@@ -224,7 +224,7 @@ app =
             [ Web.Dom.element "div"
                 []
                 [ Web.Dom.element "input"
-                    [ Web.Dom.attribute "value" state.text
+                    [ Web.Dom.stringProperty "value" state.text
                     , Web.Dom.listenTo "change"
                         |> Web.Dom.modifierFutureMap
                             (\eventJson ->
