@@ -11,36 +11,36 @@ module Web.Audio exposing
     import Web.Audio
 
     type alias State =
-        { musicSource : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
-        , musicStartTime : Time.Posix
-        , soundSetting : SoundSetting
+        { audioSource : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
+        , audioStartTime : Maybe Time.Posix
         }
 
-    type SoundSetting
-        = SoundOn
-        | SoundOff
-
     { initialState =
-        { musicSource = Nothing
-        , soundSetting = SoundOn
-        , musicStartTime = Time.millisToPosix 0
+        { audioSource = Nothing
+        , audioStartTime = Nothing
         }
     , interface =
         \state ->
-            case state.musicSource of
-                Just (Ok musicSource) ->
-                    case state.soundSetting of
-                        SoundOff ->
-                            Web.interfaceNone
-
-                        SoundOn ->
-                            Web.Audio.fromSource musicSource state.musicStartTime
+            case state.audioSource of
+                Just (Ok audioSource) ->
+                    case state.audioStartTime of
+                        Just startTime
+                            Web.Audio.fromSource audioSource startTime
                                 |> Web.Audio.play
 
-                _ ->
-                    Web.Audio.sourceLoad "https://archive.org/details/lp_the-caretakers-original-motion-picture-sco_elmer-bernstein/disc1/01.03.+Take+Care.mp3"
+
+                        Nothing ->
+                            Web.Time.posixRequest
+                                |> Web.interfaceFutureMap
+                                    (\time -> { state | audioSTartTime = time |> Just })
+
+                Nothing ->
+                    Web.Audio.sourceLoad "https://s3-us-west-2.amazonaws.com/s.cdpn.io/123941/Yodel_Sound_Effect.mp3"
                         |> Web.interfaceFutureMap
-                            (\result -> { state | musicSource = result |> Just })
+                            (\result -> { state | audioSource = result |> Just })
+
+                Just (Err _) ->
+                    Web.Console.error "audio failed to load"
     }
 
 @docs sourceLoad, fromSource, play
