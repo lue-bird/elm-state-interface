@@ -287,13 +287,11 @@ type InterfaceSingle future
 
   - `AudioSourceLoadDecodeError`: This means we got the data but we couldn't decode it. One likely reason for this is that your url points to the wrong place and you're trying to decode a 404 page instead.
   - `AudioSourceLoadNetworkError`: We couldn't reach the url. Either it's some kind of CORS issue, the server is down, or you're disconnected from the internet.
-  - `AudioSourceLoadUnknownError`: the audio source didn't load for a reason I'm not aware of. If this occurs in your app, [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new) with the reason string so a new variant can be added for this
 
 -}
 type AudioSourceLoadError
     = AudioSourceLoadDecodeError
     | AudioSourceLoadNetworkError
-    | AudioSourceLoadUnknownError String
 
 
 {-| The user clicked a displayed notification,
@@ -2248,8 +2246,8 @@ audioSourceLoadErrorJsonDecoder =
                     "DOMException: The buffer passed to decodeAudioData contains an unknown content type." ->
                         AudioSourceLoadDecodeError
 
-                    unknownMessage ->
-                        AudioSourceLoadUnknownError unknownMessage
+                    _ ->
+                        AudioSourceLoadNetworkError
             )
 
 
