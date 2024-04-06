@@ -23,6 +23,13 @@ function copyExampleDevelopmentToExample(sub) {
         path.resolve(__dirname, "..", "example", sub, "src"),
         { recursive: true, filter: (source, _) => !source.endsWith(".js") }
     )
+    if (fs.existsSync(path.resolve(__dirname, sub, "public"))) {
+        fs.cpSync(
+            path.resolve(__dirname, sub, "public"),
+            path.resolve(__dirname, "..", "example", sub, "public"),
+            { recursive: true }
+        )
+    }
     fs.cpSync(
         path.resolve(__dirname, sub, "elm.json"),
         exampleElmJsonPath
