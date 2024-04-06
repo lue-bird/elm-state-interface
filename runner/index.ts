@@ -802,7 +802,7 @@ function httpFetch(request: HttpRequest, abortSignal: AbortSignal): Promise<Http
                 }
             }
         })
-        .catch((error) => { return { tag: "Error", value: error } })
+        .catch(error => { return { tag: "Error", value: error } })
 }
 
 
