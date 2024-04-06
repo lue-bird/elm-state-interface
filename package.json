@@ -1,7 +1,7 @@
 {
     "name": "@lue-bird/elm-state-interface",
-    "version": "2.0.0",
-    "description": "TEA but simpler, safer and more declarative",
+    "version": "1.0.6",
+    "description": "define an app in a simple, safe and declarative way",
     "author": "lue-bird",
     "license": "MIT",
     "repository": {
