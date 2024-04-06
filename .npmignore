@@ -3,8 +3,8 @@ elm.json
 docs.json
 src/
 tests/
-example
-example-development
+example/
+example-development/
 review/
 social/
 elm-stuff/
