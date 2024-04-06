@@ -1,19 +1,16 @@
 module Web.Http exposing
-    ( expectString, expectJson, expectBytes, expectWhatever
+    ( request
+    , get, post, addHeaders
+    , expectString, expectJson, expectBytes, expectWhatever
     , bodyJson, bodyBytes
-    , get, post
-    , request
     )
 
 {-| Helpers for [HTTP types](Web#HttpRequest) as part of an [`Interface`](Web#Interface)
 
-@docs expectString, expectJson, expectBytes, expectWhatever
-
-@docs bodyJson, bodyBytes
-
-@docs get, post
-
 @docs request
+@docs get, post, addHeaders
+@docs expectString, expectJson, expectBytes, expectWhatever
+@docs bodyJson, bodyBytes
 
 -}
 
@@ -36,6 +33,7 @@ bodyJson content =
 The string argument should be a [MIME type](https://en.wikipedia.org/wiki/Media_type) to be used in the `Content-Type` header
 
     import Bytes exposing (Bytes)
+    import Bytes.Encode
     import Time
     import Web
     import Zip
@@ -45,9 +43,9 @@ The string argument should be a [MIME type](https://en.wikipedia.org/wiki/Media_
     exampleZipBody =
         Web.Http.bodyBytes "application/zip"
             (Zip.fromEntries
-                [ Encode.string "Hello, World!"
-                    |> Encode.encode
-                    |> store
+                [ Bytes.Encode.string "Hello, World!"
+                    |> Bytes.Encode.encode
+                    |> Zip.Entry.store
                         { path = "hello.txt"
                         , lastModified = ( Time.utc, Time.millisToPosix 0 )
                         , comment = Nothing
@@ -56,7 +54,7 @@ The string argument should be a [MIME type](https://en.wikipedia.org/wiki/Media_
                 |> Zip.toBytes
             )
 
-`Zip` and `Zip.Entry` are from [`agu-z/elm-zip`](https://dark.elm.dmy.fr/packages/agu-z/elm-zip/latest/)
+  - 🧩 [`Zip` and `Zip.Entry` are from `agu-z/elm-zip`](https://dark.elm.dmy.fr/packages/agu-z/elm-zip/latest/)
 
 -}
 bodyBytes : String -> (Bytes -> HttpBody)
@@ -74,7 +72,8 @@ The result will either be
   - `Err` with an [`HttpError`](Web#HttpError) if it didn't succeed
   - `Ok` if there was a result with either
       - `Ok` with the decoded value
-      - `Err` with a [`Json.Decode.Error`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Error) the actual text response
+      - `Err` with a [`Json.Decode.Error`](https://dark.elm.dmy.fr/packages/elm/json/latest/Json-Decode#Error)
+        and the actual text response
 
 -}
 expectJson : Json.Decode.Decoder future -> HttpExpect (Result HttpError (Result { actualBody : String, jsonError : Json.Decode.Error } future))
@@ -127,32 +126,50 @@ expectWhatever =
 
 {-| Create a `GET` [`HttpRequest`](Web#HttpRequest).
 
+Use [`Web.Http.addHeaders`](Web-Http#addHeaders) to set custom headers as needed.
 Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are willing to wait before giving up.
 
 -}
 get :
     { url : String
-    , headers : List ( String, String )
     , expect : HttpExpect future
     }
     -> HttpRequest future
 get options =
     { url = options.url
     , method = "GET"
-    , headers = options.headers |> List.map (\( name, value ) -> { name = name, value = value })
+    , headers = []
     , body = Web.HttpBodyEmpty
     , expect = options.expect
     }
 
 
+{-| Add custom headers to the [`HttpRequest`](Web#HttpRequest).
+
+    request
+        |> Web.Http.addHeaders
+            [ ( "X-Custom-Header", "ProcessThisImmediately" )
+            ]
+
+-}
+addHeaders : List ( String, String ) -> (HttpRequest future -> HttpRequest future)
+addHeaders headers =
+    \httpRequest ->
+        { httpRequest
+            | headers =
+                (headers |> List.map (\( name, value ) -> { name = name, value = value }))
+                    ++ httpRequest.headers
+        }
+
+
 {-| Create a `POST` [`HttpRequest`](Web#HttpRequest).
 
+Use [`Web.Http.addHeaders`](Web-Http#addHeaders) to set custom headers as needed.
 Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are willing to wait before giving up.
 
 -}
 post :
     { url : String
-    , headers : List ( String, String )
     , body : HttpBody
     , expect : HttpExpect future
     }
@@ -160,7 +177,7 @@ post :
 post options =
     { url = options.url
     , method = "POST"
-    , headers = options.headers |> List.map (\( name, value ) -> { name = name, value = value })
+    , headers = []
     , body = options.body
     , expect = options.expect
     }

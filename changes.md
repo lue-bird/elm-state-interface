@@ -15,6 +15,8 @@
   - `module Web.Http`:
       - remove variant `Web.HttpExpectJson` in favor of explicit `Json.Decode.Error` handling in `Web.Http.expectJson`
       - remove `Web.HttpHeader` in favor of inlined types
+      - remove headers field from the argument to `get` and `post` in favor of `addHeaders`
+      - add `addHeaders`
       - add `bodyBytes`, `expectBytes`
       - remove timeout argument fields in favor of `Time.onceAt`
   - `module Web.Window`:

@@ -351,7 +351,7 @@ type WindowVisibility
 
 {-| An HTTP request for use in an [`Interface`](#Interface).
 
-You can set custom headers as needed.
+Use [`Web.Http.addHeaders`](Web-Http#addHeaders) to set custom headers as needed.
 Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are willing to wait before giving up.
 
 -}
