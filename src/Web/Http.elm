@@ -125,13 +125,15 @@ expectWhatever =
 -- request
 
 
-{-| Create a `GET` [`HttpRequest`](Web#HttpRequest)
+{-| Create a `GET` [`HttpRequest`](Web#HttpRequest).
+
+Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are willing to wait before giving up.
+
 -}
 get :
     { url : String
     , headers : List ( String, String )
     , expect : HttpExpect future
-    , timeout : Maybe Int
     }
     -> HttpRequest future
 get options =
@@ -140,18 +142,19 @@ get options =
     , headers = options.headers |> List.map (\( name, value ) -> { name = name, value = value })
     , body = Web.HttpBodyEmpty
     , expect = options.expect
-    , timeout = options.timeout
     }
 
 
-{-| Create a `POST` [`HttpRequest`](Web#HttpRequest)
+{-| Create a `POST` [`HttpRequest`](Web#HttpRequest).
+
+Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are willing to wait before giving up.
+
 -}
 post :
     { url : String
     , headers : List ( String, String )
     , body : HttpBody
     , expect : HttpExpect future
-    , timeout : Maybe Int
     }
     -> HttpRequest future
 post options =
@@ -160,7 +163,6 @@ post options =
     , headers = options.headers |> List.map (\( name, value ) -> { name = name, value = value })
     , body = options.body
     , expect = options.expect
-    , timeout = options.timeout
     }
 
 
@@ -170,6 +172,4 @@ using the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API
 request : HttpRequest future -> Web.Interface future
 request =
     \httpRequest ->
-        httpRequest
-            |> Web.HttpRequest
-            |> Rope.singleton
+        httpRequest |> Web.HttpRequest |> Rope.singleton

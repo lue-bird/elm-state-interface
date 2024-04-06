@@ -184,6 +184,16 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                     window.clearInterval(timePeriodicallyListenId)
                 })
             }
+            case "TimeOnce": return (config: { pointInTime: number }) => {
+                const timeOnceId =
+                    window.setTimeout(
+                        () => { sendToElm(Date.now()) },
+                        config.pointInTime - Date.now()
+                    )
+                abortSignal.addEventListener("abort", _event => {
+                    window.clearInterval(timeOnceId)
+                })
+            }
             case "RandomUnsignedInt32sRequest": return (config: number) => {
                 sendToElm(Array.from(window.crypto.getRandomValues(new Uint32Array(config))))
             }
@@ -717,7 +727,6 @@ interface HttpRequest {
     method: string
     headers: { name: string, value: string }[]
     expect: Expect
-    timeout: number | null
     body: HttpRequestBody
 }
 type Expect = | "String" | "Bytes" | "Whatever"
@@ -753,11 +762,7 @@ function httpFetch(request: HttpRequest, abortSignal: AbortSignal): Promise<Http
             const tuple: [string, string] = [header.name, header.value]
             return tuple
         })),
-        signal:
-            request.timeout ?
-                AbortSignal.any([abortSignal, AbortSignal.timeout(request.timeout)])
-                : abortSignal
-
+        signal: abortSignal
     })
         .then((response: Response) => {
             const headers = Object.fromEntries(response.headers.entries())

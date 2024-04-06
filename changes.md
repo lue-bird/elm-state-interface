@@ -16,11 +16,14 @@
       - remove variant `Web.HttpExpectJson` in favor of explicit `Json.Decode.Error` handling in `Web.Http.expectJson`
       - remove `Web.HttpHeader` in favor of inlined types
       - add `bodyBytes`, `expectBytes`
+      - remove timeout argument fields in favor of `Time.onceAt`
   - `module Web.Window`:
       - `eventListen` name → `listenTo`
       - add `visibilityChangeListen`
       - add `preferredLanguagesRequest`, `preferredLanguagesChangeListen`
       - add `titleReplaceBy`, `authorSet`, `keywordsSet`, `descriptionSet`
+  - `module Web.Time`:
+      - add `onceAt`
   - `module Web`:
       - add `type alias Program` for results of `Web.program`
       - internal: add `interfacesSingleEdits` to allow simulation

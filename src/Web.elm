@@ -256,6 +256,7 @@ type InterfaceSingle future
     | HttpRequest (HttpRequest future)
     | TimePosixRequest (Time.Posix -> future)
     | TimezoneOffsetRequest (Int -> future)
+    | TimeOnce { pointInTime : Time.Posix, on : Time.Posix -> future }
     | TimePeriodicallyListen { intervalDurationMilliSeconds : Int, on : Time.Posix -> future }
     | TimezoneNameRequest (String -> future)
     | RandomUnsignedInt32sRequest { count : Int, on : List Int -> future }
@@ -353,7 +354,7 @@ type WindowVisibility
 {-| An HTTP request for use in an [`Interface`](#Interface).
 
 You can set custom headers as needed.
-The `timeout` can be set to a number of milliseconds you are willing to wait before giving up
+Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are willing to wait before giving up.
 
 -}
 type alias HttpRequest future =
@@ -363,7 +364,6 @@ type alias HttpRequest future =
         , headers : List { name : String, value : String }
         , body : HttpBody
         , expect : HttpExpect future
-        , timeout : Maybe Int
         }
 
 
@@ -594,6 +594,12 @@ interfaceSingleFutureMap futureChange =
                 (\event -> requestTimezoneName event |> futureChange)
                     |> TimezoneNameRequest
 
+            TimeOnce once ->
+                { pointInTime = once.pointInTime
+                , on = \event -> event |> once.on |> futureChange
+                }
+                    |> TimeOnce
+
             RandomUnsignedInt32sRequest randomUnsignedInt32sRequest ->
                 { count = randomUnsignedInt32sRequest.count
                 , on = \ints -> randomUnsignedInt32sRequest.on ints |> futureChange
@@ -692,7 +698,6 @@ httpRequestFutureMap futureChange =
         , method = httpRequest.method
         , headers = httpRequest.headers
         , body = httpRequest.body
-        , timeout = httpRequest.timeout
         , expect =
             case httpRequest.expect of
                 HttpExpectWhatever expectWhatever ->
@@ -1541,6 +1546,12 @@ interfaceSingleToJson =
                 TimezoneNameRequest _ ->
                     ( "TimezoneNameRequest", Json.Encode.null )
 
+                TimeOnce once ->
+                    ( "TimeOnce"
+                    , Json.Encode.object
+                        [ ( "pointInTime", once.pointInTime |> Time.posixToMillis |> Json.Encode.int ) ]
+                    )
+
                 RandomUnsignedInt32sRequest request ->
                     ( "RandomUnsignedInt32sRequest", request.count |> Json.Encode.int )
 
@@ -1629,7 +1640,6 @@ httpRequestInfoToJson =
               )
             , ( "expect", httpRequestId.expect |> httpExpectInfoToJson )
             , ( "body", httpRequestId.body |> httpBodyToJson )
-            , ( "timeout", httpRequestId.timeout |> httpTimeoutToJson )
             ]
 
 
@@ -1671,11 +1681,6 @@ httpBodyToJson =
                 HttpBodyEmpty ->
                     ( "Empty", Json.Encode.null )
             )
-
-
-httpTimeoutToJson : Maybe Int -> Json.Encode.Value
-httpTimeoutToJson =
-    Json.Encode.LocalExtra.nullable Json.Encode.int
 
 
 httpExpectInfoToJson : HttpExpect () -> Json.Encode.Value
@@ -1837,6 +1842,9 @@ interfaceSingleToStructuredId =
 
                 TimezoneNameRequest _ ->
                     ( "TimezoneNameRequest", [] )
+
+                TimeOnce once ->
+                    ( "TimeOnce", [ once.pointInTime |> Time.LocalExtra.posixToStructureId ] )
 
                 RandomUnsignedInt32sRequest request ->
                     ( "RandomUnsignedInt32sRequest"
@@ -2130,6 +2138,11 @@ interfaceSingleFutureJsonDecoder =
             TimePeriodicallyListen timePeriodicallyListen ->
                 Time.LocalExtra.posixJsonDecoder
                     |> Json.Decode.map timePeriodicallyListen.on
+                    |> Just
+
+            TimeOnce once ->
+                Time.LocalExtra.posixJsonDecoder
+                    |> Json.Decode.map once.on
                     |> Just
 
             TimezoneNameRequest toFuture ->
