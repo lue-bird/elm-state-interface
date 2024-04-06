@@ -11,7 +11,7 @@ module Web.Audio exposing
     import Web.Audio
 
     type alias State =
-        { musicSource : Maybe (Result Web.AudioSourceLoadError Audio.Source)
+        { musicSource : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
         , musicStartTime : Time.Posix
         , soundSetting : SoundSetting
         }
@@ -34,7 +34,7 @@ module Web.Audio exposing
                             Web.interfaceNone
 
                         SoundOn ->
-                            Web.Audio.fromSource musicSource model.musicStartTime
+                            Web.Audio.fromSource musicSource state.musicStartTime
                                 |> Web.Audio.play
 
                 _ ->
