@@ -64,18 +64,23 @@ interface =
 
             DiceUiState randomStuff ->
                 Web.Dom.element "div"
-                    [ Web.Dom.style "display" "flex"
-                    , Web.Dom.style "justify-content" "center"
-                    , Web.Dom.style "align-items" "center"
+                    [ Web.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
+                    , Web.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
+                    , Web.Dom.style "padding-left" "80px"
+                    , Web.Dom.style "padding-right" "80px"
+                    , Web.Dom.style "position" "fixed"
+                    , Web.Dom.style "top" "0"
+                    , Web.Dom.style "right" "0"
+                    , Web.Dom.style "bottom" "0"
+                    , Web.Dom.style "left" "0"
                     ]
-                    [ Web.Dom.element "p"
-                        [ Web.Dom.style "text-align" "center"
-                        , Web.Dom.style "font-size" "20em"
-                        , Web.Dom.style "padding" "0px 20px 0px 0px"
+                    [ Web.Dom.element "span"
+                        [ Web.Dom.style "font-size" "24em"
                         ]
                         [ randomStuff.diceEyes |> diceEyesToSymbol |> Web.Dom.text ]
+                    , Web.Dom.element "br" [] []
                     , buttonUi
-                        [ Web.Dom.style "font-size" "5em"
+                        [ Web.Dom.style "font-size" "4em"
                         ]
                         [ Web.Dom.text "roll the dice" ]
                         |> Web.Dom.futureMap (\() -> RerollClicked)
@@ -96,18 +101,15 @@ buttonUi modifiers subs =
     Web.Dom.element "button"
         ([ Web.Dom.listenTo "click"
             |> Web.Dom.modifierFutureMap (\_ -> ())
-         , Web.Dom.style "background-color" "#000000"
+         , Web.Dom.style "background-color" (Color.rgba 0 0 0 0 |> Color.toCssString)
          , Web.Dom.style "border-top" "none"
          , Web.Dom.style "border-left" "none"
          , Web.Dom.style "border-right" "none"
-         , Web.Dom.style "border-bottom" ("5px solid " ++ (Color.rgba 1 1 1 0.2 |> Color.toCssString))
+         , Web.Dom.style "border-bottom" ("5px solid " ++ (Color.rgba 1 1 1 0.5 |> Color.toCssString))
          , Web.Dom.style "border-radius" "20px"
-         , Web.Dom.style "color" "#FFFFFF"
+         , Web.Dom.style "color" "inherit"
          , Web.Dom.style "padding" "4px 13px"
          , Web.Dom.style "margin" "0px 0px"
-         , Web.Dom.style "text-align" "center"
-         , Web.Dom.style "display" "inline-block"
-         , Web.Dom.style "font-family" "inherit"
          ]
             ++ modifiers
         )
