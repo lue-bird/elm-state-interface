@@ -256,6 +256,9 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                     },
                     { signal: abortSignal }
                 )
+                abortSignal.addEventListener("abort", _event => {
+                    createdSocket.close()
+                })
             }
             case "SocketMessage": return (config: { id: number, data: string }) => {
                 const socketToDisconnect = sockets.at(config.id)
@@ -264,12 +267,6 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                 } else {
                     warn("trying to send messages on closed socket")
                 }
-            }
-            case "SocketDisconnect": return (index: number) => {
-                const socketToDisconnect = sockets.at(index)
-                if (socketToDisconnect) {
-                    socketToDisconnect.close()
-                } else { } // socket is already closed
             }
             case "SocketMessageListen": return (index: number) => {
                 const socketToListenToMessagesFrom = sockets.at(index)

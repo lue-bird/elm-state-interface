@@ -268,7 +268,6 @@ type InterfaceSingle future
     | WindowPreferredLanguagesChangeListen (List String -> future)
     | SocketConnect { address : String, on : SocketConnectionEvent -> future }
     | SocketMessage { id : SocketId, data : String }
-    | SocketDisconnect SocketId
     | SocketMessageListen { id : SocketId, on : String -> future }
     | LocalStorageSet { key : String, value : Maybe String }
     | LocalStorageRequest { key : String, on : Maybe String -> future }
@@ -531,9 +530,6 @@ interfaceSingleFutureMap futureChange =
 
             SocketMessage socketMessage ->
                 SocketMessage socketMessage
-
-            SocketDisconnect id ->
-                SocketDisconnect id
 
             LocalStorageSet localStorageItem ->
                 LocalStorageSet localStorageItem
@@ -1491,11 +1487,6 @@ interfaceSingleToJson =
                         ]
                     )
 
-                SocketDisconnect id ->
-                    ( "SocketDisconnect"
-                    , id |> socketIdToJson
-                    )
-
                 LocalStorageSet set ->
                     ( "LocalStorageSet"
                     , Json.Encode.object
@@ -1789,9 +1780,6 @@ interfaceSingleToStructuredId =
                       , message.data |> StructuredId.ofString
                       ]
                     )
-
-                SocketDisconnect id ->
-                    ( "SocketDisconnect", [ id |> socketIdToStructuredId ] )
 
                 LocalStorageSet set ->
                     ( "LocalStorageSet"
@@ -2183,9 +2171,6 @@ interfaceSingleFutureJsonDecoder =
                     |> Just
 
             SocketMessage _ ->
-                Nothing
-
-            SocketDisconnect _ ->
                 Nothing
 
             SocketMessageListen messageListen ->

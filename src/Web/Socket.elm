@@ -1,5 +1,5 @@
 module Web.Socket exposing
-    ( connectTo, disconnect
+    ( connectTo
     , message, messageListen
     )
 
@@ -8,7 +8,7 @@ module Web.Socket exposing
 
 ## connection
 
-@docs connectTo, disconnect
+@docs connectTo
 
 
 ## communicate
@@ -48,14 +48,6 @@ And once it's disconnected, set your state's [`SocketId`](Web#SocketId) back to 
 connectTo : String -> Web.Interface Web.SocketConnectionEvent
 connectTo address =
     Web.SocketConnect { address = address, on = identity }
-        |> Rope.singleton
-
-
-{-| An [`Interface`](Web#Interface) for closing a given connection
--}
-disconnect : Web.SocketId -> Web.Interface future_
-disconnect id =
-    Web.SocketDisconnect id
         |> Rope.singleton
 
 
