@@ -30,9 +30,11 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
             }
             case "Remove": return (_config: null) => {
                 const abortController = abortControllers.get(id)
-                if (abortController) {
+                if (abortController !== undefined) {
                     abortController.abort()
                     abortControllers.delete(id)
+                } else {
+                    warn("bug: trying to remove an interface that was already aborted")
                 }
             }
         }
@@ -107,7 +109,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
             }
             case "AudioPlay": return (config: AudioInfo) => {
                 const audioBuffer = audioBuffers.get(config.url)
-                if (audioBuffer) {
+                if (audioBuffer !== undefined) {
                     const createdAudioPlaying = createAudio(config, audioBuffer)
                     audioPlaying.set(id, createdAudioPlaying)
                     abortSignal.addEventListener("abort", _event => {
@@ -130,8 +132,8 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                     // it is possible that the "newDomNode" has been replaced
                     // by e.g.a text where there was an Element previously
                     const toRemove = domInElementAt(appConfig.domElement, 0, config.path)
-                    if (toRemove) {
-                        while (toRemove.nextSibling) {
+                    if (toRemove !== null) {
+                        while (toRemove.nextSibling !== null) {
                             toRemove.nextSibling.remove()
                         }
                         toRemove.remove()
@@ -258,22 +260,22 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                 )
             }
             case "SocketMessage": return (config: { id: number, data: string }) => {
-                const socketToDisconnect = sockets.at(config.id)
-                if (socketToDisconnect) {
-                    socketToDisconnect.send(config.data)
+                const socketToMessage = sockets.at(config.id)
+                if (socketToMessage !== undefined && socketToMessage !== null) {
+                    socketToMessage.send(config.data)
                 } else {
                     warn("trying to send messages on closed socket")
                 }
             }
             case "SocketDisconnect": return (index: number) => {
                 const socketToDisconnect = sockets.at(index)
-                if (socketToDisconnect) {
+                if (socketToDisconnect !== undefined && socketToDisconnect !== null) {
                     socketToDisconnect.close()
                 } else { } // socket is already closed
             }
             case "SocketMessageListen": return (index: number) => {
                 const socketToListenToMessagesFrom = sockets.at(index)
-                if (socketToListenToMessagesFrom) {
+                if (socketToListenToMessagesFrom !== undefined && socketToListenToMessagesFrom !== null) {
                     socketToListenToMessagesFrom.addEventListener(
                         "message",
                         event => {
@@ -394,7 +396,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
         const currentDom = parent.childNodes.item(indexInParent)
         return (subPath.length === 0) ?
             currentDom
-            : (currentDom && (currentDom instanceof Element)) ?
+            : (currentDom !== null && (currentDom instanceof Element)) ?
                 domInElementAt(currentDom, subPath.at(0) ?? 0, subPath.toSpliced(0, 1))
                 : null
     }
@@ -411,7 +413,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
     }
     function domElementSubAtIndexOrDummy(parent: Element, indexInParent: number): Element {
         const currentDom = parent.childNodes.item(indexInParent)
-        if ((parent.childNodes.length >= indexInParent + 1) && currentDom) {
+        if ((parent.childNodes.length >= indexInParent + 1) && (currentDom !== null)) {
             if (currentDom instanceof Element) {
                 return currentDom
             } else {
@@ -478,7 +480,7 @@ const sockets: (WebSocket | null)[] = []
 //// other helpers
 
 function getOrInitializeAudioContext(): AudioContext {
-    if (audioContext) {
+    if (audioContext !== null) {
         return audioContext
     } else {
         audioContext = new AudioContext()
@@ -532,13 +534,13 @@ function editDomModifiers(
             break
         }
         case "ScrollToPosition": {
-            if (replacement.value) {
+            if (replacement.value !== null) {
                 domElementToEdit.scrollTo({ top: replacement.value.fromTop, left: replacement.value.fromLeft })
             }
             break
         }
         case "ScrollToShow": {
-            if (replacement.value) {
+            if (replacement.value !== null) {
                 domElementToEdit.scrollIntoView({ inline: replacement.value.x, block: replacement.value.y })
             }
             break
@@ -562,7 +564,7 @@ function getOrAddMeta(name: string): HTMLMetaElement {
     const maybeExistingMeta: HTMLMetaElement | undefined =
         Array.from(document.getElementsByTagName("meta"))
             .find(meta => meta.name === name)
-    if (maybeExistingMeta) {
+    if (maybeExistingMeta !== undefined) {
         return maybeExistingMeta
     } else {
         var meta = window.document.createElement("meta")
@@ -579,7 +581,7 @@ function createDomNode(id: string, node: { tag: "Text" | "Element", value: any }
         }
         case "Element": {
             const createdDomElement: HTMLElement =
-                node.value.namespace ?
+                node.value.namespace !== null ?
                     document.createElementNS(node.value.namespace, noScript(node.value.tag))
                     :
                     document.createElement(noScript(node.value.tag))
@@ -589,13 +591,13 @@ function createDomNode(id: string, node: { tag: "Text" | "Element", value: any }
             domElementAddStyles(createdDomElement, node.value.styles)
             domElementSetProperties(createdDomElement, node.value.stringProperties)
             domElementSetProperties(createdDomElement, node.value.boolProperties)
-            if (node.value.scrollToPosition) {
+            if (node.value.scrollToPosition !== null) {
                 node.value.scrollTo({ top: node.value.scrollToPosition.fromTop, left: node.value.scrollToPosition.fromLeft })
             }
-            if (node.value.scrollToShow) {
+            if (node.value.scrollToShow !== null) {
                 node.value.scrollIntoView({ inline: node.value.scrollToShow.x, block: node.value.scrollToShow.y })
             }
-            if (node.value.scrollPositionRequest) {
+            if (node.value.scrollPositionRequest !== null) {
                 domElementAddScrollPositionRequest(createdDomElement, sendToElm)
             }
             domElementAddEventListens(id, createdDomElement, node.value.eventListens, sendToElm)
@@ -835,7 +837,7 @@ function audioSourceLoad(url: string, sendToElm: (v: any) => void, abortSignal: 
                 tag: "Success", value: { durationInSeconds: buffer.length / buffer.sampleRate }
             })
         })
-        .catch(error => { sendToElm({ tag: "Error", value: error?.message ? error.message : "NetworkError" }) })
+        .catch(error => { sendToElm({ tag: "Error", value: error?.message !== undefined ? error.message : "NetworkError" }) })
 }
 
 function audioParameterTimelineApplyTo(audioParam: AudioParam, timeline: AudioParameterTimeline) {
@@ -922,7 +924,7 @@ function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): Au
                 case "LinearConvolution": {
                     const convolverNode = new ConvolverNode(audioContext)
                     const buffer = audioBuffers.get(processing.value.sourceUrl)
-                    if (buffer) {
+                    if (buffer !== undefined) {
                         convolverNode.buffer = buffer
                     } else {
                         warn("tried to create a linear convolution from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
@@ -935,7 +937,7 @@ function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): Au
 
 function editAudio(id: string, config: { url: string, startTime: number, replacement: { tag: string, value: any } }) {
     const audioPlayingToEdit = audioPlaying.get(id)
-    if (audioPlayingToEdit) {
+    if (audioPlayingToEdit !== undefined) {
         switch (config.replacement.tag) {
             case "Volume": {
                 audioParameterTimelineApplyTo(audioPlayingToEdit.gainNode.gain, config.replacement.value)
@@ -1008,7 +1010,7 @@ function forEachConsecutive<element>(array: element[], forPair: ((pair: { curren
     for (let i = 0; i <= array.length - 2; i++) {
         const current: element | undefined = array[i]
         const next: element | undefined = array[i + 1]
-        if (current && next) { // should always work
+        if (current !== undefined && next !== undefined) { // should always work
             forPair({ current: current, next: next })
         }
     }
