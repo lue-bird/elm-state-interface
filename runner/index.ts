@@ -771,7 +771,7 @@ function httpFetch(request: HttpRequest, abortSignal: AbortSignal): Promise<Http
             switch (request.expect) {
                 case "String": return response.text()
                     .then((x) => ({
-                        tag: "Success" as "Success", // without as it would be seen as string
+                        tag: "Success" as const,
                         value: {
                             url: response.url,
                             headers: headers,
@@ -783,7 +783,7 @@ function httpFetch(request: HttpRequest, abortSignal: AbortSignal): Promise<Http
                 case "Bytes": return response.blob()
                     .then(blob => blob.arrayBuffer())
                     .then((x) => ({
-                        tag: "Success" as "Success",
+                        tag: "Success" as const,
                         value: {
                             url: response.url,
                             headers: headers,
@@ -793,7 +793,7 @@ function httpFetch(request: HttpRequest, abortSignal: AbortSignal): Promise<Http
                         }
                     }))
                 case "Whatever": return {
-                    tag: "Success" as "Success",
+                    tag: "Success" as const,
                     value: {
                         url: response.url,
                         headers: headers,
