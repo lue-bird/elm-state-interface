@@ -43,7 +43,7 @@ interface : Int -> Interface Int
 in our case an incremented counter state.
 The app will use this result as the new state.
 
-We use [`Web.Dom.listedTo`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Dom#listenTo) to be notified when a user clicks the button.
+We use [`Web.Dom.listenTo`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Dom#listenTo) to be notified when a user clicks the button.
 Without [`Web.Dom.futureMap`](https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/Web-Dom#futureMap), our interface would have the type
 ```elm
 Web.Dom.element "button" [ Web.Dom.listenTo "click" ] []
