@@ -622,16 +622,18 @@ function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles
         domElement?.style.setProperty(styleSingle.key, styleSingle.value)
     })
 }
-function domElementSetProperties(domElement: Element, stringProperties: { key: string, value: any }[]) {
-    stringProperties.forEach(stringProperty => {
-        if (RE_js_html.test(stringProperty.value)) {
+function domElementSetProperties(domElement: Element, properties: { key: string, value: any }[]) {
+    properties.forEach(property => {
+        if ((property.key === "innerHTML") || (property.key === "outerHTML")) {
+            console.error("This is an XSS vector. Please parse the html string instead and construct the dom from that.")
+        } else if (RE_js_html.test(property.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
-        } else if (stringProperty.key === "src" && RE_js_html.test(stringProperty.value)) {
+        } else if (property.key === "src" && RE_js_html.test(property.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
-        } else if (stringProperty.key === "action" || stringProperty.key === "href" && RE_js.test(stringProperty.value)) {
+        } else if (property.key === "action" || property.key === "href" && RE_js.test(property.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
         } else {
-            (domElement as { [key: string]: any })[stringProperty.key] = stringProperty.value
+            (domElement as { [key: string]: any })[property.key] = property.value
         }
     })
 }

@@ -1,5 +1,9 @@
 # change log
 
+#### unpublished: js package 2.0.1
+
+  - disallow creating string properties for innerHTML and outerHTML
+
 #### 2.0.1
 
   - readme discourse link correct
