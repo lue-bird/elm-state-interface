@@ -523,14 +523,14 @@ function editDomModifiers(
             replacement.value.remove.forEach((propertyKey: string) => {
                 (domElementToEdit as { [key: string]: any })[propertyKey] = ""
             })
-            domElementSetProperties(domElementToEdit, replacement.value.edit)
+            domElementSetStringProperties(domElementToEdit, replacement.value.edit)
             break
         }
         case "BoolProperties": {
             replacement.value.remove.forEach((propertyKey: string) => {
-                (domElementToEdit as { [key: string]: any })[propertyKey] = null
+                (domElementToEdit as { [key: string]: any })[propertyKey] = false
             })
-            domElementSetProperties(domElementToEdit, replacement.value.edit)
+            domElementSetBoolProperties(domElementToEdit, replacement.value.edit)
             break
         }
         case "ScrollToPosition": {
@@ -589,8 +589,8 @@ function createDomNode(id: string, node: { tag: "Text" | "Element", value: any }
             domElementAddAttributes(createdDomElement, node.value.attributes)
             domElementAddAttributesNamespaced(createdDomElement, node.value.attributesNamespaced)
             domElementAddStyles(createdDomElement, node.value.styles)
-            domElementSetProperties(createdDomElement, node.value.stringProperties)
-            domElementSetProperties(createdDomElement, node.value.boolProperties)
+            domElementSetStringProperties(createdDomElement, node.value.stringProperties)
+            domElementSetBoolProperties(createdDomElement, node.value.boolProperties)
             if (node.value.scrollToPosition !== null) {
                 node.value.scrollTo({ top: node.value.scrollToPosition.fromTop, left: node.value.scrollToPosition.fromLeft })
             }
@@ -622,9 +622,14 @@ function domElementAddStyles(domElement: Element & ElementCSSInlineStyle, styles
         domElement?.style.setProperty(styleSingle.key, styleSingle.value)
     })
 }
-function domElementSetProperties(domElement: Element, properties: { key: string, value: any }[]) {
+function domElementSetStringProperties(domElement: Element, properties: { key: string, value: string }[]) {
+    const domElementIndexable = (domElement as { [key: string]: any })
     properties.forEach(property => {
-        if ((property.key === "innerHTML") || (property.key === "outerHTML")) {
+        if ((Object.hasOwn(domElement, property.key))
+            && (typeof domElementIndexable[property.key] !== "string")
+        ) {
+            warn(`tried to set the existing non-string dom element property "${property.key}" to a string.`)
+        } else if ((property.key === "innerHTML") || (property.key === "outerHTML")) {
             console.error("This is an XSS vector. Please parse the html string instead and construct the dom from that.")
         } else if (RE_js_html.test(property.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
@@ -633,7 +638,19 @@ function domElementSetProperties(domElement: Element, properties: { key: string,
         } else if (property.key === "action" || property.key === "href" && RE_js.test(property.value)) {
             console.error("This is an XSS vector. Please use an interface instead.")
         } else {
-            (domElement as { [key: string]: any })[property.key] = property.value
+            domElementIndexable[property.key] = property.value
+        }
+    })
+}
+function domElementSetBoolProperties(domElement: Element, properties: { key: string, value: boolean }[]) {
+    const domElementIndexable = (domElement as { [key: string]: any })
+    properties.forEach(property => {
+        if ((Object.hasOwn(domElement, property.key))
+            && (typeof domElementIndexable[property.key] !== "boolean")
+        ) {
+            warn(`tried to set the existing non-boolean dom element property "${property.key}" to a boolean.`)
+        } else {
+            domElementIndexable[property.key] = property.value
         }
     })
 }

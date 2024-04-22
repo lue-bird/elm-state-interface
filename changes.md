@@ -3,6 +3,7 @@
 #### unpublished: js package 2.0.1
 
   - disallow creating string properties for innerHTML and outerHTML
+  - add checks around changing only properties of the specified type
 
 #### 2.0.1
 
