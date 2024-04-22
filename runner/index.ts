@@ -723,6 +723,7 @@ function noOnOrFormAction(key: string) {
     return RE_on_formAction.test(key) ? "data-" + key : key
 }
 
+
 function fileDownloadBytes(config: { mimeType: string, name: string, content: number[] }) {
     const temporaryAnchorDomElement: HTMLAnchorElement = window.document.createElement('a')
     const blob = new Blob(
