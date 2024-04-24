@@ -143,7 +143,6 @@ import List.LocalExtra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Result.LocalExtra
 import Rope exposing (Rope)
-import Set exposing (Set)
 import Speed exposing (Speed)
 import StructuredId exposing (StructuredId)
 import Time
@@ -2443,16 +2442,15 @@ maybeGamepadJsonDecoder =
                                 , touchpadButton = at .touchpad
                                 , additionalButtons =
                                     let
-                                        mappedButtonIndexes : Set Int
+                                        mappedButtonIndexes : List Int
                                         mappedButtonIndexes =
                                             [ .primary, .secondary, .tertiary, .quaternary, .leftBumper, .rightBumper, .leftTrigger, .rightTrigger, .select, .start, .leftThumbstickButton, .rightThumbstickButton, .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .homeButton, .touchpad ]
                                                 |> List.filterMap (\field -> buttonMap |> field)
-                                                |> Set.fromList
                                     in
                                     buttons
                                         |> List.LocalExtra.justsMapIndexed
                                             (\index button ->
-                                                if mappedButtonIndexes |> Set.member index then
+                                                if mappedButtonIndexes |> List.member index then
                                                     Nothing
 
                                                 else
