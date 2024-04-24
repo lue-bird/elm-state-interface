@@ -1730,198 +1730,198 @@ interfaceSingleToStructuredId =
         StructuredId.ofVariant
             (case interfaceSingle of
                 DocumentTitleReplaceBy title ->
-                    ( "DocumentTitleReplaceBy", [ title |> StructuredId.ofString ] )
+                    { tag = "DocumentTitleReplaceBy", value = title |> StructuredId.ofString }
 
                 DocumentAuthorSet author ->
-                    ( "DocumentAuthorSet", [ author |> StructuredId.ofString ] )
+                    { tag = "DocumentAuthorSet", value = author |> StructuredId.ofString }
 
                 DocumentKeywordsSet keywords ->
-                    ( "DocumentKeywordsSet", [ keywords |> StructuredId.ofList StructuredId.ofString ] )
+                    { tag = "DocumentKeywordsSet"
+                    , value = keywords |> StructuredId.ofList StructuredId.ofString
+                    }
 
                 DocumentDescriptionSet description ->
-                    ( "DocumentDescriptionSet", [ description |> StructuredId.ofString ] )
+                    { tag = "DocumentDescriptionSet", value = description |> StructuredId.ofString }
 
                 ConsoleLog message ->
-                    ( "ConsoleLog", [ message |> StructuredId.ofString ] )
+                    { tag = "ConsoleLog", value = message |> StructuredId.ofString }
 
                 ConsoleWarn message ->
-                    ( "ConsoleWarn", [ message |> StructuredId.ofString ] )
+                    { tag = "ConsoleWarn", value = message |> StructuredId.ofString }
 
                 ConsoleError message ->
-                    ( "ConsoleError", [ message |> StructuredId.ofString ] )
+                    { tag = "ConsoleError", value = message |> StructuredId.ofString }
 
                 NavigationReplaceUrl appUrl ->
-                    ( "NavigationReplaceUrl", [ appUrl |> AppUrl.LocalExtra.toStructuredId ] )
+                    { tag = "NavigationReplaceUrl", value = appUrl |> AppUrl.LocalExtra.toStructuredId }
 
                 NavigationPushUrl appUrl ->
-                    ( "NavigationPushUrl", [ appUrl |> AppUrl.LocalExtra.toStructuredId ] )
+                    { tag = "NavigationPushUrl", value = appUrl |> AppUrl.LocalExtra.toStructuredId }
 
                 NavigationGo urlSteps ->
-                    ( "NavigationGo", [ urlSteps |> StructuredId.ofInt ] )
+                    { tag = "NavigationGo", value = urlSteps |> StructuredId.ofInt }
 
                 NavigationLoad url ->
-                    ( "NavigationLoad", [ url |> StructuredId.ofString ] )
+                    { tag = "NavigationLoad", value = url |> StructuredId.ofString }
 
                 NavigationReload ->
-                    ( "NavigationReload", [] )
+                    { tag = "NavigationReload", value = StructuredId.ofUnit }
 
                 FileDownloadUnsignedInt8s config ->
-                    ( "FileDownloadUnsignedInt8s"
-                    , [ config.name |> StructuredId.ofString
-                      , config.mimeType |> StructuredId.ofString
-                      , config.content |> StructuredId.ofList StructuredId.ofInt
-                      ]
-                    )
+                    { tag = "FileDownloadUnsignedInt8s"
+                    , value =
+                        StructuredId.ofParts
+                            [ config.name |> StructuredId.ofString
+                            , config.mimeType |> StructuredId.ofString
+                            , config.content |> StructuredId.ofList StructuredId.ofInt
+                            ]
+                    }
 
                 ClipboardReplaceBy replacement ->
-                    ( "ClipboardReplaceBy", [ replacement |> StructuredId.ofString ] )
+                    { tag = "ClipboardReplaceBy", value = replacement |> StructuredId.ofString }
 
                 AudioPlay audio ->
-                    ( "AudioPlay"
-                    , [ audio.url |> StructuredId.ofString
-                      , audio.startTime |> Time.LocalExtra.posixToStructureId
-                      ]
-                    )
+                    { tag = "AudioPlay"
+                    , value =
+                        StructuredId.ofParts
+                            [ audio.url |> StructuredId.ofString
+                            , audio.startTime |> Time.LocalExtra.posixToStructureId
+                            ]
+                    }
 
                 SocketMessage message ->
-                    ( "SocketMessage"
-                    , [ message.id |> socketIdToStructuredId
-                      , message.data |> StructuredId.ofString
-                      ]
-                    )
+                    { tag = "SocketMessage"
+                    , value =
+                        StructuredId.ofParts
+                            [ message.id |> socketIdToStructuredId
+                            , message.data |> StructuredId.ofString
+                            ]
+                    }
 
                 SocketDisconnect id ->
-                    ( "SocketDisconnect", [ id |> socketIdToStructuredId ] )
+                    { tag = "SocketDisconnect", value = id |> socketIdToStructuredId }
 
                 LocalStorageSet set ->
-                    ( "LocalStorageSet"
-                    , [ set.key |> StructuredId.ofString
-                      , set.value |> StructuredId.ofMaybe StructuredId.ofString
-                      ]
-                    )
+                    { tag = "LocalStorageSet"
+                    , value =
+                        StructuredId.ofParts
+                            [ set.key |> StructuredId.ofString
+                            , set.value |> StructuredId.ofMaybe StructuredId.ofString
+                            ]
+                    }
 
                 NotificationAskForPermission ->
-                    ( "NotificationAskForPermission", [] )
+                    { tag = "NotificationAskForPermission", value = StructuredId.ofUnit }
 
                 DomNodeRender path ->
-                    ( "DomNodeRender"
-                    , [ path.path |> StructuredId.ofList StructuredId.ofInt ]
-                    )
+                    { tag = "DomNodeRender"
+                    , value = path.path |> StructuredId.ofList StructuredId.ofInt
+                    }
 
                 AudioSourceLoad load ->
-                    ( "AudioSourceLoad"
-                    , [ load.url |> StructuredId.ofString
-                      ]
-                    )
+                    { tag = "AudioSourceLoad"
+                    , value = load.url |> StructuredId.ofString
+                    }
 
                 SocketConnect connect ->
-                    ( "SocketConnect"
-                    , [ StructuredId.ofString connect.address
-                      ]
-                    )
+                    { tag = "SocketConnect"
+                    , value = StructuredId.ofString connect.address
+                    }
 
                 NotificationShow show ->
-                    ( "NotificationShow"
-                    , [ show.id |> StructuredId.ofString
-                      ]
-                    )
+                    { tag = "NotificationShow"
+                    , value = show.id |> StructuredId.ofString
+                    }
 
                 HttpRequest request ->
-                    ( "HttpRequest"
-                    , [ request.url |> StructuredId.ofString
-                      ]
-                    )
+                    { tag = "HttpRequest"
+                    , value = request.url |> StructuredId.ofString
+                    }
 
                 TimePosixRequest _ ->
-                    ( "TimePosixRequest", [] )
+                    { tag = "TimePosixRequest", value = StructuredId.ofUnit }
 
                 TimezoneOffsetRequest _ ->
-                    ( "TimezoneOffsetRequest", [] )
+                    { tag = "TimezoneOffsetRequest", value = StructuredId.ofUnit }
 
                 TimezoneNameRequest _ ->
-                    ( "TimezoneNameRequest", [] )
+                    { tag = "TimezoneNameRequest", value = StructuredId.ofUnit }
 
                 TimeOnce once ->
-                    ( "TimeOnce", [ once.pointInTime |> Time.LocalExtra.posixToStructureId ] )
+                    { tag = "TimeOnce", value = once.pointInTime |> Time.LocalExtra.posixToStructureId }
 
                 RandomUnsignedInt32sRequest request ->
-                    ( "RandomUnsignedInt32sRequest"
-                    , [ request.count |> StructuredId.ofInt
-                      ]
-                    )
+                    { tag = "RandomUnsignedInt32sRequest"
+                    , value = request.count |> StructuredId.ofInt
+                    }
 
                 LocalStorageRequest request ->
-                    ( "LocalStorageRequest"
-                    , [ request.key |> StructuredId.ofString
-                      ]
-                    )
+                    { tag = "LocalStorageRequest"
+                    , value = request.key |> StructuredId.ofString
+                    }
 
                 WindowSizeRequest _ ->
-                    ( "WindowSizeRequest", [] )
+                    { tag = "WindowSizeRequest", value = StructuredId.ofUnit }
 
                 WindowPreferredLanguagesRequest _ ->
-                    ( "WindowPreferredLanguagesRequest", [] )
+                    { tag = "WindowPreferredLanguagesRequest", value = StructuredId.ofUnit }
 
                 NavigationUrlRequest _ ->
-                    ( "NavigationUrlRequest", [] )
+                    { tag = "NavigationUrlRequest", value = StructuredId.ofUnit }
 
                 ClipboardRequest _ ->
-                    ( "ClipboardRequest", [] )
+                    { tag = "ClipboardRequest", value = StructuredId.ofUnit }
 
                 GeoLocationRequest _ ->
-                    ( "GeoLocationRequest", [] )
+                    { tag = "GeoLocationRequest", value = StructuredId.ofUnit }
 
                 GamepadsRequest _ ->
-                    ( "GamepadsRequest", [] )
+                    { tag = "GamepadsRequest", value = StructuredId.ofUnit }
 
                 WindowEventListen listen ->
-                    ( "WindowEventListen"
-                    , [ listen.eventName |> StructuredId.ofString
-                      ]
-                    )
+                    { tag = "WindowEventListen"
+                    , value = listen.eventName |> StructuredId.ofString
+                    }
 
                 WindowVisibilityChangeListen _ ->
-                    ( "WindowVisibilityChangeListen", [] )
+                    { tag = "WindowVisibilityChangeListen", value = StructuredId.ofUnit }
 
                 WindowAnimationFrameListen _ ->
-                    ( "WindowAnimationFrameListen", [] )
+                    { tag = "WindowAnimationFrameListen", value = StructuredId.ofUnit }
 
                 WindowPreferredLanguagesChangeListen _ ->
-                    ( "WindowPreferredLanguagesChangeListen", [] )
+                    { tag = "WindowPreferredLanguagesChangeListen", value = StructuredId.ofUnit }
 
                 DocumentEventListen listen ->
-                    ( "DocumentEventListen"
-                    , [ listen.eventName |> StructuredId.ofString
-                      ]
-                    )
+                    { tag = "DocumentEventListen"
+                    , value = listen.eventName |> StructuredId.ofString
+                    }
 
                 TimePeriodicallyListen listen ->
-                    ( "TimePeriodicallyListen"
-                    , [ listen.intervalDurationMilliSeconds |> StructuredId.ofInt
-                      ]
-                    )
+                    { tag = "TimePeriodicallyListen"
+                    , value = listen.intervalDurationMilliSeconds |> StructuredId.ofInt
+                    }
 
                 SocketMessageListen listen ->
-                    ( "SocketMessageListen"
-                    , [ listen.id |> socketIdToStructuredId
-                      ]
-                    )
+                    { tag = "SocketMessageListen"
+                    , value = listen.id |> socketIdToStructuredId
+                    }
 
                 LocalStorageRemoveOnADifferentTabListen listen ->
-                    ( "LocalStorageRemoveOnADifferentTabListen"
-                    , [ listen.key |> StructuredId.ofString ]
-                    )
+                    { tag = "LocalStorageRemoveOnADifferentTabListen"
+                    , value = listen.key |> StructuredId.ofString
+                    }
 
                 LocalStorageSetOnADifferentTabListen listen ->
-                    ( "LocalStorageSetOnADifferentTabListen"
-                    , [ listen.key |> StructuredId.ofString ]
-                    )
+                    { tag = "LocalStorageSetOnADifferentTabListen"
+                    , value = listen.key |> StructuredId.ofString
+                    }
 
                 GeoLocationChangeListen _ ->
-                    ( "GeoLocationChangeListen", [] )
+                    { tag = "GeoLocationChangeListen", value = StructuredId.ofUnit }
 
                 GamepadsChangeListen _ ->
-                    ( "GamepadsChangeListen", [] )
+                    { tag = "GamepadsChangeListen", value = StructuredId.ofUnit }
             )
 
 

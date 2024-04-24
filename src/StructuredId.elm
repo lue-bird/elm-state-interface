@@ -1,7 +1,7 @@
 module StructuredId exposing
     ( StructuredId(..), toString
-    , ofInt, ofString
-    , ofVariant, ofMaybe, ofList
+    , ofUnit, ofInt, ofString
+    , ofParts, ofVariant, ofMaybe, ofList
     )
 
 {-| Assigning each unique value one "structured id"
@@ -11,8 +11,8 @@ which makes it possible to use as a key in a `Dict`
 
 @docs StructuredId, toString
 
-@docs ofInt, ofString
-@docs ofVariant, ofMaybe, ofList
+@docs ofUnit, ofInt, ofString
+@docs ofParts, ofVariant, ofMaybe, ofList
 
 -}
 
@@ -22,6 +22,11 @@ import Rope exposing (Rope)
 type StructuredId
     = String String
     | List (List StructuredId)
+
+
+ofUnit : StructuredId
+ofUnit =
+    List []
 
 
 ofString : String -> StructuredId
@@ -35,13 +40,22 @@ ofInt =
     \int -> int |> String.fromInt |> ofString
 
 
-{-| In our project, variants only have zero or one value, so
-the list in the second tuple part should describe the **fields** of that value.
+ofParts : List StructuredId -> StructuredId
+ofParts =
+    \fieldValueStructureIds ->
+        fieldValueStructureIds |> List
+
+
+{-|
+
+  - If a variant has no value, use [`StructuredId.ofUnit`](#ofUnit)
+  - If a variant has more than one value, use [`StructuredId.ofParts`](#ofParts)
+
 -}
-ofVariant : ( String, List StructuredId ) -> StructuredId
+ofVariant : { tag : String, value : StructuredId } -> StructuredId
 ofVariant =
-    \( tag, attachmentFields ) ->
-        ofString tag :: attachmentFields |> List
+    \variant ->
+        [ variant.tag |> ofString, variant.value ] |> ofParts
 
 
 ofMaybe : (value -> StructuredId) -> (Maybe value -> StructuredId)
@@ -50,10 +64,10 @@ ofMaybe valueToStructuredId =
         ofVariant
             (case maybe of
                 Nothing ->
-                    ( "Nothing", [] )
+                    { tag = "Nothing", value = ofUnit }
 
                 Just value ->
-                    ( "Just", [ value |> valueToStructuredId ] )
+                    { tag = "Just", value = value |> valueToStructuredId }
             )
 
 
