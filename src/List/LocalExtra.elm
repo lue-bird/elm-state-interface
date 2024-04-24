@@ -28,7 +28,10 @@ justsMapIndexed elementToMaybe =
             |> .justs
 
 
-foldUpIndexedFrom : folded -> (Int -> element -> (folded -> folded)) -> List element -> folded
+foldUpIndexedFrom :
+    folded
+    -> (Int -> element -> (folded -> folded))
+    -> (List element -> folded)
 foldUpIndexedFrom initialFolded reduce =
     \list ->
         list
