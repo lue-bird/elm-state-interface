@@ -480,6 +480,68 @@ interfaceNone =
     Rope.empty
 
 
+{-| Take what the [`Interface`](#Interface) can come back with and return a different future value.
+
+In practice, this is sometimes used like a kind of event-config pattern:
+
+    Web.Time.posixRequest
+        |> Web.interfaceFutureMap (\timeNow -> TimeReceived timeNow)
+
+    button "show all entries"
+        |> Web.Dom.render
+        |> Web.interfaceFutureMap (\Pressed -> ShowAllEntriesButtonClicked)
+
+sometimes as a way to deal with all events (like `update` in The Elm Architecture)
+
+    ...
+        |> Web.interfaceFutureMap
+            (\event ->
+                case event of
+                    MouseMovedTo newMousePoint ->
+                        { state | mousePoint = newMousePoint }
+
+                    CounterDecreaseClicked ->
+                        { state | counter = state.counter - 1 }
+
+                    CounterIncreaseClicked ->
+                        { state | counter = state.counter + 1 }
+            )
+
+and sometimes to nest events (like `Cmd.map/Task.map/Sub.map/...` in The Elm Architecture):
+
+    type Event
+        = DirectoryTreeViewEvent TreeUiEvent
+        | SortButtonClicked
+
+    type TreeUiEvent
+        = Expanded TreePath
+        | Collapsed TreePath
+
+    interface : State -> Interface State
+    interface state =
+        ...
+            [ treeUi ..
+                |> Web.interfaceFutureMap DirectoryTreeViewEvent
+            , ...
+            ]
+            |> Web.Dom.render
+
+    treeUi : ... -> Web.Dom.Node TreeUiEvent
+
+In all these examples, you end up converting the narrow future representation of part of the interface
+to a broader representation for the parent interface
+
+-}
+interfaceFutureMap : (future -> mappedFuture) -> (Interface future -> Interface mappedFuture)
+interfaceFutureMap futureChange =
+    \interface ->
+        interface
+            |> Rope.map
+                (\interfaceSingle ->
+                    interfaceSingle |> interfaceSingleFutureMap futureChange
+                )
+
+
 interfaceSingleFutureMap : (future -> mappedFuture) -> (InterfaceSingle future -> InterfaceSingle mappedFuture)
 interfaceSingleFutureMap futureChange =
     \interface ->
@@ -707,68 +769,6 @@ httpRequestFutureMap futureChange =
                 HttpExpectBytes expectBytes ->
                     (\bytes -> expectBytes bytes |> futureChange) |> HttpExpectBytes
         }
-
-
-{-| Take what the [`Interface`](#Interface) can come back with and return a different future value.
-
-In practice, this is sometimes used like a kind of event-config pattern:
-
-    Web.Time.posixRequest
-        |> Web.interfaceFutureMap (\timeNow -> TimeReceived timeNow)
-
-    button "show all entries"
-        |> Web.Dom.render
-        |> Web.interfaceFutureMap (\Pressed -> ShowAllEntriesButtonClicked)
-
-sometimes as a way to deal with all events (like `update` in The Elm Architecture)
-
-    ...
-        |> Web.interfaceFutureMap
-            (\event ->
-                case event of
-                    MouseMovedTo newMousePoint ->
-                        { state | mousePoint = newMousePoint }
-
-                    CounterDecreaseClicked ->
-                        { state | counter = state.counter - 1 }
-
-                    CounterIncreaseClicked ->
-                        { state | counter = state.counter + 1 }
-            )
-
-and sometimes to nest events (like `Cmd.map/Task.map/Sub.map/...` in The Elm Architecture):
-
-    type Event
-        = DirectoryTreeViewEvent TreeUiEvent
-        | SortButtonClicked
-
-    type TreeUiEvent
-        = Expanded TreePath
-        | Collapsed TreePath
-
-    interface : State -> Interface State
-    interface state =
-        ...
-            [ treeUi ..
-                |> Web.interfaceFutureMap DirectoryTreeViewEvent
-            , ...
-            ]
-            |> Web.Dom.render
-
-    treeUi : ... -> Web.Dom.Node TreeUiEvent
-
-In all these examples, you end up converting the narrow future representation of part of the interface
-to a broader representation for the parent interface
-
--}
-interfaceFutureMap : (future -> mappedFuture) -> (Interface future -> Interface mappedFuture)
-interfaceFutureMap futureChange =
-    \interface ->
-        interface
-            |> Rope.map
-                (\interfaceSingle ->
-                    interfaceSingle |> interfaceSingleFutureMap futureChange
-                )
 
 
 {-| The "msg" in a [`Web.program`](#program)
@@ -1001,7 +1001,7 @@ interfacesDiff :
     { old : FastDict.Dict String (InterfaceSingle future)
     , updated : FastDict.Dict String (InterfaceSingle future)
     }
-    -> List { id : String, diff : InterfaceSingleDiff }
+    -> List { id : String, diff : InterfaceSingleDiff future }
 interfacesDiff =
     \interfaces ->
         FastDict.merge
@@ -1017,7 +1017,7 @@ interfacesDiff =
             )
             (\id onlyNew soFar ->
                 { id = id
-                , diff = onlyNew |> interfaceSingleFutureMap (\_ -> ()) |> Add
+                , diff = onlyNew |> Add
                 }
                     :: soFar
             )
@@ -1026,7 +1026,7 @@ interfacesDiff =
             []
 
 
-toJsToJson : { id : String, diff : InterfaceSingleDiff } -> Json.Encode.Value
+toJsToJson : { id : String, diff : InterfaceSingleDiff future_ } -> Json.Encode.Value
 toJsToJson =
     \toJs ->
         Json.Encode.object
@@ -1035,7 +1035,7 @@ toJsToJson =
             ]
 
 
-interfaceSingleDiffToJson : InterfaceSingleDiff -> Json.Encode.Value
+interfaceSingleDiffToJson : InterfaceSingleDiff future_ -> Json.Encode.Value
 interfaceSingleDiffToJson =
     \diff ->
         Json.Encode.LocalExtra.variant
@@ -1145,7 +1145,7 @@ interfaceSingleEditToJson =
             )
 
 
-domTextOrElementHeaderInfoToJson : DomTextOrElementHeader () -> Json.Encode.Value
+domTextOrElementHeaderInfoToJson : DomTextOrElementHeader future_ -> Json.Encode.Value
 domTextOrElementHeaderInfoToJson =
     \domNodeId ->
         Json.Encode.LocalExtra.variant
@@ -1219,7 +1219,7 @@ domElementScrollPositionToJson =
             ]
 
 
-domElementHeaderInfoToJson : DomElementHeader () -> Json.Encode.Value
+domElementHeaderInfoToJson : DomElementHeader future_ -> Json.Encode.Value
 domElementHeaderInfoToJson =
     \header ->
         Json.Encode.object
@@ -1451,7 +1451,7 @@ editDomDiffToJson =
             )
 
 
-interfaceSingleToJson : InterfaceSingle () -> Json.Encode.Value
+interfaceSingleToJson : InterfaceSingle future_ -> Json.Encode.Value
 interfaceSingleToJson =
     \add ->
         Json.Encode.LocalExtra.variant
@@ -1662,7 +1662,7 @@ socketIdToJson =
     \(SocketId index) -> index |> Json.Encode.int
 
 
-httpRequestInfoToJson : HttpRequest () -> Json.Encode.Value
+httpRequestInfoToJson : HttpRequest future_ -> Json.Encode.Value
 httpRequestInfoToJson =
     \httpRequestId ->
         Json.Encode.object
@@ -1717,7 +1717,7 @@ httpBodyToJson =
             )
 
 
-httpExpectInfoToJson : HttpExpect () -> Json.Encode.Value
+httpExpectInfoToJson : HttpExpect future_ -> Json.Encode.Value
 httpExpectInfoToJson =
     \httpExpectId ->
         Json.Encode.string
@@ -2887,7 +2887,7 @@ windowVisibilityJsonDecoder =
 Implementation note:
 As you know, gamepad layouts differ between models.
 For most of them, we're able to map them to the buttons and thumbsticks above.
-If you experience issues with some model, [open an issue]()
+If you experience issues with some model, [open an issue](https://github.com/lue-bird/elm-state-interface/issues/new)
 
 -}
 type alias Gamepad =
@@ -2959,7 +2959,7 @@ programUpdate appConfig =
                 \state ->
                     ( state
                     , let
-                        notifyOfBugInterface : InterfaceSingle ()
+                        notifyOfBugInterface : InterfaceSingle never_
                         notifyOfBugInterface =
                             ([ "bug: js event failed to decode: "
                              , jsonError |> Json.Decode.errorToString
@@ -3033,8 +3033,8 @@ type alias HttpMetadata =
 
 {-| Individual message to js to sync up with the latest interface type
 -}
-type InterfaceSingleDiff
-    = Add (InterfaceSingle ())
+type InterfaceSingleDiff irrelevantFuture
+    = Add (InterfaceSingle irrelevantFuture)
     | Edit InterfaceSingleEdit
     | Remove
 
