@@ -857,7 +857,10 @@ domTextOrElementHeaderDiff =
 domElementHeaderDiff : { old : DomElementHeader future, updated : DomElementHeader future } -> List DomEdit
 domElementHeaderDiff =
     \elements ->
-        if elements.old.tag == elements.updated.tag then
+        if elements.old.tag /= elements.updated.tag then
+            [ elements.updated |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
+
+        else
             [ { old = elements.old.styles, updated = elements.updated.styles }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
@@ -916,9 +919,6 @@ domElementHeaderDiff =
                 ReplacementDomElementEventListens updatedElementEventListensId |> Just
             ]
                 |> List.LocalExtra.justs
-
-        else
-            [ elements.updated |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
 
 
 dictEditAndRemoveDiff :
