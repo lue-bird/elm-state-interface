@@ -33,7 +33,6 @@ Exposed so can for example simulate it more easily in tests, add a debugger etc.
 
 import Dict
 import Json.Decode
-import List.LocalExtra
 import RecordWithoutConstructorFunction exposing (RecordWithoutConstructorFunction)
 import Rope exposing (Rope)
 import Web
@@ -155,135 +154,72 @@ text =
 
 elementWithMaybeNamespace : Maybe String -> String -> List (Modifier future) -> List (Node future) -> Node future
 elementWithMaybeNamespace maybeNamespace tag modifiers subs =
-    let
-        modifierList : List (ModifierSingle future)
-        modifierList =
-            modifiers |> modifierBatch |> Rope.toList
-    in
     { header =
-        { namespace = maybeNamespace
-        , tag = tag
-        , scrollToPosition =
-            modifierList
-                |> List.LocalExtra.firstJustMap
-                    (\modifier ->
-                        case modifier of
-                            ScrollToPosition position ->
-                                position |> Just
+        modifiers
+            |> modifierBatch
+            |> Rope.foldl
+                (\modifier soFar ->
+                    case modifier of
+                        ScrollToPosition position ->
+                            { soFar | scrollToPosition = position |> Just }
 
-                            _ ->
-                                Nothing
-                    )
-        , scrollToShow =
-            modifierList
-                |> List.LocalExtra.firstJustMap
-                    (\modifier ->
-                        case modifier of
-                            ScrollToShow alignment ->
-                                alignment |> Just
+                        ScrollToShow alignment ->
+                            { soFar | scrollToShow = alignment |> Just }
 
-                            _ ->
-                                Nothing
-                    )
-        , scrollPositionRequest =
-            modifierList
-                |> List.LocalExtra.firstJustMap
-                    (\modifier ->
-                        case modifier of
-                            ScrollPositionRequest positionRequest ->
-                                positionRequest |> Just
+                        ScrollPositionRequest positionRequest ->
+                            { soFar | scrollPositionRequest = positionRequest |> Just }
 
-                            _ ->
-                                Nothing
-                    )
-        , eventListens =
-            modifierList
-                |> List.filterMap
-                    (\modifier ->
-                        case modifier of
-                            Listen listen ->
-                                ( listen.eventName
-                                , { on = listen.on
-                                  , defaultActionHandling = listen.defaultActionHandling
-                                  }
-                                )
-                                    |> Just
+                        Listen listen ->
+                            { soFar
+                                | eventListens =
+                                    soFar.eventListens
+                                        |> Dict.insert listen.eventName
+                                            { on = listen.on
+                                            , defaultActionHandling = listen.defaultActionHandling
+                                            }
+                            }
 
-                            _ ->
-                                Nothing
-                    )
-                |> Dict.fromList
-        , styles =
-            modifierList
-                |> List.filterMap
-                    (\modifier ->
-                        case modifier of
-                            Style keyValue ->
-                                ( keyValue.key, keyValue.value ) |> Just
+                        Style keyValue ->
+                            { soFar | styles = soFar.styles |> Dict.insert keyValue.key keyValue.value }
 
-                            _ ->
-                                Nothing
-                    )
-                |> Dict.fromList
-        , stringProperties =
-            modifierList
-                |> List.filterMap
-                    (\modifier ->
-                        case modifier of
-                            StringProperty keyValue ->
-                                ( keyValue.key, keyValue.value ) |> Just
+                        StringProperty keyValue ->
+                            { soFar
+                                | stringProperties =
+                                    soFar.stringProperties |> Dict.insert keyValue.key keyValue.value
+                            }
 
-                            _ ->
-                                Nothing
-                    )
-                |> Dict.fromList
-        , boolProperties =
-            modifierList
-                |> List.filterMap
-                    (\modifier ->
-                        case modifier of
-                            BoolProperty keyValue ->
-                                ( keyValue.key, keyValue.value ) |> Just
+                        BoolProperty keyValue ->
+                            { soFar
+                                | boolProperties =
+                                    soFar.boolProperties |> Dict.insert keyValue.key keyValue.value
+                            }
 
-                            _ ->
-                                Nothing
-                    )
-                |> Dict.fromList
-        , attributes =
-            modifierList
-                |> List.filterMap
-                    (\modifier ->
-                        case modifier of
-                            Attribute keyValue ->
-                                case keyValue.namespace of
-                                    Just _ ->
-                                        Nothing
+                        Attribute keyValue ->
+                            case keyValue.namespace of
+                                Just namespace ->
+                                    { soFar
+                                        | attributesNamespaced =
+                                            soFar.attributesNamespaced |> Dict.insert ( namespace, keyValue.key ) keyValue.value
+                                    }
 
-                                    Nothing ->
-                                        ( keyValue.key, keyValue.value ) |> Just
-
-                            _ ->
-                                Nothing
-                    )
-                |> Dict.fromList
-        , attributesNamespaced =
-            modifierList
-                |> List.filterMap
-                    (\modifier ->
-                        case modifier of
-                            Attribute keyValue ->
-                                case keyValue.namespace of
-                                    Just namespace ->
-                                        ( ( namespace, keyValue.key ), keyValue.value ) |> Just
-
-                                    Nothing ->
-                                        Nothing
-
-                            _ ->
-                                Nothing
-                    )
-                |> Dict.fromList
-        }
+                                Nothing ->
+                                    { soFar
+                                        | attributes =
+                                            soFar.attributes |> Dict.insert keyValue.key keyValue.value
+                                    }
+                )
+                { namespace = maybeNamespace
+                , tag = tag
+                , scrollToPosition = Nothing
+                , scrollToShow = Nothing
+                , scrollPositionRequest = Nothing
+                , eventListens = Dict.empty
+                , styles = Dict.empty
+                , stringProperties = Dict.empty
+                , boolProperties = Dict.empty
+                , attributes = Dict.empty
+                , attributesNamespaced = Dict.empty
+                }
     , subs = subs
     }
         |> Element
