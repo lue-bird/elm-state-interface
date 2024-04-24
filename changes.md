@@ -1,5 +1,9 @@
 # change log
 
+#### (unreleased) 2.0.2
+
+  - internal: improve performance a bit
+
 #### js package 2.0.1
 
   - disallow creating string properties for innerHTML and outerHTML
