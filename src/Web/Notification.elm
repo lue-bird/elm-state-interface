@@ -41,21 +41,24 @@ to only notify users when they're on a different page
 
                 Rejected ->
                     Web.interfaceNone
-            , case ( state.windowVisibility, state.whoseTurn ) of
-                ( Web.WindowHidden, You ) ->
-                    Web.Notification.show
-                        { message = "opponent moved", ... }
-                        |> Web.interfaceFutureMap
-                            (\Web.NotificationClicked ->
-                                -- return to the game if previously in settings
-                                State { state | mode = LongGameBoardMode }
-                            )
-
-                ( Web.WindowHidden, Opponent ) ->
+            , case state.windowVisibility of
+                Web.WindowShown ->
                     Web.interfaceNone
 
-                ( Web.WindowShown, _ ) ->
-                    Web.interfaceNone
+                Web.WindowHidden ->
+                    case state.whoseTurn of
+                        Opponent ->
+                            Web.interfaceNone
+
+                        You ->
+                            Web.Notification.show
+                                { message = "opponent moved", ... }
+                                |> Web.interfaceFutureMap
+                                    (\Web.NotificationClicked ->
+                                        -- return to the game if previously in settings
+                                        State { state | mode = LongGameBoardMode }
+                                    )
+
             , case state.mode of
                 LongGameBoardMode ->
                     ..listen for opponent move from server..

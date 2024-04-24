@@ -11,13 +11,17 @@ tests : Test
 tests =
     Test.describe "elm-state-interface"
         [ Test.describe "StructuredId"
-            [ Test.fuzz (Fuzz.pair treeFuzz treeFuzz)
+            [ Test.fuzz
+                (Fuzz.constant (\a b -> { a = a, b = b })
+                    |> Fuzz.andMap treeFuzz
+                    |> Fuzz.andMap treeFuzz
+                )
                 "== equivalent to on toString =="
-                (\( tree0, tree1 ) ->
-                    (tree0 |> exampleTreeToStructuredId |> StructuredId.toString)
-                        == (tree1 |> exampleTreeToStructuredId |> StructuredId.toString)
+                (\trees ->
+                    (trees.a |> exampleTreeToStructuredId |> StructuredId.toString)
+                        == (trees.b |> exampleTreeToStructuredId |> StructuredId.toString)
                         |> Expect.equal
-                            (tree0 == tree1)
+                            (trees.a == trees.b)
                 )
             ]
         , Test.describe "List.LocalExtra"
@@ -31,11 +35,11 @@ tests =
                             )
                         |> Expect.equalLists
                             (list
-                                |> List.indexedMap Tuple.pair
-                                |> List.filterMap
-                                    (\( index, maybe ) ->
+                                |> List.indexedMap
+                                    (\index maybe ->
                                         maybe |> Maybe.map (\just -> { just = just, index = index })
                                     )
+                                |> List.filterMap identity
                             )
                 )
             ]

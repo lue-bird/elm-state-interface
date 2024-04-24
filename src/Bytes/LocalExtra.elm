@@ -17,14 +17,19 @@ toUnsignedInt8List =
 
 unsignedInt8ListBytesDecoder : Int -> Bytes.Decode.Decoder (List Int)
 unsignedInt8ListBytesDecoder length =
-    Bytes.Decode.loop ( length, [] )
-        (\( n, elements ) ->
-            if n <= 0 then
-                Bytes.Decode.succeed (Bytes.Decode.Done (elements |> List.reverse))
+    Bytes.Decode.loop { remainingLength = length, elements = [] }
+        (\soFar ->
+            if soFar.remainingLength <= 0 then
+                Bytes.Decode.succeed (Bytes.Decode.Done (soFar.elements |> List.reverse))
 
             else
                 Bytes.Decode.map
-                    (\byte -> Bytes.Decode.Loop ( n - 1, byte :: elements ))
+                    (\byte ->
+                        Bytes.Decode.Loop
+                            { remainingLength = soFar.remainingLength - 1
+                            , elements = byte :: soFar.elements
+                            }
+                    )
                     Bytes.Decode.unsignedInt8
         )
 

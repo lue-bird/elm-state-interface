@@ -3,12 +3,12 @@ module Json.Encode.LocalExtra exposing (nullable, variant)
 import Json.Encode
 
 
-variant : ( String, Json.Encode.Value ) -> Json.Encode.Value
+variant : { tag : String, value : Json.Encode.Value } -> Json.Encode.Value
 variant =
-    \( tag, value ) ->
+    \tagAndValue ->
         Json.Encode.object
-            [ ( "tag", tag |> Json.Encode.string )
-            , ( "value", value )
+            [ ( "tag", tagAndValue.tag |> Json.Encode.string )
+            , ( "value", tagAndValue.value )
             ]
 
 

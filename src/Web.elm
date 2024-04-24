@@ -785,29 +785,44 @@ interfaceSingleEdits :
     -> List InterfaceSingleEdit
 interfaceSingleEdits =
     \interfaces ->
-        case ( interfaces.old, interfaces.updated ) of
-            ( DomNodeRender domElementPreviouslyRendered, DomNodeRender domElementToRender ) ->
-                { old = domElementPreviouslyRendered.node, updated = domElementToRender.node }
-                    |> domTextOrElementHeaderDiff
-                    |> List.map
-                        (\diff ->
-                            { path = domElementPreviouslyRendered.path, replacement = diff }
-                                |> EditDom
-                        )
+        case interfaces.old of
+            DomNodeRender domElementPreviouslyRendered ->
+                case interfaces.updated of
+                    DomNodeRender domElementToRender ->
+                        { old = domElementPreviouslyRendered.node, updated = domElementToRender.node }
+                            |> domTextOrElementHeaderDiff
+                            |> List.map
+                                (\diff ->
+                                    { path = domElementPreviouslyRendered.path, replacement = diff }
+                                        |> EditDom
+                                )
 
-            ( AudioPlay previouslyPlayed, AudioPlay toPlay ) ->
-                ( previouslyPlayed, toPlay )
-                    |> audioDiff
-                    |> List.map
-                        (\diff ->
-                            { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
-                                |> EditAudio
-                        )
+                    _ ->
+                        []
 
-            ( NotificationShow _, NotificationShow toShow ) ->
-                { id = toShow.id, message = toShow.message, details = toShow.details }
-                    |> EditNotification
-                    |> List.singleton
+            AudioPlay previouslyPlayed ->
+                case interfaces.updated of
+                    AudioPlay toPlay ->
+                        { old = previouslyPlayed, updated = toPlay }
+                            |> audioDiff
+                            |> List.map
+                                (\diff ->
+                                    { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
+                                        |> EditAudio
+                                )
+
+                    _ ->
+                        []
+
+            NotificationShow _ ->
+                case interfaces.updated of
+                    NotificationShow toShow ->
+                        { id = toShow.id, message = toShow.message, details = toShow.details }
+                            |> EditNotification
+                            |> List.singleton
+
+                    _ ->
+                        []
 
             _ ->
                 []
@@ -818,100 +833,103 @@ domTextOrElementHeaderDiff :
     -> List DomEdit
 domTextOrElementHeaderDiff =
     \nodes ->
-        case ( nodes.old, nodes.updated ) of
-            ( DomText _, DomElementHeader bElement ) ->
-                [ bElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
+        case nodes.old of
+            DomText oldText ->
+                case nodes.updated of
+                    DomElementHeader updatedElement ->
+                        [ updatedElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
 
-            ( DomElementHeader _, DomText bText ) ->
-                [ bText |> DomText |> ReplacementDomNode ]
+                    DomText updatedText ->
+                        if oldText == updatedText then
+                            []
 
-            ( DomText aText, DomText bText ) ->
-                if aText == bText then
-                    []
+                        else
+                            [ updatedText |> DomText |> ReplacementDomNode ]
 
-                else
-                    [ bText |> DomText |> ReplacementDomNode ]
+            DomElementHeader oldElement ->
+                case nodes.updated of
+                    DomText updatedText ->
+                        [ updatedText |> DomText |> ReplacementDomNode ]
 
-            ( DomElementHeader aElement, DomElementHeader bElement ) ->
-                ( aElement, bElement ) |> domElementHeaderDiff
+                    DomElementHeader updatedElement ->
+                        { old = oldElement, updated = updatedElement } |> domElementHeaderDiff
 
 
-domElementHeaderDiff : ( DomElementHeader future, DomElementHeader future ) -> List DomEdit
+domElementHeaderDiff : { old : DomElementHeader future, updated : DomElementHeader future } -> List DomEdit
 domElementHeaderDiff =
-    \( aElement, bElement ) ->
-        if aElement.tag == bElement.tag then
-            [ ( aElement.styles, bElement.styles )
+    \elements ->
+        if elements.old.tag == elements.updated.tag then
+            [ { old = elements.old.styles, updated = elements.updated.styles }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
                 |> Maybe.map ReplacementDomElementStyles
-            , ( aElement.attributes, bElement.attributes )
+            , { old = elements.old.attributes, updated = elements.updated.attributes }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
                 |> Maybe.map ReplacementDomElementAttributes
-            , ( aElement.attributesNamespaced, bElement.attributesNamespaced )
+            , { old = elements.old.attributesNamespaced, updated = elements.updated.attributesNamespaced }
                 |> dictEditAndRemoveDiff
                     { remove = \( namespace, key ) -> { namespace = namespace, key = key }
                     , edit = \( namespace, key ) value -> { namespace = namespace, key = key, value = value }
                     }
                 |> Maybe.map ReplacementDomElementAttributesNamespaced
-            , ( aElement.stringProperties, bElement.stringProperties )
+            , { old = elements.old.stringProperties, updated = elements.updated.stringProperties }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
                 |> Maybe.map ReplacementDomElementStringProperties
-            , ( aElement.boolProperties, bElement.boolProperties )
+            , { old = elements.old.boolProperties, updated = elements.updated.boolProperties }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
                 |> Maybe.map ReplacementDomElementBoolProperties
-            , if aElement.scrollToPosition == bElement.scrollToPosition then
+            , if elements.old.scrollToPosition == elements.updated.scrollToPosition then
                 Nothing
 
               else
-                ReplacementDomElementScrollToPosition bElement.scrollToPosition |> Just
-            , if aElement.scrollToShow == bElement.scrollToShow then
+                ReplacementDomElementScrollToPosition elements.updated.scrollToPosition |> Just
+            , if elements.old.scrollToShow == elements.updated.scrollToShow then
                 Nothing
 
               else
-                ReplacementDomElementScrollToShow bElement.scrollToShow |> Just
-            , case ( aElement.scrollPositionRequest, bElement.scrollPositionRequest ) of
-                ( Nothing, Nothing ) ->
+                ReplacementDomElementScrollToShow elements.updated.scrollToShow |> Just
+            , case elements.old.scrollPositionRequest of
+                Just _ ->
                     Nothing
 
-                ( Just _, Just _ ) ->
-                    Nothing
+                Nothing ->
+                    case elements.updated.scrollPositionRequest of
+                        Nothing ->
+                            Nothing
 
-                ( Just _, Nothing ) ->
-                    Nothing
-
-                ( Nothing, Just _ ) ->
-                    ReplacementDomElementScrollPositionRequest |> Just
+                        Just _ ->
+                            ReplacementDomElementScrollPositionRequest |> Just
             , let
-                bElementEventListensId : Dict String DefaultActionHandling
-                bElementEventListensId =
-                    bElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling)
+                updatedElementEventListensId : Dict String DefaultActionHandling
+                updatedElementEventListensId =
+                    elements.updated.eventListens |> Dict.map (\_ v -> v.defaultActionHandling)
               in
               if
-                (aElement.eventListens |> Dict.map (\_ v -> v.defaultActionHandling))
-                    == bElementEventListensId
+                (elements.old.eventListens |> Dict.map (\_ v -> v.defaultActionHandling))
+                    == updatedElementEventListensId
               then
                 Nothing
 
               else
-                ReplacementDomElementEventListens bElementEventListensId |> Just
+                ReplacementDomElementEventListens updatedElementEventListensId |> Just
             ]
                 |> List.LocalExtra.justs
 
         else
-            [ bElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
+            [ elements.updated |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
 
 
 dictEditAndRemoveDiff :
     { remove : comparableKey -> removeSingle, edit : comparableKey -> value -> editSingle }
     ->
-        (( Dict comparableKey value, Dict comparableKey value )
+        ({ old : Dict comparableKey value, updated : Dict comparableKey value }
          -> Maybe { remove : List removeSingle, edit : List editSingle }
         )
 dictEditAndRemoveDiff asDiffSingle =
-    \( oldDict, updatedDict ) ->
+    \dicts ->
         let
             diff : { remove : List removeSingle, edit : List editSingle }
             diff =
@@ -929,8 +947,8 @@ dictEditAndRemoveDiff asDiffSingle =
                     (\key updated soFar ->
                         { soFar | edit = soFar.edit |> (::) (asDiffSingle.edit key updated) }
                     )
-                    oldDict
-                    updatedDict
+                    dicts.old
+                    dicts.updated
                     { remove = [], edit = [] }
         in
         case ( diff.remove, diff.edit ) of
@@ -944,29 +962,29 @@ dictEditAndRemoveDiff asDiffSingle =
                 { remove = remove, edit = edit0 :: edit0Up } |> Just
 
 
-audioDiff : ( Audio, Audio ) -> List AudioEdit
+audioDiff : { old : Audio, updated : Audio } -> List AudioEdit
 audioDiff =
-    \( previous, new ) ->
-        [ if previous.volume == new.volume then
+    \audios ->
+        [ if audios.old.volume == audios.updated.volume then
             Nothing
 
           else
-            ReplacementAudioVolume new.volume |> Just
-        , if previous.speed == new.speed then
+            ReplacementAudioVolume audios.updated.volume |> Just
+        , if audios.old.speed == audios.updated.speed then
             Nothing
 
           else
-            ReplacementAudioSpeed new.speed |> Just
-        , if previous.stereoPan == new.stereoPan then
+            ReplacementAudioSpeed audios.updated.speed |> Just
+        , if audios.old.stereoPan == audios.updated.stereoPan then
             Nothing
 
           else
-            ReplacementAudioStereoPan new.stereoPan |> Just
-        , if previous.processingLastToFirst == new.processingLastToFirst then
+            ReplacementAudioStereoPan audios.updated.stereoPan |> Just
+        , if audios.old.processingLastToFirst == audios.updated.processingLastToFirst then
             Nothing
 
           else
-            new.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
+            audios.updated.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
         ]
             |> List.LocalExtra.justs
 
@@ -1023,13 +1041,13 @@ interfaceSingleDiffToJson =
         Json.Encode.LocalExtra.variant
             (case diff of
                 Add interfaceSingleInfo ->
-                    ( "Add", interfaceSingleInfo |> interfaceSingleToJson )
+                    { tag = "Add", value = interfaceSingleInfo |> interfaceSingleToJson }
 
                 Edit edit ->
-                    ( "Edit", edit |> interfaceSingleEditToJson )
+                    { tag = "Edit", value = edit |> interfaceSingleEditToJson }
 
                 Remove ->
-                    ( "Remove", Json.Encode.null )
+                    { tag = "Remove", value = Json.Encode.null }
             )
 
 
@@ -1058,19 +1076,19 @@ audioProcessingToJson =
         Json.Encode.LocalExtra.variant
             (case processing of
                 AudioLinearConvolution linearConvolution ->
-                    ( "LinearConvolution"
-                    , Json.Encode.object [ ( "sourceUrl", linearConvolution.sourceUrl |> Json.Encode.string ) ]
-                    )
+                    { tag = "LinearConvolution"
+                    , value = Json.Encode.object [ ( "sourceUrl", linearConvolution.sourceUrl |> Json.Encode.string ) ]
+                    }
 
                 AudioLowpass lowpass ->
-                    ( "Lowpass"
-                    , Json.Encode.object [ ( "cutoffFrequency", lowpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
-                    )
+                    { tag = "Lowpass"
+                    , value = Json.Encode.object [ ( "cutoffFrequency", lowpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                    }
 
                 AudioHighpass highpass ->
-                    ( "highpasses"
-                    , Json.Encode.object [ ( "cutoffFrequency", highpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
-                    )
+                    { tag = "highpasses"
+                    , value = Json.Encode.object [ ( "cutoffFrequency", highpass.cutoffFrequency |> audioParameterTimelineToJson ) ]
+                    }
             )
 
 
@@ -1080,47 +1098,50 @@ interfaceSingleEditToJson =
         Json.Encode.LocalExtra.variant
             (case edit of
                 EditDom editDomDiff ->
-                    ( "EditDom"
-                    , Json.Encode.object
-                        [ ( "path", editDomDiff.path |> Json.Encode.list Json.Encode.int )
-                        , ( "replacement", editDomDiff.replacement |> editDomDiffToJson )
-                        ]
-                    )
+                    { tag = "EditDom"
+                    , value =
+                        Json.Encode.object
+                            [ ( "path", editDomDiff.path |> Json.Encode.list Json.Encode.int )
+                            , ( "replacement", editDomDiff.replacement |> editDomDiffToJson )
+                            ]
+                    }
 
                 EditAudio audioEdit ->
-                    ( "EditAudio"
-                    , Json.Encode.object
-                        [ ( "url", audioEdit.url |> Json.Encode.string )
-                        , ( "startTime", audioEdit.startTime |> Time.posixToMillis |> Json.Encode.int )
-                        , ( "replacement"
-                          , Json.Encode.LocalExtra.variant
-                                (case audioEdit.replacement of
-                                    ReplacementAudioSpeed new ->
-                                        ( "Speed", new |> audioParameterTimelineToJson )
+                    { tag = "EditAudio"
+                    , value =
+                        Json.Encode.object
+                            [ ( "url", audioEdit.url |> Json.Encode.string )
+                            , ( "startTime", audioEdit.startTime |> Time.posixToMillis |> Json.Encode.int )
+                            , ( "replacement"
+                              , Json.Encode.LocalExtra.variant
+                                    (case audioEdit.replacement of
+                                        ReplacementAudioSpeed new ->
+                                            { tag = "Speed", value = new |> audioParameterTimelineToJson }
 
-                                    ReplacementAudioVolume new ->
-                                        ( "Volume", new |> audioParameterTimelineToJson )
+                                        ReplacementAudioVolume new ->
+                                            { tag = "Volume", value = new |> audioParameterTimelineToJson }
 
-                                    ReplacementAudioStereoPan new ->
-                                        ( "StereoPan", new |> audioParameterTimelineToJson )
+                                        ReplacementAudioStereoPan new ->
+                                            { tag = "StereoPan", value = new |> audioParameterTimelineToJson }
 
-                                    ReplacementAudioProcessing new ->
-                                        ( "Processing"
-                                        , new |> Json.Encode.list audioProcessingToJson
-                                        )
-                                )
-                          )
-                        ]
-                    )
+                                        ReplacementAudioProcessing new ->
+                                            { tag = "Processing"
+                                            , value = new |> Json.Encode.list audioProcessingToJson
+                                            }
+                                    )
+                              )
+                            ]
+                    }
 
                 EditNotification editNotificationDiff ->
-                    ( "EditNotification"
-                    , Json.Encode.object
-                        [ ( "id", editNotificationDiff.id |> Json.Encode.string )
-                        , ( "message", editNotificationDiff.message |> Json.Encode.string )
-                        , ( "details", editNotificationDiff.details |> Json.Encode.string )
-                        ]
-                    )
+                    { tag = "EditNotification"
+                    , value =
+                        Json.Encode.object
+                            [ ( "id", editNotificationDiff.id |> Json.Encode.string )
+                            , ( "message", editNotificationDiff.message |> Json.Encode.string )
+                            , ( "details", editNotificationDiff.details |> Json.Encode.string )
+                            ]
+                    }
             )
 
 
@@ -1130,10 +1151,10 @@ domTextOrElementHeaderInfoToJson =
         Json.Encode.LocalExtra.variant
             (case domNodeId of
                 DomText text ->
-                    ( "Text", text |> Json.Encode.string )
+                    { tag = "Text", value = text |> Json.Encode.string }
 
                 DomElementHeader element ->
-                    ( "Element", element |> domElementHeaderInfoToJson )
+                    { tag = "Element", value = element |> domElementHeaderInfoToJson }
             )
 
 
@@ -1308,118 +1329,123 @@ editDomDiffToJson =
         Json.Encode.LocalExtra.variant
             (case replacementInEditDomDiff of
                 ReplacementDomNode node ->
-                    ( "Node", node |> domTextOrElementHeaderInfoToJson )
+                    { tag = "Node", value = node |> domTextOrElementHeaderInfoToJson }
 
                 ReplacementDomElementStyles styles ->
-                    ( "Styles"
-                    , Json.Encode.object
-                        [ ( "remove", styles.remove |> Json.Encode.list Json.Encode.string )
-                        , ( "edit"
-                          , styles.edit
-                                |> Json.Encode.list
-                                    (\editSingle ->
-                                        Json.Encode.object
-                                            [ ( "key", editSingle.key |> Json.Encode.string )
-                                            , ( "value", editSingle.value |> Json.Encode.string )
-                                            ]
-                                    )
-                          )
-                        ]
-                    )
+                    { tag = "Styles"
+                    , value =
+                        Json.Encode.object
+                            [ ( "remove", styles.remove |> Json.Encode.list Json.Encode.string )
+                            , ( "edit"
+                              , styles.edit
+                                    |> Json.Encode.list
+                                        (\editSingle ->
+                                            Json.Encode.object
+                                                [ ( "key", editSingle.key |> Json.Encode.string )
+                                                , ( "value", editSingle.value |> Json.Encode.string )
+                                                ]
+                                        )
+                              )
+                            ]
+                    }
 
                 ReplacementDomElementAttributes attributes ->
-                    ( "Attributes"
-                    , Json.Encode.object
-                        [ ( "remove", attributes.remove |> Json.Encode.list Json.Encode.string )
-                        , ( "edit"
-                          , attributes.edit
-                                |> Json.Encode.list
-                                    (\editSingle ->
-                                        Json.Encode.object
-                                            [ ( "key", editSingle.key |> Json.Encode.string )
-                                            , ( "value", editSingle.value |> Json.Encode.string )
-                                            ]
-                                    )
-                          )
-                        ]
-                    )
+                    { tag = "Attributes"
+                    , value =
+                        Json.Encode.object
+                            [ ( "remove", attributes.remove |> Json.Encode.list Json.Encode.string )
+                            , ( "edit"
+                              , attributes.edit
+                                    |> Json.Encode.list
+                                        (\editSingle ->
+                                            Json.Encode.object
+                                                [ ( "key", editSingle.key |> Json.Encode.string )
+                                                , ( "value", editSingle.value |> Json.Encode.string )
+                                                ]
+                                        )
+                              )
+                            ]
+                    }
 
                 ReplacementDomElementAttributesNamespaced attributesNamespaced ->
-                    ( "AttributesNamespaced"
-                    , Json.Encode.object
-                        [ ( "remove"
-                          , attributesNamespaced.remove
-                                |> Json.Encode.list
-                                    (\removeSingle ->
-                                        Json.Encode.object
-                                            [ ( "namespace", removeSingle.namespace |> Json.Encode.string )
-                                            , ( "key", removeSingle.key |> Json.Encode.string )
-                                            ]
-                                    )
-                          )
-                        , ( "edit"
-                          , attributesNamespaced.edit
-                                |> Json.Encode.list
-                                    (\editSingle ->
-                                        Json.Encode.object
-                                            [ ( "namespace", editSingle.namespace |> Json.Encode.string )
-                                            , ( "key", editSingle.key |> Json.Encode.string )
-                                            , ( "value", editSingle.value |> Json.Encode.string )
-                                            ]
-                                    )
-                          )
-                        ]
-                    )
+                    { tag = "AttributesNamespaced"
+                    , value =
+                        Json.Encode.object
+                            [ ( "remove"
+                              , attributesNamespaced.remove
+                                    |> Json.Encode.list
+                                        (\removeSingle ->
+                                            Json.Encode.object
+                                                [ ( "namespace", removeSingle.namespace |> Json.Encode.string )
+                                                , ( "key", removeSingle.key |> Json.Encode.string )
+                                                ]
+                                        )
+                              )
+                            , ( "edit"
+                              , attributesNamespaced.edit
+                                    |> Json.Encode.list
+                                        (\editSingle ->
+                                            Json.Encode.object
+                                                [ ( "namespace", editSingle.namespace |> Json.Encode.string )
+                                                , ( "key", editSingle.key |> Json.Encode.string )
+                                                , ( "value", editSingle.value |> Json.Encode.string )
+                                                ]
+                                        )
+                              )
+                            ]
+                    }
 
                 ReplacementDomElementStringProperties stringProperties ->
-                    ( "StringProperties"
-                    , Json.Encode.object
-                        [ ( "remove", stringProperties.remove |> Json.Encode.list Json.Encode.string )
-                        , ( "edit"
-                          , stringProperties.edit
-                                |> Json.Encode.list
-                                    (\editSingle ->
-                                        Json.Encode.object
-                                            [ ( "key", editSingle.key |> Json.Encode.string )
-                                            , ( "value", editSingle.value |> Json.Encode.string )
-                                            ]
-                                    )
-                          )
-                        ]
-                    )
+                    { tag = "StringProperties"
+                    , value =
+                        Json.Encode.object
+                            [ ( "remove", stringProperties.remove |> Json.Encode.list Json.Encode.string )
+                            , ( "edit"
+                              , stringProperties.edit
+                                    |> Json.Encode.list
+                                        (\editSingle ->
+                                            Json.Encode.object
+                                                [ ( "key", editSingle.key |> Json.Encode.string )
+                                                , ( "value", editSingle.value |> Json.Encode.string )
+                                                ]
+                                        )
+                              )
+                            ]
+                    }
 
                 ReplacementDomElementBoolProperties boolProperties ->
-                    ( "StringProperties"
-                    , Json.Encode.object
-                        [ ( "remove", boolProperties.remove |> Json.Encode.list Json.Encode.string )
-                        , ( "edit"
-                          , boolProperties.edit
-                                |> Json.Encode.list
-                                    (\editSingle ->
-                                        Json.Encode.object
-                                            [ ( "key", editSingle.key |> Json.Encode.string )
-                                            , ( "value", editSingle.value |> Json.Encode.bool )
-                                            ]
-                                    )
-                          )
-                        ]
-                    )
+                    { tag = "StringProperties"
+                    , value =
+                        Json.Encode.object
+                            [ ( "remove", boolProperties.remove |> Json.Encode.list Json.Encode.string )
+                            , ( "edit"
+                              , boolProperties.edit
+                                    |> Json.Encode.list
+                                        (\editSingle ->
+                                            Json.Encode.object
+                                                [ ( "key", editSingle.key |> Json.Encode.string )
+                                                , ( "value", editSingle.value |> Json.Encode.bool )
+                                                ]
+                                        )
+                              )
+                            ]
+                    }
 
                 ReplacementDomElementScrollToPosition maybePosition ->
-                    ( "ScrollToPosition"
-                    , maybePosition |> Json.Encode.LocalExtra.nullable domElementScrollPositionToJson
-                    )
+                    { tag = "ScrollToPosition"
+                    , value = maybePosition |> Json.Encode.LocalExtra.nullable domElementScrollPositionToJson
+                    }
 
                 ReplacementDomElementScrollToShow alignment ->
-                    ( "ScrollToShow"
-                    , alignment |> Json.Encode.LocalExtra.nullable domElementVisibilityAlignmentsToJson
-                    )
+                    { tag = "ScrollToShow"
+                    , value = alignment |> Json.Encode.LocalExtra.nullable domElementVisibilityAlignmentsToJson
+                    }
 
                 ReplacementDomElementScrollPositionRequest ->
-                    ( "ScrollPositionRequest", Json.Encode.null )
+                    { tag = "ScrollPositionRequest", value = Json.Encode.null }
 
                 ReplacementDomElementEventListens listens ->
-                    ( "EventListens", listens |> domElementEventListensInfoToJson )
+                    { tag = "EventListens", value = listens |> domElementEventListensInfoToJson }
             )
 
 
@@ -1429,194 +1455,203 @@ interfaceSingleToJson =
         Json.Encode.LocalExtra.variant
             (case add of
                 DocumentTitleReplaceBy replacement ->
-                    ( "DocumentTitleReplaceBy", replacement |> Json.Encode.string )
+                    { tag = "DocumentTitleReplaceBy", value = replacement |> Json.Encode.string }
 
                 DocumentAuthorSet new ->
-                    ( "DocumentAuthorSet", new |> Json.Encode.string )
+                    { tag = "DocumentAuthorSet", value = new |> Json.Encode.string }
 
                 DocumentKeywordsSet new ->
-                    ( "DocumentKeywordsSet", new |> String.join "," |> Json.Encode.string )
+                    { tag = "DocumentKeywordsSet", value = new |> String.join "," |> Json.Encode.string }
 
                 DocumentDescriptionSet new ->
-                    ( "DocumentDescriptionSet", new |> Json.Encode.string )
+                    { tag = "DocumentDescriptionSet", value = new |> Json.Encode.string }
 
                 ConsoleLog string ->
-                    ( "ConsoleLog", string |> Json.Encode.string )
+                    { tag = "ConsoleLog", value = string |> Json.Encode.string }
 
                 ConsoleWarn string ->
-                    ( "ConsoleWarn", string |> Json.Encode.string )
+                    { tag = "ConsoleWarn", value = string |> Json.Encode.string }
 
                 ConsoleError string ->
-                    ( "ConsoleError", string |> Json.Encode.string )
+                    { tag = "ConsoleError", value = string |> Json.Encode.string }
 
                 NavigationPushUrl url ->
-                    ( "NavigationPushUrl", url |> AppUrl.toString |> Json.Encode.string )
+                    { tag = "NavigationPushUrl", value = url |> AppUrl.toString |> Json.Encode.string }
 
                 NavigationReplaceUrl url ->
-                    ( "NavigationReplaceUrl", url |> AppUrl.toString |> Json.Encode.string )
+                    { tag = "NavigationReplaceUrl", value = url |> AppUrl.toString |> Json.Encode.string }
 
                 NavigationGo urlSteps ->
-                    ( "NavigationGo", urlSteps |> Json.Encode.int )
+                    { tag = "NavigationGo", value = urlSteps |> Json.Encode.int }
 
                 NavigationLoad url ->
-                    ( "NavigationLoad", url |> Json.Encode.string )
+                    { tag = "NavigationLoad", value = url |> Json.Encode.string }
 
                 NavigationReload ->
-                    ( "NavigationReload", Json.Encode.null )
+                    { tag = "NavigationReload", value = Json.Encode.null }
 
                 FileDownloadUnsignedInt8s config ->
-                    ( "FileDownloadUnsignedInt8s"
-                    , Json.Encode.object
-                        [ ( "name", config.name |> Json.Encode.string )
-                        , ( "mimeType", config.mimeType |> Json.Encode.string )
-                        , ( "content"
-                          , config.content |> Json.Encode.list Json.Encode.int
-                          )
-                        ]
-                    )
+                    { tag = "FileDownloadUnsignedInt8s"
+                    , value =
+                        Json.Encode.object
+                            [ ( "name", config.name |> Json.Encode.string )
+                            , ( "mimeType", config.mimeType |> Json.Encode.string )
+                            , ( "content"
+                              , config.content |> Json.Encode.list Json.Encode.int
+                              )
+                            ]
+                    }
 
                 ClipboardReplaceBy replacement ->
-                    ( "ClipboardReplaceBy"
-                    , replacement |> Json.Encode.string
-                    )
+                    { tag = "ClipboardReplaceBy"
+                    , value = replacement |> Json.Encode.string
+                    }
 
                 AudioPlay audio ->
-                    ( "AudioPlay", audio |> audioToJson )
+                    { tag = "AudioPlay", value = audio |> audioToJson }
 
                 SocketMessage message ->
-                    ( "SocketMessage"
-                    , Json.Encode.object
-                        [ ( "id", message.id |> socketIdToJson )
-                        , ( "data", message.data |> Json.Encode.string )
-                        ]
-                    )
+                    { tag = "SocketMessage"
+                    , value =
+                        Json.Encode.object
+                            [ ( "id", message.id |> socketIdToJson )
+                            , ( "data", message.data |> Json.Encode.string )
+                            ]
+                    }
 
                 SocketDisconnect id ->
-                    ( "SocketDisconnect"
-                    , id |> socketIdToJson
-                    )
+                    { tag = "SocketDisconnect"
+                    , value = id |> socketIdToJson
+                    }
 
                 LocalStorageSet set ->
-                    ( "LocalStorageSet"
-                    , Json.Encode.object
-                        [ ( "key", set.key |> Json.Encode.string )
-                        , ( "value", set.value |> Json.Encode.LocalExtra.nullable Json.Encode.string )
-                        ]
-                    )
+                    { tag = "LocalStorageSet"
+                    , value =
+                        Json.Encode.object
+                            [ ( "key", set.key |> Json.Encode.string )
+                            , ( "value", set.value |> Json.Encode.LocalExtra.nullable Json.Encode.string )
+                            ]
+                    }
 
                 NotificationAskForPermission ->
-                    ( "NotificationAskForPermission", Json.Encode.null )
+                    { tag = "NotificationAskForPermission", value = Json.Encode.null }
 
                 DomNodeRender render ->
-                    ( "DomNodeRender"
-                    , Json.Encode.object
-                        [ ( "path", render.path |> Json.Encode.list Json.Encode.int )
-                        , ( "node", render.node |> domTextOrElementHeaderInfoToJson )
-                        ]
-                    )
+                    { tag = "DomNodeRender"
+                    , value =
+                        Json.Encode.object
+                            [ ( "path", render.path |> Json.Encode.list Json.Encode.int )
+                            , ( "node", render.node |> domTextOrElementHeaderInfoToJson )
+                            ]
+                    }
 
                 AudioSourceLoad audioSourceLoad ->
-                    ( "AudioSourceLoad", audioSourceLoad.url |> Json.Encode.string )
+                    { tag = "AudioSourceLoad", value = audioSourceLoad.url |> Json.Encode.string }
 
                 SocketConnect connect ->
-                    ( "SocketConnect"
-                    , Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ]
-                    )
+                    { tag = "SocketConnect"
+                    , value = Json.Encode.object [ ( "address", connect.address |> Json.Encode.string ) ]
+                    }
 
                 NotificationShow show ->
-                    ( "NotificationShow"
-                    , Json.Encode.object
-                        [ ( "id", show.id |> Json.Encode.string )
-                        , ( "message", show.message |> Json.Encode.string )
-                        , ( "details", show.details |> Json.Encode.string )
-                        ]
-                    )
+                    { tag = "NotificationShow"
+                    , value =
+                        Json.Encode.object
+                            [ ( "id", show.id |> Json.Encode.string )
+                            , ( "message", show.message |> Json.Encode.string )
+                            , ( "details", show.details |> Json.Encode.string )
+                            ]
+                    }
 
                 HttpRequest httpRequestInfo ->
-                    ( "HttpRequest", httpRequestInfo |> httpRequestInfoToJson )
+                    { tag = "HttpRequest", value = httpRequestInfo |> httpRequestInfoToJson }
 
                 TimePosixRequest _ ->
-                    ( "TimePosixRequest", Json.Encode.null )
+                    { tag = "TimePosixRequest", value = Json.Encode.null }
 
                 TimezoneOffsetRequest _ ->
-                    ( "TimezoneOffsetRequest", Json.Encode.null )
+                    { tag = "TimezoneOffsetRequest", value = Json.Encode.null }
 
                 TimezoneNameRequest _ ->
-                    ( "TimezoneNameRequest", Json.Encode.null )
+                    { tag = "TimezoneNameRequest", value = Json.Encode.null }
 
                 TimeOnce once ->
-                    ( "TimeOnce"
-                    , Json.Encode.object
-                        [ ( "pointInTime", once.pointInTime |> Time.posixToMillis |> Json.Encode.int ) ]
-                    )
+                    { tag = "TimeOnce"
+                    , value =
+                        Json.Encode.object
+                            [ ( "pointInTime", once.pointInTime |> Time.posixToMillis |> Json.Encode.int ) ]
+                    }
 
                 RandomUnsignedInt32sRequest request ->
-                    ( "RandomUnsignedInt32sRequest", request.count |> Json.Encode.int )
+                    { tag = "RandomUnsignedInt32sRequest", value = request.count |> Json.Encode.int }
 
                 WindowSizeRequest _ ->
-                    ( "WindowSizeRequest", Json.Encode.null )
+                    { tag = "WindowSizeRequest", value = Json.Encode.null }
 
                 WindowPreferredLanguagesRequest _ ->
-                    ( "WindowPreferredLanguagesRequest", Json.Encode.null )
+                    { tag = "WindowPreferredLanguagesRequest", value = Json.Encode.null }
 
                 NavigationUrlRequest _ ->
-                    ( "NavigationUrlRequest", Json.Encode.null )
+                    { tag = "NavigationUrlRequest", value = Json.Encode.null }
 
                 ClipboardRequest _ ->
-                    ( "ClipboardRequest", Json.Encode.null )
+                    { tag = "ClipboardRequest", value = Json.Encode.null }
 
                 LocalStorageRequest request ->
-                    ( "LocalStorageRequest"
-                    , Json.Encode.object [ ( "key", request.key |> Json.Encode.string ) ]
-                    )
+                    { tag = "LocalStorageRequest"
+                    , value = Json.Encode.object [ ( "key", request.key |> Json.Encode.string ) ]
+                    }
 
                 GeoLocationRequest _ ->
-                    ( "GeoLocationRequest", Json.Encode.null )
+                    { tag = "GeoLocationRequest", value = Json.Encode.null }
 
                 GamepadsRequest _ ->
-                    ( "GamepadsRequest", Json.Encode.null )
+                    { tag = "GamepadsRequest", value = Json.Encode.null }
 
                 TimePeriodicallyListen intervalDuration ->
-                    ( "TimePeriodicallyListen"
-                    , Json.Encode.object
-                        [ ( "milliSeconds", intervalDuration.intervalDurationMilliSeconds |> Json.Encode.int ) ]
-                    )
+                    { tag = "TimePeriodicallyListen"
+                    , value =
+                        Json.Encode.object
+                            [ ( "milliSeconds", intervalDuration.intervalDurationMilliSeconds |> Json.Encode.int ) ]
+                    }
 
                 WindowEventListen listen ->
-                    ( "WindowEventListen", listen.eventName |> Json.Encode.string )
+                    { tag = "WindowEventListen", value = listen.eventName |> Json.Encode.string }
 
                 WindowVisibilityChangeListen _ ->
-                    ( "WindowVisibilityChangeListen", Json.Encode.null )
+                    { tag = "WindowVisibilityChangeListen", value = Json.Encode.null }
 
                 WindowAnimationFrameListen _ ->
-                    ( "WindowAnimationFrameListen", Json.Encode.null )
+                    { tag = "WindowAnimationFrameListen", value = Json.Encode.null }
 
                 WindowPreferredLanguagesChangeListen _ ->
-                    ( "WindowPreferredLanguagesChangeListen", Json.Encode.null )
+                    { tag = "WindowPreferredLanguagesChangeListen", value = Json.Encode.null }
 
                 DocumentEventListen listen ->
-                    ( "DocumentEventListen", listen.eventName |> Json.Encode.string )
+                    { tag = "DocumentEventListen", value = listen.eventName |> Json.Encode.string }
 
                 SocketMessageListen listen ->
-                    ( "SocketMessageListen", listen.id |> socketIdToJson )
+                    { tag = "SocketMessageListen", value = listen.id |> socketIdToJson }
 
                 LocalStorageRemoveOnADifferentTabListen listen ->
-                    ( "LocalStorageRemoveOnADifferentTabListen"
-                    , Json.Encode.object
-                        [ ( "key", listen.key |> Json.Encode.string ) ]
-                    )
+                    { tag = "LocalStorageRemoveOnADifferentTabListen"
+                    , value =
+                        Json.Encode.object
+                            [ ( "key", listen.key |> Json.Encode.string ) ]
+                    }
 
                 LocalStorageSetOnADifferentTabListen listen ->
-                    ( "LocalStorageSetOnADifferentTabListen"
-                    , Json.Encode.object
-                        [ ( "key", listen.key |> Json.Encode.string ) ]
-                    )
+                    { tag = "LocalStorageSetOnADifferentTabListen"
+                    , value =
+                        Json.Encode.object
+                            [ ( "key", listen.key |> Json.Encode.string ) ]
+                    }
 
                 GeoLocationChangeListen _ ->
-                    ( "GeoLocationChangeListen", Json.Encode.null )
+                    { tag = "GeoLocationChangeListen", value = Json.Encode.null }
 
                 GamepadsChangeListen _ ->
-                    ( "GamepadsChangeListen", Json.Encode.null )
+                    { tag = "GamepadsChangeListen", value = Json.Encode.null }
             )
 
 
@@ -1669,15 +1704,17 @@ httpBodyToJson =
         Json.Encode.LocalExtra.variant
             (case body of
                 HttpBodyString stringBodyInfo ->
-                    ( "String"
-                    , stringBodyInfo.content |> Json.Encode.string
-                    )
+                    { tag = "String"
+                    , value = stringBodyInfo.content |> Json.Encode.string
+                    }
 
                 HttpBodyUnsignedInt8s bytesBodyInfo ->
-                    ( "Uint8Array", bytesBodyInfo.content |> Json.Encode.list Json.Encode.int )
+                    { tag = "Uint8Array"
+                    , value = bytesBodyInfo.content |> Json.Encode.list Json.Encode.int
+                    }
 
                 HttpBodyEmpty ->
-                    ( "Empty", Json.Encode.null )
+                    { tag = "Empty", value = Json.Encode.null }
             )
 
 
