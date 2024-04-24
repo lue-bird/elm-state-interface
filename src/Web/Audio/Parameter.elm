@@ -7,12 +7,12 @@ module Web.Audio.Parameter exposing (at, through)
 -}
 
 import Time
-import Web exposing (AudioParameterTimeline)
+import Web
 
 
 {-| Set it to a constant value. Add [`through`](#through) to make it transition from this starting value over time
 -}
-at : Float -> AudioParameterTimeline
+at : Float -> Web.AudioParameterTimeline
 at valueAtTheStart =
     { startValue = valueAtTheStart, keyFrames = [] }
 
@@ -44,7 +44,7 @@ Let's define an audio function that fades in to 1 and then fades out until it's 
 You do not have to worry about order.
 
 -}
-through : Time.Posix -> Float -> (AudioParameterTimeline -> AudioParameterTimeline)
+through : Time.Posix -> Float -> (Web.AudioParameterTimeline -> Web.AudioParameterTimeline)
 through keyFrameMoment keyFrameValue =
     \soFar ->
         { startValue = soFar.startValue

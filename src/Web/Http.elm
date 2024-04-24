@@ -19,12 +19,12 @@ import Bytes.LocalExtra
 import Json.Decode
 import Json.Encode
 import Rope
-import Web exposing (HttpBody, HttpError, HttpExpect, HttpRequest)
+import Web
 
 
 {-| Put a given JSON value in the body of your request. This will automatically add the `Content-Type: application/json` header.
 -}
-bodyJson : Json.Encode.Value -> HttpBody
+bodyJson : Json.Encode.Value -> Web.HttpBody
 bodyJson content =
     Web.HttpBodyString { mimeType = "application/json", content = Json.Encode.encode 0 content }
 
@@ -57,7 +57,7 @@ The string argument should be a [MIME type](https://en.wikipedia.org/wiki/Media_
   - 🧩 [`Zip` and `Zip.Entry` are from `agu-z/elm-zip`](https://dark.elm.dmy.fr/packages/agu-z/elm-zip/latest/)
 
 -}
-bodyBytes : String -> (Bytes -> HttpBody)
+bodyBytes : String -> (Bytes -> Web.HttpBody)
 bodyBytes mimeType content =
     Web.HttpBodyUnsignedInt8s { mimeType = mimeType, content = content |> Bytes.LocalExtra.toUnsignedInt8List }
 
@@ -76,7 +76,14 @@ The result will either be
         and the actual text response
 
 -}
-expectJson : Json.Decode.Decoder future -> HttpExpect (Result HttpError (Result { actualBody : String, jsonError : Json.Decode.Error } future))
+expectJson :
+    Json.Decode.Decoder future
+    ->
+        Web.HttpExpect
+            (Result
+                Web.HttpError
+                (Result { actualBody : String, jsonError : Json.Decode.Error } future)
+            )
 expectJson stateDecoder =
     Web.HttpExpectString
         (\result ->
@@ -101,21 +108,21 @@ The result will either be
   - `Ok` with the `Bytes`
 
 -}
-expectBytes : HttpExpect (Result HttpError Bytes)
+expectBytes : Web.HttpExpect (Result Web.HttpError Bytes)
 expectBytes =
     Web.HttpExpectBytes identity
 
 
 {-| Expect the response body to be a `String`.
 -}
-expectString : HttpExpect (Result HttpError String)
+expectString : Web.HttpExpect (Result Web.HttpError String)
 expectString =
     Web.HttpExpectString identity
 
 
 {-| Discard the response body.
 -}
-expectWhatever : HttpExpect (Result HttpError ())
+expectWhatever : Web.HttpExpect (Result Web.HttpError ())
 expectWhatever =
     Web.HttpExpectWhatever identity
 
@@ -132,9 +139,9 @@ Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are wi
 -}
 get :
     { url : String
-    , expect : HttpExpect future
+    , expect : Web.HttpExpect future
     }
-    -> HttpRequest future
+    -> Web.HttpRequest future
 get options =
     { url = options.url
     , method = "GET"
@@ -152,7 +159,7 @@ get options =
             ]
 
 -}
-addHeaders : List ( String, String ) -> (HttpRequest future -> HttpRequest future)
+addHeaders : List ( String, String ) -> (Web.HttpRequest future -> Web.HttpRequest future)
 addHeaders headers =
     \httpRequest ->
         { httpRequest
@@ -170,10 +177,10 @@ Use [`Web.Time.onceAt`](Web-Time#onceAt) to add a timeout of how long you are wi
 -}
 post :
     { url : String
-    , body : HttpBody
-    , expect : HttpExpect future
+    , body : Web.HttpBody
+    , expect : Web.HttpExpect future
     }
-    -> HttpRequest future
+    -> Web.HttpRequest future
 post options =
     { url = options.url
     , method = "POST"
@@ -186,7 +193,7 @@ post options =
 {-| An [`Interface`](Web#Interface) for handling an [`HttpRequest`](Web#HttpRequest)
 using the [fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch)
 -}
-request : HttpRequest future -> Web.Interface future
+request : Web.HttpRequest future -> Web.Interface future
 request =
     \httpRequest ->
         httpRequest |> Web.HttpRequest |> Rope.singleton

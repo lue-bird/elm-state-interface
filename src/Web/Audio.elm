@@ -54,7 +54,7 @@ To detune, use [`speedScaleBy`](#speedScaleBy). It's documentation also shows wh
 import Duration
 import Rope
 import Time
-import Web exposing (Audio, AudioParameterTimeline, AudioSource)
+import Web exposing (Audio)
 import Web.Audio.Parameter
 import Web.Audio.Parameter.Internal
 
@@ -64,7 +64,7 @@ import Web.Audio.Parameter.Internal
 `Web.Audio.pan -0.9` for example means that the sound is almost fully balanced towards the left speaker
 
 -}
-stereoPan : AudioParameterTimeline -> (Audio -> Audio)
+stereoPan : Web.AudioParameterTimeline -> (Audio -> Audio)
 stereoPan signedPercentageTimeline =
     \a ->
         { a
@@ -89,7 +89,7 @@ see [Audio time stretching and pitch scaling](https://en.wikipedia.org/wiki/Audi
 Help appreciated!
 
 -}
-speedScaleBy : AudioParameterTimeline -> (Audio -> Audio)
+speedScaleBy : Web.AudioParameterTimeline -> (Audio -> Audio)
 speedScaleBy speedScaleFactorTimeline =
     \a ->
         { a
@@ -104,7 +104,7 @@ speedScaleBy speedScaleFactorTimeline =
 1 preserves the current volume, 0.5 halves it, and 0 mutes it.
 If the the volume is less than 0, 0 will be used instead.
 -}
-volumeScaleBy : AudioParameterTimeline -> (Audio -> Audio)
+volumeScaleBy : Web.AudioParameterTimeline -> (Audio -> Audio)
 volumeScaleBy volumeScaleFactor =
     \a ->
         { a
@@ -129,7 +129,7 @@ If you need some nice impulse wavs to try it out, there's a few at [`dhiogoboza/
 If you know more nice ones, don't hesitate to open an issue or a PR.
 
 -}
-addLinearConvolutionWith : AudioSource -> (Audio -> Audio)
+addLinearConvolutionWith : Web.AudioSource -> (Audio -> Audio)
 addLinearConvolutionWith bufferAudioSource =
     \a -> a |> addProcessing (Web.AudioLinearConvolution { sourceUrl = bufferAudioSource.url })
 
@@ -140,7 +140,7 @@ frequencies above it are attenuated.
 Has a 12dB/octave rolloff and no peak at the cutoff.
 
 -}
-addLowpassUntilFrequency : AudioParameterTimeline -> (Audio -> Audio)
+addLowpassUntilFrequency : Web.AudioParameterTimeline -> (Audio -> Audio)
 addLowpassUntilFrequency cutoffFrequency =
     \a -> a |> addProcessing (Web.AudioLowpass { cutoffFrequency = cutoffFrequency })
 
@@ -151,7 +151,7 @@ frequencies above it pass through.
 Has a 12dB/octave rolloff and no peak at the cutoff.
 
 -}
-addHighpassFromFrequency : AudioParameterTimeline -> (Audio -> Audio)
+addHighpassFromFrequency : Web.AudioParameterTimeline -> (Audio -> Audio)
 addHighpassFromFrequency cutoffFrequency =
     \a -> a |> addProcessing (Web.AudioHighpass { cutoffFrequency = cutoffFrequency })
 
@@ -168,7 +168,7 @@ which will play at a given [time](https://dark.elm.dmy.fr/packages/elm/time/late
 Note that in some browsers audio will be muted until the user interacts with the webpage.
 
 -}
-fromSource : AudioSource -> Time.Posix -> Audio
+fromSource : Web.AudioSource -> Time.Posix -> Audio
 fromSource source startTime =
     { url = source.url
     , startTime = startTime
