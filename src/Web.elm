@@ -182,13 +182,23 @@ import Url.LocalExtra
        }
        ```
 
+    - inside `Web.interfaceSingleEdits`, add a case `[YourName] -> []`.
+      If your running interface can be changed, read the section below
+
+
    Sometimes, removing + adding the new interface would not be the same as editing the existing one or would at least perform worse.
    For example, changing the volume of an audio should not require removing and and re-adding all audio nodes.
 
    If you also want to enable editing a running interface:
 
     - to `Web.InterfaceSingleEdit`, add a variant `| Edit[YourName] ..your diff info..`
-    - inside `Web.interfaceSingleEdits`, add a case `( [YourName] old, [YourName] new ) -> Edit[YourName] ..the diff..`
+    - inside `Web.interfaceSingleEdits`, set the case
+      ```elm
+      [YourName] old ->
+          case case interfaces.updated of
+              [YourName] new ->
+                  Edit[YourName] ..the diff..
+      ```
     - in `runner/index.ts` inside `interfaceEditImplementation`, add a `case "Edit[YourName]" : return (yourInput) => { ... }`
 -}
 
@@ -823,7 +833,136 @@ interfaceSingleEdits =
                     _ ->
                         []
 
-            _ ->
+            DocumentTitleReplaceBy _ ->
+                []
+
+            DocumentAuthorSet _ ->
+                []
+
+            DocumentKeywordsSet _ ->
+                []
+
+            DocumentDescriptionSet _ ->
+                []
+
+            DocumentEventListen _ ->
+                []
+
+            ConsoleLog _ ->
+                []
+
+            ConsoleWarn _ ->
+                []
+
+            ConsoleError _ ->
+                []
+
+            NavigationReplaceUrl _ ->
+                []
+
+            NavigationPushUrl _ ->
+                []
+
+            NavigationGo _ ->
+                []
+
+            NavigationLoad _ ->
+                []
+
+            NavigationReload ->
+                []
+
+            NavigationUrlRequest _ ->
+                []
+
+            FileDownloadUnsignedInt8s _ ->
+                []
+
+            ClipboardReplaceBy _ ->
+                []
+
+            ClipboardRequest _ ->
+                []
+
+            AudioSourceLoad _ ->
+                []
+
+            NotificationAskForPermission ->
+                []
+
+            HttpRequest _ ->
+                []
+
+            TimePosixRequest _ ->
+                []
+
+            TimezoneOffsetRequest _ ->
+                []
+
+            TimeOnce _ ->
+                []
+
+            TimePeriodicallyListen _ ->
+                []
+
+            TimezoneNameRequest _ ->
+                []
+
+            RandomUnsignedInt32sRequest _ ->
+                []
+
+            WindowSizeRequest _ ->
+                []
+
+            WindowPreferredLanguagesRequest _ ->
+                []
+
+            WindowEventListen _ ->
+                []
+
+            WindowVisibilityChangeListen _ ->
+                []
+
+            WindowAnimationFrameListen _ ->
+                []
+
+            WindowPreferredLanguagesChangeListen _ ->
+                []
+
+            SocketConnect _ ->
+                []
+
+            SocketMessage _ ->
+                []
+
+            SocketDisconnect _ ->
+                []
+
+            SocketMessageListen _ ->
+                []
+
+            LocalStorageSet _ ->
+                []
+
+            LocalStorageRequest _ ->
+                []
+
+            LocalStorageRemoveOnADifferentTabListen _ ->
+                []
+
+            LocalStorageSetOnADifferentTabListen _ ->
+                []
+
+            GeoLocationRequest _ ->
+                []
+
+            GeoLocationChangeListen _ ->
+                []
+
+            GamepadsRequest _ ->
+                []
+
+            GamepadsChangeListen _ ->
                 []
 
 
