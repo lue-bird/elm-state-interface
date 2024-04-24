@@ -1669,19 +1669,16 @@ httpRequestInfoToJson =
             , ( "headers"
               , httpRequestId.headers
                     |> addContentTypeForBody httpRequestId.body
-                    |> Json.Encode.list headerToJson
+                    |> Json.Encode.list
+                        (\header ->
+                            Json.Encode.object
+                                [ ( "name", header.name |> Json.Encode.string )
+                                , ( "value", header.value |> Json.Encode.string )
+                                ]
+                        )
               )
             , ( "expect", httpRequestId.expect |> httpExpectInfoToJson )
             , ( "body", httpRequestId.body |> httpBodyToJson )
-            ]
-
-
-headerToJson : { name : String, value : String } -> Json.Encode.Value
-headerToJson =
-    \header ->
-        Json.Encode.object
-            [ ( "name", header.name |> Json.Encode.string )
-            , ( "value", header.value |> Json.Encode.string )
             ]
 
 
