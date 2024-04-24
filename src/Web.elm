@@ -1237,12 +1237,14 @@ domElementHeaderInfoToJson =
               , header.scrollToShow |> Json.Encode.LocalExtra.nullable domElementVisibilityAlignmentsToJson
               )
             , ( "scrollPositionRequest"
-              , case header.scrollPositionRequest of
-                    Nothing ->
-                        Json.Encode.bool False
+              , Json.Encode.bool
+                    (case header.scrollPositionRequest of
+                        Nothing ->
+                            False
 
-                    Just _ ->
-                        Json.Encode.bool True
+                        Just _ ->
+                            True
+                    )
               )
             , ( "eventListens"
               , header.eventListens
