@@ -1,7 +1,7 @@
 module Tests exposing (tests)
 
 import Expect
-import Fuzz exposing (Fuzzer)
+import Fuzz
 import List.LocalExtra
 import StructuredId exposing (StructuredId)
 import Test exposing (Test)
@@ -46,12 +46,12 @@ tests =
         ]
 
 
-treeFuzz : Fuzzer ExampleTree
+treeFuzz : Fuzz.Fuzzer ExampleTree
 treeFuzz =
     treeFuzzAtDepth 0
 
 
-treeFuzzAtDepth : Int -> Fuzzer ExampleTree
+treeFuzzAtDepth : Int -> Fuzz.Fuzzer ExampleTree
 treeFuzzAtDepth depth =
     if depth >= 4 then
         Fuzz.map Leaf Fuzz.int

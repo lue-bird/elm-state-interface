@@ -1,10 +1,10 @@
 module Web.Audio.Parameter.Internal exposing (scaleAlongParameter, valuesAlter)
 
 import Time
-import Web exposing (AudioParameterTimeline)
+import Web
 
 
-valuesAlter : (Float -> Float) -> (AudioParameterTimeline -> AudioParameterTimeline)
+valuesAlter : (Float -> Float) -> (Web.AudioParameterTimeline -> Web.AudioParameterTimeline)
 valuesAlter valueAlter =
     \timeline ->
         { startValue = timeline.startValue |> valueAlter
@@ -14,7 +14,7 @@ valuesAlter valueAlter =
         }
 
 
-scaleAlongParameter : Time.Posix -> AudioParameterTimeline -> (AudioParameterTimeline -> AudioParameterTimeline)
+scaleAlongParameter : Time.Posix -> Web.AudioParameterTimeline -> (Web.AudioParameterTimeline -> Web.AudioParameterTimeline)
 scaleAlongParameter startTime timelineToScaleBy =
     \audioParameterTimelineToScale ->
         let
