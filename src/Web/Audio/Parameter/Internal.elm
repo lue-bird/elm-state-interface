@@ -41,15 +41,15 @@ keyFramesScaleAlong :
     }
     -> (List { time : Time.Posix, value : Float } -> List { time : Time.Posix, value : Float })
 keyFramesScaleAlong state =
-    \ŧoScale ->
+    \toScale ->
         List.map2
             (\keyFrameToScale keyFrameToScaleBy ->
                 { time = keyFrameToScale.time
                 , value = keyFrameToScale.value * keyFrameToScaleBy.value
                 }
             )
-            (ŧoScale |> keyFramesAddSubs { subs = state.toScaleBy |> List.map .time, previous = state.previous })
-            (state.toScaleBy |> keyFramesAddSubs { subs = ŧoScale |> List.map .time, previous = state.previous })
+            (toScale |> keyFramesAddSubs { subs = state.toScaleBy |> List.map .time, previous = state.previous })
+            (state.toScaleBy |> keyFramesAddSubs { subs = toScale |> List.map .time, previous = state.previous })
 
 
 keyFramesAddSubs :
