@@ -1,4 +1,4 @@
-port module Main exposing (main)
+port module Main exposing (State, Todo, VisibilityFilter(..), main)
 
 import Color
 import Json.Decode
@@ -14,41 +14,6 @@ main =
         , interface = interface
         , ports = { fromJs = fromJs, toJs = toJs }
         }
-
-
-port toJs : Json.Encode.Value -> Cmd event_
-
-
-port fromJs : (Json.Encode.Value -> event) -> Sub event
-
-
-type alias State =
-    { todos : List Todo
-    , userInput : String
-    , visibilityFilter : VisibilityFilter
-    }
-
-
-type alias Todo =
-    { completed : Bool
-    , content : String
-    }
-
-
-type VisibilityFilter
-    = AllVisible
-    | OnlyTodoVisible
-    | OnlyCompletedVisible
-
-
-type Event
-    = InputTextSubmitClicked
-    | InputTextChanged (Result Json.Decode.Error String)
-    | TodoRemoved Int
-    | TodoCompletenessToggled Int
-    | ResetAllToUncompletedClicked
-    | VisibilityFilterSet VisibilityFilter
-    | RemoveCompleted
 
 
 initialState : State
@@ -167,6 +132,30 @@ ui =
             ]
 
 
+buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
+buttonUi modifiers subs =
+    Web.Dom.element "button"
+        ([ Web.Dom.listenTo "click"
+            |> Web.Dom.modifierFutureMap (\_ -> ())
+         , Web.Dom.style "background-color" "#000000"
+         , Web.Dom.style "border-top" "none"
+         , Web.Dom.style "border-left" "none"
+         , Web.Dom.style "border-right" "none"
+         , Web.Dom.style "border-bottom" ("2px solid " ++ (Color.rgba 1 1 1 0.2 |> Color.toCssString))
+         , Web.Dom.style "border-radius" "20px"
+         , Web.Dom.style "color" "#FFFFFF"
+         , Web.Dom.style "padding" "4px 13px"
+         , Web.Dom.style "margin" "0px 0px"
+         , Web.Dom.style "text-align" "center"
+         , Web.Dom.style "display" "inline-block"
+         , Web.Dom.style "font-size" "0.9em"
+         , Web.Dom.style "font-family" "inherit"
+         ]
+            ++ modifiers
+        )
+        subs
+
+
 todoNewItemInputUi : String -> Web.Dom.Node Event
 todoNewItemInputUi userInput =
     Web.Dom.element "div"
@@ -180,13 +169,56 @@ todoNewItemInputUi userInput =
         ]
 
 
+textInputUi :
+    (Result Json.Decode.Error String -> future)
+    -> String
+    -> List (Web.Dom.Modifier future)
+    -> Web.Dom.Node future
+textInputUi toFuture inputValue modifiers =
+    Web.Dom.element "input"
+        ([ Web.Dom.attribute "type" "text"
+         , Web.Dom.stringProperty "value" inputValue
+         , Web.Dom.listenTo "input"
+            |> Web.Dom.modifierFutureMap
+                (Json.Decode.decodeValue
+                    (Json.Decode.field "target" (Json.Decode.field "value" Json.Decode.string))
+                )
+            |> Web.Dom.modifierFutureMap toFuture
+         , Web.Dom.style "font-size" "1em"
+         , Web.Dom.style "background-color" "transparent"
+         , Web.Dom.style "border-bottom" ("2px solid " ++ (Color.rgba 1 1 1 0.5 |> Color.toCssString))
+         , Web.Dom.style "border-top" "none"
+         , Web.Dom.style "border-left" "none"
+         , Web.Dom.style "border-right" "none"
+         , Web.Dom.style "color" "inherit"
+         , Web.Dom.style "font-family" "inherit"
+         ]
+            ++ modifiers
+        )
+        []
+
+
+visibilityFilterToString : VisibilityFilter -> String
+visibilityFilterToString =
+    \visibilityFilter ->
+        case visibilityFilter of
+            AllVisible ->
+                "all"
+
+            OnlyTodoVisible ->
+                "only todo"
+
+            OnlyCompletedVisible ->
+                "only completed"
+
+
 visibilityOptionsUi : VisibilityFilter -> Web.Dom.Node Event
 visibilityOptionsUi currentVisibility =
     Web.Dom.element "div"
         []
         (Web.Dom.element "span"
             [ Web.Dom.style "padding" "0px 2px 0px 0px" ]
-            [ Web.Dom.text ("showing " ++ (currentVisibility |> visibilityFilterToString) ++ ". Try also ")
+            [ Web.Dom.text ([ "showing ", currentVisibility |> visibilityFilterToString, ". Try also " ] |> String.concat)
             ]
             :: ([ AllVisible, OnlyTodoVisible, OnlyCompletedVisible ]
                     |> List.filter (\v -> v /= currentVisibility)
@@ -240,7 +272,7 @@ todoListInfoAndActionsUi todos currentVisibility =
                                     _ ->
                                         "todos"
                           in
-                          ((todoCount |> String.fromInt) ++ " " ++ todoPluralized ++ " left.")
+                          ([ todoCount |> String.fromInt, " ", todoPluralized, " left." ] |> String.concat)
                             |> Web.Dom.text
                         ]
                     ]
@@ -301,68 +333,36 @@ todoListUi state =
         )
 
 
-buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
-buttonUi modifiers subs =
-    Web.Dom.element "button"
-        ([ Web.Dom.listenTo "click"
-            |> Web.Dom.modifierFutureMap (\_ -> ())
-         , Web.Dom.style "background-color" "#000000"
-         , Web.Dom.style "border-top" "none"
-         , Web.Dom.style "border-left" "none"
-         , Web.Dom.style "border-right" "none"
-         , Web.Dom.style "border-bottom" ("2px solid " ++ (Color.rgba 1 1 1 0.2 |> Color.toCssString))
-         , Web.Dom.style "border-radius" "20px"
-         , Web.Dom.style "color" "#FFFFFF"
-         , Web.Dom.style "padding" "4px 13px"
-         , Web.Dom.style "margin" "0px 0px"
-         , Web.Dom.style "text-align" "center"
-         , Web.Dom.style "display" "inline-block"
-         , Web.Dom.style "font-size" "0.9em"
-         , Web.Dom.style "font-family" "inherit"
-         ]
-            ++ modifiers
-        )
-        subs
+port toJs : Json.Encode.Value -> Cmd event_
 
 
-textInputUi :
-    (Result Json.Decode.Error String -> future)
-    -> String
-    -> List (Web.Dom.Modifier future)
-    -> Web.Dom.Node future
-textInputUi toFuture inputValue modifiers =
-    Web.Dom.element "input"
-        ([ Web.Dom.attribute "type" "text"
-         , Web.Dom.stringProperty "value" inputValue
-         , Web.Dom.listenTo "input"
-            |> Web.Dom.modifierFutureMap
-                (Json.Decode.decodeValue
-                    (Json.Decode.field "target" (Json.Decode.field "value" Json.Decode.string))
-                )
-            |> Web.Dom.modifierFutureMap toFuture
-         , Web.Dom.style "font-size" "1em"
-         , Web.Dom.style "background-color" "transparent"
-         , Web.Dom.style "border-bottom" ("2px solid " ++ (Color.rgba 1 1 1 0.5 |> Color.toCssString))
-         , Web.Dom.style "border-top" "none"
-         , Web.Dom.style "border-left" "none"
-         , Web.Dom.style "border-right" "none"
-         , Web.Dom.style "color" "inherit"
-         , Web.Dom.style "font-family" "inherit"
-         ]
-            ++ modifiers
-        )
-        []
+port fromJs : (Json.Encode.Value -> event) -> Sub event
 
 
-visibilityFilterToString : VisibilityFilter -> String
-visibilityFilterToString =
-    \visibilityFilter ->
-        case visibilityFilter of
-            AllVisible ->
-                "all"
+type alias State =
+    { todos : List Todo
+    , userInput : String
+    , visibilityFilter : VisibilityFilter
+    }
 
-            OnlyTodoVisible ->
-                "only todo"
 
-            OnlyCompletedVisible ->
-                "only completed"
+type alias Todo =
+    { completed : Bool
+    , content : String
+    }
+
+
+type VisibilityFilter
+    = AllVisible
+    | OnlyTodoVisible
+    | OnlyCompletedVisible
+
+
+type Event
+    = InputTextSubmitClicked
+    | InputTextChanged (Result Json.Decode.Error String)
+    | TodoRemoved Int
+    | TodoCompletenessToggled Int
+    | ResetAllToUncompletedClicked
+    | VisibilityFilterSet VisibilityFilter
+    | RemoveCompleted

@@ -1,17 +1,14 @@
-port module Main exposing (main)
+port module Main exposing (State(..), main)
 
 import Color
 import Json.Decode
 import Json.Encode
-import Random.Pcg.Extended
 import Time
 import Web
 import Web.Audio
 import Web.Audio.Parameter
 import Web.Console
 import Web.Dom
-import Web.Http
-import Web.Random
 import Web.Time
 import Web.Window
 
@@ -23,31 +20,6 @@ main =
         , interface = interface
         , ports = { fromJs = fromJs, toJs = toJs }
         }
-
-
-port toJs : Json.Encode.Value -> Cmd event_
-
-
-port fromJs : (Json.Encode.Value -> event) -> Sub event
-
-
-type State
-    = State
-        { windowSize : { width : Int, height : Int }
-        , musicSource : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
-        , tonesPlaying : List { time : Time.Posix, pitchPercentage : Float }
-        , lastUnplayedClickPitchPercentage : Maybe Float
-        }
-
-
-type SoundSetting
-    = SoundOn
-    | SoundOff
-
-
-codeRandomGenerator : Random.Pcg.Extended.Generator Int
-codeRandomGenerator =
-    Random.Pcg.Extended.int 100 500
 
 
 initialState : State
@@ -176,24 +148,16 @@ interface =
             |> Web.interfaceBatch
 
 
-buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
-buttonUi modifiers subs =
-    Web.Dom.element "button"
-        ([ Web.Dom.listenTo "click"
-            |> Web.Dom.modifierFutureMap (\_ -> ())
-         , Web.Dom.style "background-color" "#000000"
-         , Web.Dom.style "border-top" "none"
-         , Web.Dom.style "border-left" "none"
-         , Web.Dom.style "border-right" "none"
-         , Web.Dom.style "border-bottom" ("6px solid " ++ (Color.rgba 1 1 1 0.4 |> Color.toCssString))
-         , Web.Dom.style "border-radius" "20px"
-         , Web.Dom.style "color" "#FFFFFF"
-         , Web.Dom.style "padding" "6px 15px"
-         , Web.Dom.style "margin" "0px 0px"
-         , Web.Dom.style "text-align" "center"
-         , Web.Dom.style "display" "inline-block"
-         , Web.Dom.style "font-family" "inherit"
-         ]
-            ++ modifiers
-        )
-        subs
+port toJs : Json.Encode.Value -> Cmd event_
+
+
+port fromJs : (Json.Encode.Value -> event) -> Sub event
+
+
+type State
+    = State
+        { windowSize : { width : Int, height : Int }
+        , musicSource : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
+        , tonesPlaying : List { time : Time.Posix, pitchPercentage : Float }
+        , lastUnplayedClickPitchPercentage : Maybe Float
+        }

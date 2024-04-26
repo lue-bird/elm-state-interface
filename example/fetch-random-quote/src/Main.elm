@@ -1,4 +1,4 @@
-port module Main exposing (main)
+port module Main exposing (State(..), main)
 
 import Color
 import Json.Decode
@@ -15,38 +15,6 @@ main =
         , interface = interface
         , ports = { fromJs = fromJs, toJs = toJs }
         }
-
-
-port toJs : Json.Encode.Value -> Cmd event_
-
-
-port fromJs : (Json.Encode.Value -> event) -> Sub event
-
-
-type State
-    = State
-        { movies :
-            Maybe
-                (Result
-                    Web.HttpError
-                    (Result
-                        { actualBody : String, jsonError : Json.Decode.Error }
-                        { content : String, author : String }
-                    )
-                )
-        }
-
-
-type DiceUiEvent
-    = MoreClicked
-    | MoviesReceived
-        (Result
-            Web.HttpError
-            (Result
-                { actualBody : String, jsonError : Json.Decode.Error }
-                { content : String, author : String }
-            )
-        )
 
 
 initialState : State
@@ -149,19 +117,48 @@ buttonUi modifiers subs =
     Web.Dom.element "button"
         ([ Web.Dom.listenTo "click"
             |> Web.Dom.modifierFutureMap (\_ -> ())
-         , Web.Dom.style "background-color" "#000000"
+         , Web.Dom.style "background-color" (Color.rgba 0 0 0 0 |> Color.toCssString)
+         , Web.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
+         , Web.Dom.style "padding" "4px 13px"
+         , Web.Dom.style "text-align" "center"
+         , Web.Dom.style "border-radius" "20px"
          , Web.Dom.style "border-top" "none"
          , Web.Dom.style "border-left" "none"
          , Web.Dom.style "border-right" "none"
          , Web.Dom.style "border-bottom" ("5px solid " ++ (Color.rgba 1 1 1 0.2 |> Color.toCssString))
-         , Web.Dom.style "border-radius" "20px"
-         , Web.Dom.style "color" "#FFFFFF"
-         , Web.Dom.style "padding" "4px 13px"
-         , Web.Dom.style "margin" "0px 0px"
-         , Web.Dom.style "text-align" "center"
-         , Web.Dom.style "display" "inline-block"
-         , Web.Dom.style "font-family" "inherit"
          ]
             ++ modifiers
         )
         subs
+
+
+port toJs : Json.Encode.Value -> Cmd event_
+
+
+port fromJs : (Json.Encode.Value -> event) -> Sub event
+
+
+type State
+    = State
+        { movies :
+            Maybe
+                (Result
+                    Web.HttpError
+                    (Result
+                        { actualBody : String, jsonError : Json.Decode.Error }
+                        { content : String, author : String }
+                    )
+                )
+        }
+
+
+type DiceUiEvent
+    = MoreClicked
+    | MoviesReceived
+        (Result
+            Web.HttpError
+            (Result
+                { actualBody : String, jsonError : Json.Decode.Error }
+                { content : String, author : String }
+            )
+        )

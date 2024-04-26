@@ -2,7 +2,6 @@ module Svg.LocalExtra exposing (circle, ellipse, fillUniform, line, polygon, pol
 
 import Angle
 import Color exposing (Color)
-import Web
 import Web.Dom
 import Web.Svg
 
@@ -51,13 +50,15 @@ ellipse geometry additionalModifiers =
 rotated : { angle : Angle.Angle, center : { x : Float, y : Float } } -> Web.Dom.Modifier future_
 rotated geometry =
     Web.Dom.attribute "transform"
-        ("rotate("
-            ++ (geometry.angle |> Angle.inDegrees |> String.fromFloat)
-            ++ ", "
-            ++ (geometry.center.x |> String.fromFloat)
-            ++ ", "
-            ++ (geometry.center.y |> String.fromFloat)
-            ++ ")"
+        ([ "rotate("
+         , geometry.angle |> Angle.inDegrees |> String.fromFloat
+         , ", "
+         , geometry.center.x |> String.fromFloat
+         , ", "
+         , geometry.center.y |> String.fromFloat
+         , ")"
+         ]
+            |> String.concat
         )
 
 
@@ -71,11 +72,27 @@ strokeUniform color =
     Web.Dom.attribute "stroke" (color |> Color.toCssString)
 
 
+points : List { x : Float, y : Float } -> Web.Dom.Modifier future_
+points =
+    \points_ ->
+        Web.Dom.attribute "points"
+            ((case points_ of
+                [ onlyElement ] ->
+                    [ onlyElement, onlyElement ]
+
+                notOnlyOne ->
+                    notOnlyOne
+             )
+                |> List.map (\point -> [ point.x |> String.fromFloat, ",", point.y |> String.fromFloat ] |> String.concat)
+                |> String.join " "
+            )
+
+
 polygon : List { x : Float, y : Float } -> List (Web.Dom.Modifier future) -> Web.Dom.Node future
 polygon points_ additionalModifiers =
     Web.Svg.element "polyline"
-        ([ points points_ ]
-            ++ additionalModifiers
+        (points points_
+            :: additionalModifiers
         )
         []
 
@@ -88,23 +105,7 @@ strokeWidth pixels =
 polyline : List { x : Float, y : Float } -> List (Web.Dom.Modifier future) -> Web.Dom.Node future
 polyline points_ additionalModifiers =
     Web.Svg.element "polyline"
-        ([ points points_ ]
-            ++ additionalModifiers
+        (points points_
+            :: additionalModifiers
         )
         []
-
-
-points : List { x : Float, y : Float } -> Web.Dom.Modifier future_
-points =
-    \points_ ->
-        Web.Dom.attribute "points"
-            ((case points_ of
-                [ onlyElement ] ->
-                    [ onlyElement, onlyElement ]
-
-                notOnlyOne ->
-                    notOnlyOne
-             )
-                |> List.map (\point -> (point.x |> String.fromFloat) ++ "," ++ (point.y |> String.fromFloat))
-                |> String.join " "
-            )

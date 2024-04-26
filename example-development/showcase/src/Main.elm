@@ -12,7 +12,6 @@ import Serialize
 import Set
 import Svg.LocalExtra
 import Time
-import Url
 import Web
 import Web.Audio
 import Web.Audio.Parameter
@@ -125,36 +124,56 @@ initializedInterface =
                 mapWithExitInterface
 
 
-type State
-    = WaitingForInitialUrl
-    | Initialized InitializedState
+narrativeUiFrame : List (Web.Dom.Modifier state) -> List (Web.Dom.Node state) -> Web.Dom.Node state
+narrativeUiFrame modifiers subs =
+    uiFrame
+        modifiers
+        [ Web.Dom.element "div"
+            [ Web.Dom.style "max-width" "870px"
+            , Web.Dom.style "padding-top" "80px"
+            ]
+            subs
+        ]
 
 
-type InitializedState
-    = StartingRoom StartingRoomState
-    | AtSign AtSignState
-    | PickingApples PickApplesState
-    | ShowingMapWithExit
+uiFrame : List (Web.Dom.Modifier state) -> List (Web.Dom.Node state) -> Web.Dom.Node state
+uiFrame modifiers subs =
+    Web.Dom.element "div"
+        ([ Web.Dom.style "font-size" "2em"
+         , Web.Dom.style "padding-left" "80px"
+         , Web.Dom.style "padding-right" "80px"
+         , Web.Dom.style "position" "fixed"
+         , Web.Dom.style "top" "0"
+         , Web.Dom.style "right" "0"
+         , Web.Dom.style "bottom" "0"
+         , Web.Dom.style "left" "0"
+         , Web.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
+         , Web.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
+         ]
+            ++ modifiers
+        )
+        subs
 
 
-type alias StartingRoomState =
-    RecordWithoutConstructorFunction
-        { name : Maybe String
-        , gemCount : Int
-        , mousePoint : { x : Int, y : Int }
-        , timezone : Time.Zone
-        , posix : Time.Posix
-        }
-
-
-type StartingRoomEvent
-    = NameChanged (Result Json.Decode.Error String)
-    | MouseMovedTo (Result Json.Decode.Error { x : Int, y : Int })
-    | GemCountDecreaseClicked
-    | GemCountIncreaseClicked
-    | TimePassed Time.Posix
-    | TimeZoneReceived Time.Zone
-    | WalkToSignClicked
+buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
+buttonUi modifiers subs =
+    Web.Dom.element "button"
+        ([ Web.Dom.listenTo "click"
+            |> Web.Dom.modifierFutureMap (\_ -> ())
+         , Web.Dom.style "background-color" "#000000"
+         , Web.Dom.style "border" "3px solid"
+         , Web.Dom.style "border-radius" "50px"
+         , Web.Dom.style "color" "#FFFFFF"
+         , Web.Dom.style "padding" "5px 15px"
+         , Web.Dom.style "margin" "7px 0px"
+         , Web.Dom.style "text-align" "center"
+         , Web.Dom.style "display" "inline-block"
+         , Web.Dom.style "font-size" "1em"
+         , Web.Dom.style "font-family" "inherit"
+         ]
+            ++ modifiers
+        )
+        subs
 
 
 startingRoomInterface : StartingRoomState -> Web.Interface InitializedState
@@ -188,9 +207,15 @@ startingRoomInterface =
                     []
                     [ Web.Dom.element "q"
                         []
-                        [ "Why do I know that you're exactly at "
-                            ++ ("x" ++ (state.mousePoint.x |> String.fromInt) ++ " y" ++ (state.mousePoint.y |> String.fromInt))
-                            ++ "?"
+                        [ ([ "Why do I know that you're exactly at "
+                           , "x"
+                           , state.mousePoint.x |> String.fromInt
+                           , " y"
+                           , state.mousePoint.y |> String.fromInt
+                           , "?"
+                           ]
+                            |> String.concat
+                          )
                             |> Web.Dom.text
                         ]
                     ]
@@ -237,15 +262,17 @@ startingRoomInterface =
                 [ "The voice repeats: " |> Web.Dom.text
                 , Web.Dom.element "q"
                     []
-                    [ "Don't worry. Here,  take a couple 💎 if you want"
-                        ++ (case state.name of
-                                Nothing ->
-                                    ""
+                    [ ([ "Don't worry. Here,  take a couple 💎 if you want"
+                       , case state.name of
+                            Nothing ->
+                                ""
 
-                                Just name ->
-                                    ", " ++ name
-                           )
-                        ++ ":"
+                            Just name ->
+                                ", " ++ name
+                       , ":"
+                       ]
+                        |> String.concat
+                      )
                         |> Web.Dom.text
                     ]
                 ]
@@ -342,29 +369,109 @@ startingRoomInterface =
                 )
 
 
-type alias AtSignState =
-    RecordWithoutConstructorFunction
-        { gemCount : Int
-        , appleCount : Int
-        , name : String
-        , birdConversationState : BirdConversationState
+textInputUi : Maybe String -> Web.Dom.Node (Result Json.Decode.Error String)
+textInputUi currentInputValue =
+    Web.Dom.element "input"
+        [ Web.Dom.attribute "type" "text"
+        , Web.Dom.stringProperty "value"
+            (case currentInputValue of
+                Nothing ->
+                    ""
+
+                Just inputValue ->
+                    inputValue
+            )
+        , Web.Dom.listenTo "input"
+            |> Web.Dom.modifierFutureMap
+                (Json.Decode.decodeValue
+                    (Json.Decode.field "target" (Json.Decode.field "value" Json.Decode.string))
+                )
+        , Web.Dom.style "font-size" "1em"
+        , Web.Dom.style "background-color" "transparent"
+        , Web.Dom.style "border-bottom" "3px solid white"
+        , Web.Dom.style "border-top" "none"
+        , Web.Dom.style "border-left" "none"
+        , Web.Dom.style "border-right" "none"
+        , Web.Dom.style "color" "inherit"
+        , Web.Dom.style "font-family" "inherit"
+        ]
+        []
+
+
+clockUi : { posix : Time.Posix, timezone : Time.Zone } -> Web.Dom.Node state_
+clockUi state =
+    let
+        hour : Int
+        hour =
+            Time.toHour state.timezone state.posix
+
+        minute : Int
+        minute =
+            Time.toMinute state.timezone state.posix
+
+        second : Int
+        second =
+            Time.toSecond state.timezone state.posix
+    in
+    Web.Svg.element "svg"
+        [ Web.Dom.attribute "viewBox" "0 0 60 60"
+        , Web.Dom.attribute "width" "60"
+        , Web.Dom.attribute "height" "60"
+        ]
+        [ Svg.LocalExtra.circle
+            { radius = 30
+            , position =
+                { x = 30
+                , y = 30
+                }
+            }
+            [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 0.15)
+            ]
+        , clockHandUi { width = 4, length = 15, turns = (hour |> Basics.toFloat) / 12 }
+        , clockHandUi { width = 3, length = 20, turns = (minute |> Basics.toFloat) / 60 }
+        , clockHandUi { width = 2, length = 22, turns = (second |> Basics.toFloat) / 60 }
+        ]
+
+
+clockHandUi : { width : Int, length : Float, turns : Float } -> Web.Dom.Node state_
+clockHandUi config =
+    let
+        clockTurns : Float
+        clockTurns =
+            config.turns - 0.25
+    in
+    Svg.LocalExtra.line
+        { start = { x = 30, y = 30 }
+        , end =
+            { x = 30 + config.length * cos (Basics.turns clockTurns)
+            , y = 30 + config.length * sin (Basics.turns clockTurns)
+            }
         }
+        [ Svg.LocalExtra.strokeUniform (Color.rgb 1 1 1)
+        , Svg.LocalExtra.strokeWidth (config.width |> Basics.toFloat)
+        , Web.Dom.attribute "stroke-linecap" "round"
+        ]
 
 
-type BirdConversationState
-    = WaitingForTalk
-    | GreetingAndAskingForWhatYouWant
-    | BirdTellAboutItself
-    | AskedBirdForMap
-    | TooHungryToSell
+initialPickingApplesState : { name : String, gemCount : Int, appleCountBefore : Int } -> PickApplesState
+initialPickingApplesState state =
+    { name = state.name
+    , gemCount = state.gemCount
+    , windowSize = dummyWindowSize
+    , headDirection = Right
+    , headLocation = { x = 4, y = 5 }
+    , tailSegments = [ { x = 3, y = 5 }, { x = 3, y = 6 } ]
+    , appleLocation = { x = 3, y = 2 }
+    , appleCountBefore = state.appleCountBefore
+    , pickedAppleCount = 0
+    , eatAppleAudio = Nothing
+    , eatAppleTimes = []
+    }
 
 
-type AtSignEvent
-    = TalkToBirdClicked
-    | PickApplesClicked
-    | BirdTellAboutYourselfClicked
-    | BuyMapClicked
-    | OpenMapClicked
+dummyWindowSize : { width : Int, height : Int }
+dummyWindowSize =
+    { width = 1920, height = 1080 }
 
 
 atSignInterface : AtSignState -> Web.Interface InitializedState
@@ -375,7 +482,7 @@ atSignInterface =
                 []
                 [ Web.Dom.element "q"
                     []
-                    [ "And there we are, " ++ state.name ++ "!" |> Web.Dom.text ]
+                    [ ([ "And there we are, ", state.name, "!" ] |> String.concat) |> Web.Dom.text ]
                 ]
             , Web.Dom.element "div"
                 [ Web.Dom.style "text-align" "center"
@@ -396,9 +503,12 @@ atSignInterface =
                             [ "Don't you think the bird looks a bit hungry..." |> Web.Dom.text ]
 
                     non0AppleCount ->
-                        "You've already picked "
-                            ++ (non0AppleCount |> String.fromInt)
-                            ++ " 🍎s"
+                        ([ "You've already picked "
+                         , non0AppleCount |> String.fromInt
+                         , " 🍎s"
+                         ]
+                            |> String.concat
+                        )
                             |> Web.Dom.text
                 ]
             , case state.birdConversationState of
@@ -531,74 +641,6 @@ atSignInterface =
                 )
 
 
-initialPickingApplesState : { name : String, gemCount : Int, appleCountBefore : Int } -> PickApplesState
-initialPickingApplesState state =
-    { name = state.name
-    , gemCount = state.gemCount
-    , windowSize = dummyWindowSize
-    , headDirection = Right
-    , headLocation = { x = 4, y = 5 }
-    , tailSegments = [ { x = 3, y = 5 }, { x = 3, y = 6 } ]
-    , appleLocation = { x = 3, y = 2 }
-    , appleCountBefore = state.appleCountBefore
-    , pickedAppleCount = 0
-    , eatAppleAudio = Nothing
-    , eatAppleTimes = []
-    }
-
-
-dummyWindowSize : { width : Int, height : Int }
-dummyWindowSize =
-    { width = 1920, height = 1080 }
-
-
-
--- pick apples
-
-
-type SnakeDirection
-    = Up
-    | Right
-    | Down
-    | Left
-
-
-type alias PickApplesState =
-    RecordWithoutConstructorFunction
-        { name : String
-        , gemCount : Int
-        , appleCountBefore : Int
-        , windowSize : { width : Int, height : Int }
-        , headDirection : SnakeDirection
-        , headLocation : PickApplesLocation
-        , tailSegments : List PickApplesLocation
-        , appleLocation : PickApplesLocation
-        , pickedAppleCount : Int
-        , eatAppleAudio : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
-        , eatAppleTimes : List { time : Time.Posix, nthPickedApple : Int }
-        }
-
-
-type alias PickApplesLocation =
-    RecordWithoutConstructorFunction
-        { x : Int
-        , y : Int
-        }
-
-
-type PickApplesEvent
-    = PickApplesKeyPressed (Result Json.Decode.Error String)
-    | PickApplesGamepadReceived (Maybe Web.Gamepad)
-    | PickApplesSimulationTick Time.Posix
-    | WindowSizeReceived { width : Int, height : Int }
-    | EatAppleAudioReceived (Result Web.AudioSourceLoadError Web.AudioSource)
-
-
-worldSizeCells : { x : Int, y : Int }
-worldSizeCells =
-    { x = 16, y = 12 }
-
-
 pickApplesInterface : PickApplesState -> Web.Interface InitializedState
 pickApplesInterface state =
     [ case state.eatAppleAudio of
@@ -639,17 +681,6 @@ pickApplesInterface state =
                     (gamepads |> Dict.foldr (\_ gamepad _ -> gamepad |> Just) Nothing)
             )
     , let
-        rectangleAtCellLocation : Color.Color -> PickApplesLocation -> Web.Dom.Node state_
-        rectangleAtCellLocation fill cellLocation =
-            Web.Svg.element "rect"
-                [ Svg.LocalExtra.fillUniform fill
-                , Web.Dom.attribute "width" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
-                , Web.Dom.attribute "height" (((cellSideLength * 0.9) |> String.fromFloat) ++ "px")
-                , Web.Dom.attribute "x" (((cellSideLength * 0.05 + toFloat cellLocation.x * cellSideLength) |> String.fromFloat) ++ "px")
-                , Web.Dom.attribute "y" (((cellSideLength * 0.05 + toFloat cellLocation.y * cellSideLength) |> String.fromFloat) ++ "px")
-                ]
-                []
-
         worldUi : Web.Dom.Node state_
         worldUi =
             Web.Svg.element "rect"
@@ -691,6 +722,10 @@ pickApplesInterface state =
                                         { previousPoint = head, currentSegment = [ head ], finishedSegments = [] }
                         in
                         segmented.currentSegment :: segmented.finishedSegments
+
+        cellSideLength : Float
+        cellSideLength =
+            worldSize.width / (worldSizeCells.x |> Basics.toFloat)
 
         headTailUi : Web.Dom.Node future_
         headTailUi =
@@ -745,35 +780,6 @@ pickApplesInterface state =
                     case segments |> List.reverse of
                         (lastPoint :: beforeLastPoint) :: _ ->
                             case beforeLastPoint of
-                                _ :: _ :: _ ->
-                                    Web.Dom.text ""
-
-                                [ _ ] ->
-                                    [ Svg.LocalExtra.circle
-                                        { radius = cellSideLength * 2.5
-                                        , position =
-                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
-                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
-                                            }
-                                        }
-                                        [ Svg.LocalExtra.fillUniform colorInvisible
-                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.01)
-                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 1)
-                                        ]
-                                    , Svg.LocalExtra.circle
-                                        { radius = cellSideLength * 0.4
-                                        , position =
-                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
-                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
-                                            }
-                                        }
-                                        [ Svg.LocalExtra.fillUniform colorInvisible
-                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.075)
-                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.7)
-                                        ]
-                                    ]
-                                        |> Web.Svg.element "g" []
-
                                 [] ->
                                     [ Svg.LocalExtra.circle
                                         { radius = cellSideLength * 3.5
@@ -810,6 +816,35 @@ pickApplesInterface state =
                                         ]
                                     ]
                                         |> Web.Svg.element "g" []
+
+                                [ _ ] ->
+                                    [ Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 2.5
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.01)
+                                        , Svg.LocalExtra.strokeWidth cellSideLength
+                                        ]
+                                    , Svg.LocalExtra.circle
+                                        { radius = cellSideLength * 0.4
+                                        , position =
+                                            { x = cellSideLength * 0.5 + (lastPoint.x |> Basics.toFloat) * cellSideLength
+                                            , y = cellSideLength * 0.5 + (lastPoint.y |> Basics.toFloat) * cellSideLength
+                                            }
+                                        }
+                                        [ Svg.LocalExtra.fillUniform colorInvisible
+                                        , Svg.LocalExtra.strokeUniform (Color.rgba 1 1 1 0.075)
+                                        , Svg.LocalExtra.strokeWidth (cellSideLength * 0.7)
+                                        ]
+                                    ]
+                                        |> Web.Svg.element "g" []
+
+                                _ :: _ :: _ ->
+                                    Web.Dom.text ""
 
                         _ ->
                             Web.Dom.text ""
@@ -991,10 +1026,6 @@ pickApplesInterface state =
                     |> Web.Dom.text
                 ]
 
-        cellSideLength : Float
-        cellSideLength =
-            worldSize.width / (worldSizeCells.x |> Basics.toFloat)
-
         worldSize : { width : Float, height : Float }
         worldSize =
             let
@@ -1023,7 +1054,7 @@ pickApplesInterface state =
         , Web.Dom.style "left" "0"
         ]
         [ Web.Svg.element "svg"
-            [ Web.Dom.attribute "viewBox" ("0 0 " ++ (worldSize.width |> String.fromFloat) ++ " " ++ (worldSize.height |> String.fromFloat))
+            [ Web.Dom.attribute "viewBox" ([ "0 0 ", worldSize.width |> String.fromFloat, " ", worldSize.height |> String.fromFloat ] |> String.concat)
             , Web.Dom.attribute "width" ((worldSize.width |> String.fromFloat) ++ "px")
             , Web.Dom.attribute "height" ((worldSize.height |> String.fromFloat) ++ "px")
             , Web.Dom.style "display" "block"
@@ -1155,6 +1186,15 @@ pickApplesInterface state =
             )
 
 
+
+-- pick apples
+
+
+worldSizeCells : { x : Int, y : Int }
+worldSizeCells =
+    { x = 16, y = 12 }
+
+
 colorInvisible : Color
 colorInvisible =
     Color.rgba 0 0 0 0
@@ -1240,159 +1280,6 @@ mapWithExitInterface =
     Web.Navigation.load "https://dark.elm.dmy.fr/packages/lue-bird/elm-state-interface/latest/"
 
 
-
--- Ui
-
-
-uiFrame : List (Web.Dom.Modifier state) -> List (Web.Dom.Node state) -> Web.Dom.Node state
-uiFrame modifiers subs =
-    Web.Dom.element "div"
-        ([ Web.Dom.style "font-size" "2em"
-         , Web.Dom.style "padding-left" "80px"
-         , Web.Dom.style "padding-right" "80px"
-         , Web.Dom.style "position" "fixed"
-         , Web.Dom.style "top" "0"
-         , Web.Dom.style "right" "0"
-         , Web.Dom.style "bottom" "0"
-         , Web.Dom.style "left" "0"
-         , Web.Dom.style "background-color" (Color.rgb 0 0 0 |> Color.toCssString)
-         , Web.Dom.style "color" (Color.rgb 1 1 1 |> Color.toCssString)
-         ]
-            ++ modifiers
-        )
-        subs
-
-
-narrativeUiFrame : List (Web.Dom.Modifier state_) -> List (Web.Dom.Node state_) -> Web.Dom.Node state_
-narrativeUiFrame modifiers subs =
-    uiFrame
-        modifiers
-        [ Web.Dom.element "div"
-            [ Web.Dom.style "max-width" "870px"
-            , Web.Dom.style "padding-top" "80px"
-            ]
-            subs
-        ]
-
-
-buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
-buttonUi modifiers subs =
-    Web.Dom.element "button"
-        ([ Web.Dom.listenTo "click"
-            |> Web.Dom.modifierFutureMap (\_ -> ())
-         , Web.Dom.style "background-color" "#000000"
-         , Web.Dom.style "border" "3px solid"
-         , Web.Dom.style "border-radius" "50px"
-         , Web.Dom.style "color" "#FFFFFF"
-         , Web.Dom.style "padding" "5px 15px"
-         , Web.Dom.style "margin" "7px 0px"
-         , Web.Dom.style "text-align" "center"
-         , Web.Dom.style "display" "inline-block"
-         , Web.Dom.style "font-size" "1em"
-         , Web.Dom.style "font-family" "inherit"
-         ]
-            ++ modifiers
-        )
-        subs
-
-
-textInputUi : Maybe String -> Web.Dom.Node (Result Json.Decode.Error String)
-textInputUi currentInputValue =
-    Web.Dom.element "input"
-        [ Web.Dom.attribute "type" "text"
-        , Web.Dom.stringProperty "value"
-            (case currentInputValue of
-                Nothing ->
-                    ""
-
-                Just inputValue ->
-                    inputValue
-            )
-        , Web.Dom.listenTo "input"
-            |> Web.Dom.modifierFutureMap
-                (Json.Decode.decodeValue
-                    (Json.Decode.field "target" (Json.Decode.field "value" Json.Decode.string))
-                )
-        , Web.Dom.style "font-size" "1em"
-        , Web.Dom.style "background-color" "transparent"
-        , Web.Dom.style "border-bottom" "3px solid white"
-        , Web.Dom.style "border-top" "none"
-        , Web.Dom.style "border-left" "none"
-        , Web.Dom.style "border-right" "none"
-        , Web.Dom.style "color" "inherit"
-        , Web.Dom.style "font-family" "inherit"
-        ]
-        []
-
-
-clockUi : { posix : Time.Posix, timezone : Time.Zone } -> Web.Dom.Node state_
-clockUi state =
-    let
-        hour : Int
-        hour =
-            Time.toHour state.timezone state.posix
-
-        minute : Int
-        minute =
-            Time.toMinute state.timezone state.posix
-
-        second : Int
-        second =
-            Time.toSecond state.timezone state.posix
-    in
-    Web.Svg.element "svg"
-        [ Web.Dom.attribute "viewBox" "0 0 60 60"
-        , Web.Dom.attribute "width" "60"
-        , Web.Dom.attribute "height" "60"
-        ]
-        [ Svg.LocalExtra.circle
-            { radius = 30
-            , position =
-                { x = 30
-                , y = 30
-                }
-            }
-            [ Svg.LocalExtra.fillUniform (Color.rgba 1 1 1 0.15)
-            ]
-        , clockHandUi { width = 4, length = 15, turns = (hour |> Basics.toFloat) / 12 }
-        , clockHandUi { width = 3, length = 20, turns = (minute |> Basics.toFloat) / 60 }
-        , clockHandUi { width = 2, length = 22, turns = (second |> Basics.toFloat) / 60 }
-        ]
-
-
-clockHandUi : { width : Int, length : Float, turns : Float } -> Web.Dom.Node state_
-clockHandUi config =
-    let
-        clockTurns : Float
-        clockTurns =
-            config.turns - 0.25
-    in
-    Svg.LocalExtra.line
-        { start = { x = 30, y = 30 }
-        , end =
-            { x = 30 + config.length * cos (Basics.turns clockTurns)
-            , y = 30 + config.length * sin (Basics.turns clockTurns)
-            }
-        }
-        [ Svg.LocalExtra.strokeUniform (Color.rgb 1 1 1)
-        , Svg.LocalExtra.strokeWidth (config.width |> Basics.toFloat)
-        , Web.Dom.attribute "stroke-linecap" "round"
-        ]
-
-
-
--- app url
-
-
-stateToAppUrl : InitializedState -> AppUrl
-stateToAppUrl =
-    \state ->
-        { path = []
-        , queryParameters = Dict.singleton "" [ state |> Serialize.encodeToString stateCodec ]
-        , fragment = Nothing
-        }
-
-
 stateCodec : Serialize.Codec error_ InitializedState
 stateCodec =
     Serialize.customType
@@ -1415,15 +1302,6 @@ stateCodec =
         |> Serialize.variant1 PickingApples pickApplesStateCodec
         |> Serialize.variant0 ShowingMapWithExit
         |> Serialize.finishCustomType
-
-
-appUrlToState : AppUrl -> Maybe InitializedState
-appUrlToState =
-    \appUrl ->
-        appUrl.queryParameters
-            |> Dict.get ""
-            |> Maybe.andThen List.head
-            |> Maybe.andThen (\str -> str |> Serialize.decodeFromString stateCodec |> Result.toMaybe)
 
 
 startingRoomStateCodec : Serialize.Codec error_ StartingRoomState
@@ -1502,6 +1380,127 @@ pickApplesStateCodec =
         |> Serialize.field .appleCountBefore Serialize.int
         |> Serialize.field .pickedAppleCount Serialize.int
         |> Serialize.finishRecord
+
+
+
+-- Ui
+
+
+stateToAppUrl : InitializedState -> AppUrl
+stateToAppUrl =
+    \state ->
+        { path = []
+        , queryParameters = Dict.singleton "" [ state |> Serialize.encodeToString stateCodec ]
+        , fragment = Nothing
+        }
+
+
+appUrlToState : AppUrl -> Maybe InitializedState
+appUrlToState =
+    \appUrl ->
+        appUrl.queryParameters
+            |> Dict.get ""
+            |> Maybe.andThen List.head
+            |> Maybe.andThen (\str -> str |> Serialize.decodeFromString stateCodec |> Result.toMaybe)
+
+
+type State
+    = WaitingForInitialUrl
+    | Initialized InitializedState
+
+
+type InitializedState
+    = StartingRoom StartingRoomState
+    | AtSign AtSignState
+    | PickingApples PickApplesState
+    | ShowingMapWithExit
+
+
+type alias StartingRoomState =
+    RecordWithoutConstructorFunction
+        { name : Maybe String
+        , gemCount : Int
+        , mousePoint : { x : Int, y : Int }
+        , timezone : Time.Zone
+        , posix : Time.Posix
+        }
+
+
+type StartingRoomEvent
+    = NameChanged (Result Json.Decode.Error String)
+    | MouseMovedTo (Result Json.Decode.Error { x : Int, y : Int })
+    | GemCountDecreaseClicked
+    | GemCountIncreaseClicked
+    | TimePassed Time.Posix
+    | TimeZoneReceived Time.Zone
+    | WalkToSignClicked
+
+
+
+-- app url
+
+
+type alias AtSignState =
+    RecordWithoutConstructorFunction
+        { gemCount : Int
+        , appleCount : Int
+        , name : String
+        , birdConversationState : BirdConversationState
+        }
+
+
+type BirdConversationState
+    = WaitingForTalk
+    | GreetingAndAskingForWhatYouWant
+    | BirdTellAboutItself
+    | AskedBirdForMap
+    | TooHungryToSell
+
+
+type AtSignEvent
+    = TalkToBirdClicked
+    | PickApplesClicked
+    | BirdTellAboutYourselfClicked
+    | BuyMapClicked
+    | OpenMapClicked
+
+
+type SnakeDirection
+    = Up
+    | Right
+    | Down
+    | Left
+
+
+type alias PickApplesState =
+    RecordWithoutConstructorFunction
+        { name : String
+        , gemCount : Int
+        , appleCountBefore : Int
+        , windowSize : { width : Int, height : Int }
+        , headDirection : SnakeDirection
+        , headLocation : PickApplesLocation
+        , tailSegments : List PickApplesLocation
+        , appleLocation : PickApplesLocation
+        , pickedAppleCount : Int
+        , eatAppleAudio : Maybe (Result Web.AudioSourceLoadError Web.AudioSource)
+        , eatAppleTimes : List { time : Time.Posix, nthPickedApple : Int }
+        }
+
+
+type alias PickApplesLocation =
+    RecordWithoutConstructorFunction
+        { x : Int
+        , y : Int
+        }
+
+
+type PickApplesEvent
+    = PickApplesKeyPressed (Result Json.Decode.Error String)
+    | PickApplesGamepadReceived (Maybe Web.Gamepad)
+    | PickApplesSimulationTick Time.Posix
+    | WindowSizeReceived { width : Int, height : Int }
+    | EatAppleAudioReceived (Result Web.AudioSourceLoadError Web.AudioSource)
 
 
 port toJs : Json.Encode.Value -> Cmd event_

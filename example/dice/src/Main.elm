@@ -1,7 +1,6 @@
-port module Main exposing (main)
+port module Main exposing (State(..), main)
 
 import Color
-import Json.Decode
 import Json.Encode
 import Random.Pcg.Extended
 import Web
@@ -16,26 +15,6 @@ main =
         , interface = interface
         , ports = { fromJs = fromJs, toJs = toJs }
         }
-
-
-port toJs : Json.Encode.Value -> Cmd event_
-
-
-port fromJs : (Json.Encode.Value -> event) -> Sub event
-
-
-type State
-    = WaitingForInitialRandomness
-    | DiceUiState { diceEyes : Int, seed : Random.Pcg.Extended.Seed }
-
-
-type DiceUiEvent
-    = RerollClicked
-
-
-diceEyesRandomGenerator : Random.Pcg.Extended.Generator Int
-diceEyesRandomGenerator =
-    Random.Pcg.Extended.int 1 6
 
 
 initialState : State
@@ -96,6 +75,11 @@ interface =
                         )
 
 
+diceEyesRandomGenerator : Random.Pcg.Extended.Generator Int
+diceEyesRandomGenerator =
+    Random.Pcg.Extended.int 1 6
+
+
 buttonUi : List (Web.Dom.Modifier ()) -> List (Web.Dom.Node ()) -> Web.Dom.Node ()
 buttonUi modifiers subs =
     Web.Dom.element "button"
@@ -137,3 +121,18 @@ diceEyesToSymbol =
 
             _ ->
                 "⚅"
+
+
+port toJs : Json.Encode.Value -> Cmd event_
+
+
+port fromJs : (Json.Encode.Value -> event) -> Sub event
+
+
+type State
+    = WaitingForInitialRandomness
+    | DiceUiState { diceEyes : Int, seed : Random.Pcg.Extended.Seed }
+
+
+type DiceUiEvent
+    = RerollClicked
