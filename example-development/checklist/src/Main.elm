@@ -137,19 +137,17 @@ buttonUi modifiers subs =
     Web.Dom.element "button"
         ([ Web.Dom.listenTo "click"
             |> Web.Dom.modifierFutureMap (\_ -> ())
-         , Web.Dom.style "background-color" "#000000"
+         , Web.Dom.style "background-color" "transparent"
+         , Web.Dom.style "color" "inherit"
+         , Web.Dom.style "padding" "4px 13px"
+         , Web.Dom.style "text-align" "center"
+         , Web.Dom.style "font-size" "0.9em"
+         , Web.Dom.style "border-radius" "20px"
          , Web.Dom.style "border-top" "none"
          , Web.Dom.style "border-left" "none"
          , Web.Dom.style "border-right" "none"
-         , Web.Dom.style "border-bottom" ("2px solid " ++ (Color.rgba 1 1 1 0.2 |> Color.toCssString))
-         , Web.Dom.style "border-radius" "20px"
-         , Web.Dom.style "color" "#FFFFFF"
-         , Web.Dom.style "padding" "4px 13px"
-         , Web.Dom.style "margin" "0px 0px"
-         , Web.Dom.style "text-align" "center"
          , Web.Dom.style "display" "inline-block"
-         , Web.Dom.style "font-size" "0.9em"
-         , Web.Dom.style "font-family" "inherit"
+         , Web.Dom.style "border-bottom" ("2px solid " ++ (Color.rgba 1 1 1 0.2 |> Color.toCssString))
          ]
             ++ modifiers
         )
@@ -191,7 +189,6 @@ textInputUi toFuture inputValue modifiers =
          , Web.Dom.style "border-left" "none"
          , Web.Dom.style "border-right" "none"
          , Web.Dom.style "color" "inherit"
-         , Web.Dom.style "font-family" "inherit"
          ]
             ++ modifiers
         )
@@ -296,9 +293,8 @@ todoListUi state =
                     [ "✔" |> Web.Dom.text
                     ]
                     |> Web.Dom.futureMap (\() -> TodoCompletenessToggled index)
-                , buttonUi
-                    []
-                    [ "⌫" |> Web.Dom.text ]
+                , buttonUi [ Web.Dom.style "text-size" "0.9em", Web.Dom.style "filter" "grayscale(100%)" ]
+                    [ "💥" |> Web.Dom.text ]
                     |> Web.Dom.futureMap (\() -> TodoRemoved index)
                 , Web.Dom.element "span"
                     [ Web.Dom.style "padding" "0px 0px 0px 20px"
