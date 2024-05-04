@@ -4,6 +4,11 @@
 
   - internal: improve performance a bit
 
+#### (unreleased) js package 2.0.2
+
+  - catch setting readonly DOM object property.
+    Thanks to [an issue comment by Simon Lydell](https://github.com/elm/virtual-dom/issues/173#issuecomment-792027590)
+
 #### js package 2.0.1
 
   - disallow creating string properties for innerHTML and outerHTML

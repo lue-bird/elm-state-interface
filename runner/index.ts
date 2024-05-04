@@ -630,15 +630,19 @@ function domElementSetStringProperties(domElement: Element, properties: { key: s
         ) {
             warn(`tried to set the existing non-string dom element property "${property.key}" to a string.`)
         } else if ((property.key === "innerHTML") || (property.key === "outerHTML")) {
-            console.error("This is an XSS vector. Please parse the html string instead and construct the dom from that.")
+            window?.console.error("This is an XSS vector. Please parse the html string instead and construct the dom from that.")
         } else if (RE_js_html.test(property.value)) {
-            console.error("This is an XSS vector. Please use an interface instead.")
+            window?.console.error("This is an XSS vector. Please use an interface instead.")
         } else if (property.key === "src" && RE_js_html.test(property.value)) {
-            console.error("This is an XSS vector. Please use an interface instead.")
+            window?.console.error("This is an XSS vector. Please use an interface instead.")
         } else if (property.key === "action" || property.key === "href" && RE_js.test(property.value)) {
-            console.error("This is an XSS vector. Please use an interface instead.")
+            window?.console.error("This is an XSS vector. Please use an interface instead.")
         } else {
-            domElementIndexable[property.key] = property.value
+            try {
+                domElementIndexable[property.key] = property.value
+            } catch (error) {
+                warn("tried to set the string property " + property.key + " failed: " + error)
+            }
         }
     })
 }
@@ -650,7 +654,11 @@ function domElementSetBoolProperties(domElement: Element, properties: { key: str
         ) {
             warn(`tried to set the existing non-boolean dom element property "${property.key}" to a boolean.`)
         } else {
-            domElementIndexable[property.key] = property.value
+            try {
+                domElementIndexable[property.key] = property.value
+            } catch (error) {
+                warn("tried to set the string property " + property.key + " failed: " + error)
+            }
         }
     })
 }
