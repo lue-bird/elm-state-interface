@@ -2,7 +2,7 @@
 
 #### (unreleased) 2.0.2
 
-  - internal: improve performance a bit
+  - internal: improve performance quite a bit
 
 #### (unreleased) js package 2.0.2
 
