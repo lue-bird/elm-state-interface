@@ -259,7 +259,12 @@ type InterfaceSingle future
     | ClipboardRequest (String -> future)
     | AudioSourceLoad { url : String, on : Result AudioSourceLoadError AudioSource -> future }
     | AudioPlay Audio
-    | DomNodeRender { pathReverse : List Int, node : DomTextOrElementHeader future }
+    | DomNodeRender
+        { path :
+            -- from inner parent to outer parent index
+            List Int
+        , node : DomTextOrElementHeader future
+        }
     | NotificationAskForPermission
     | NotificationShow { id : String, message : String, details : String, on : NotificationClicked -> future }
     | HttpRequest (HttpRequest future)
@@ -613,7 +618,7 @@ interfaceSingleFutureMap futureChange =
                 NotificationAskForPermission
 
             DomNodeRender toRender ->
-                { pathReverse = toRender.pathReverse
+                { path = toRender.path
                 , node = toRender.node |> domNodeFutureMap futureChange
                 }
                     |> DomNodeRender
@@ -804,7 +809,7 @@ interfaceSingleEdits =
                             |> domTextOrElementHeaderDiff
                             |> List.map
                                 (\diff ->
-                                    { path = domElementPreviouslyRendered.pathReverse
+                                    { path = domElementPreviouslyRendered.path
                                     , replacement = diff
                                     }
                                         |> EditDom
@@ -1684,7 +1689,7 @@ interfaceSingleToJson =
                     { tag = "DomNodeRender"
                     , value =
                         Json.Encode.object
-                            [ ( "pathReverse", render.pathReverse |> Json.Encode.list Json.Encode.int )
+                            [ ( "path", render.path |> Json.Encode.list Json.Encode.int )
                             , ( "node", render.node |> domTextOrElementHeaderInfoToJson )
                             ]
                     }
@@ -1993,7 +1998,7 @@ interfaceSingleToStructuredId =
 
                 DomNodeRender path ->
                     { tag = "DomNodeRender"
-                    , value = path.pathReverse |> StructuredId.ofList StructuredId.ofInt
+                    , value = path.path |> StructuredId.ofList StructuredId.ofInt
                     }
 
                 AudioSourceLoad load ->

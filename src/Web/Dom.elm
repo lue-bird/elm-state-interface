@@ -40,14 +40,14 @@ import Web
 
 nodeFlattenToList :
     List (Web.InterfaceSingle future)
-    -> { pathReverse : List Int, node : Node future }
-    -> List { pathReverse : List Int, node : Node future }
+    -> { path : List Int, node : Node future }
+    -> List { path : List Int, node : Node future }
     -> List (Web.InterfaceSingle future)
 nodeFlattenToList interfacesSoFar current nodesRemaining =
     case current.node of
         Text string ->
             flattenRemainingNodesToList
-                (({ pathReverse = current.pathReverse, node = Web.DomText string }
+                (({ path = current.path, node = Web.DomText string }
                     |> Web.DomNodeRender
                  )
                     :: interfacesSoFar
@@ -58,7 +58,7 @@ nodeFlattenToList interfacesSoFar current nodesRemaining =
             let
                 updatedInterfaces : List (Web.InterfaceSingle future)
                 updatedInterfaces =
-                    ({ pathReverse = current.pathReverse, node = Web.DomElementHeader element_.header }
+                    ({ path = current.path, node = Web.DomElementHeader element_.header }
                         |> Web.DomNodeRender
                     )
                         :: interfacesSoFar
@@ -69,14 +69,14 @@ nodeFlattenToList interfacesSoFar current nodesRemaining =
 
                 sub0 :: sub1Up ->
                     let
-                        updatedRemaining : { index : Int, mapped : List { pathReverse : List Int, node : Node future } }
+                        updatedRemaining : { index : Int, mapped : List { path : List Int, node : Node future } }
                         updatedRemaining =
                             sub1Up
                                 |> List.foldl
                                     (\sub soFar ->
                                         { index = soFar.index + 1
                                         , mapped =
-                                            { pathReverse = soFar.index :: current.pathReverse
+                                            { path = soFar.index :: current.path
                                             , node = sub
                                             }
                                                 :: soFar.mapped
@@ -86,7 +86,7 @@ nodeFlattenToList interfacesSoFar current nodesRemaining =
                     in
                     nodeFlattenToList
                         updatedInterfaces
-                        { pathReverse = 0 :: current.pathReverse, node = sub0 }
+                        { path = 0 :: current.path, node = sub0 }
                         updatedRemaining.mapped
 
 
@@ -95,13 +95,13 @@ nodeFlattenToList interfacesSoFar current nodesRemaining =
 render : Node future -> Web.Interface future
 render =
     \domNode ->
-        nodeFlattenToList [] { pathReverse = [], node = domNode } []
+        nodeFlattenToList [] { path = [], node = domNode } []
             |> Rope.fromList
 
 
 flattenRemainingNodesToList :
     List (Web.InterfaceSingle future)
-    -> List { pathReverse : List Int, node : Node future }
+    -> List { path : List Int, node : Node future }
     -> List (Web.InterfaceSingle future)
 flattenRemainingNodesToList updatedInterfaces nodesRemaining =
     case nodesRemaining of
