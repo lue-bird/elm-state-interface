@@ -1,11 +1,15 @@
 # change log
 
-#### (unreleased) 2.0.2
+#### js package 2.0.3
+
+  - fix issue with new internal dom interface representation
+
+#### 2.0.2
 
   - internal: improve performance quite a bit
   - internal: change representation of dom interface
 
-#### (unreleased) js package 2.0.2
+#### js package 2.0.2
 
   - catch setting readonly DOM object property.
     Thanks to [an issue comment by Simon Lydell](https://github.com/elm/virtual-dom/issues/173#issuecomment-792027590)
