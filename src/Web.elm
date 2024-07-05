@@ -11,7 +11,7 @@ module Web exposing
     , WindowVisibility(..)
     , ProgramConfig, programInit, programUpdate, programSubscriptions
     , ProgramState(..), ProgramEvent(..), InterfaceSingle(..), DomTextOrElementHeader(..)
-    , interfaceSingleEdits, InterfaceSingleEdit(..), AudioEdit(..), DomEdit(..)
+    , interfaceSingleEdits, InterfaceSingleEdit(..), AudioEdit, DomEdit(..)
     )
 
 {-| A state-interface program that can run in the browser
@@ -812,13 +812,12 @@ interfaceSingleEdits =
             AudioPlay previouslyPlayed ->
                 case interfaces.updated of
                     AudioPlay toPlay ->
-                        { old = previouslyPlayed, updated = toPlay }
-                            |> audioDiff
-                            |> List.map
-                                (\diff ->
-                                    { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
-                                        |> EditAudio
-                                )
+                        { url = toPlay.url
+                        , startTime = toPlay.startTime
+                        , replacement = audioDiff { old = previouslyPlayed, updated = toPlay }
+                        }
+                            |> EditAudio
+                            |> List.singleton
 
                     _ ->
                         []
@@ -1100,31 +1099,34 @@ dictEditAndRemoveDiff asDiffSingle =
                 { remove = remove, edit = edit0 :: edit0Up } |> Just
 
 
-audioDiff : { old : Audio, updated : Audio } -> List AudioEdit
+audioDiff : { old : Audio, updated : Audio } -> AudioEdit
 audioDiff =
     \audios ->
-        [ if audios.old.volume == audios.updated.volume then
-            Nothing
+        { volume =
+            if audios.old.volume == audios.updated.volume then
+                Nothing
 
-          else
-            ReplacementAudioVolume audios.updated.volume |> Just
-        , if audios.old.speed == audios.updated.speed then
-            Nothing
+            else
+                audios.updated.volume |> Just
+        , speed =
+            if audios.old.speed == audios.updated.speed then
+                Nothing
 
-          else
-            ReplacementAudioSpeed audios.updated.speed |> Just
-        , if audios.old.stereoPan == audios.updated.stereoPan then
-            Nothing
+            else
+                audios.updated.speed |> Just
+        , stereoPan =
+            if audios.old.stereoPan == audios.updated.stereoPan then
+                Nothing
 
-          else
-            ReplacementAudioStereoPan audios.updated.stereoPan |> Just
-        , if audios.old.processingLastToFirst == audios.updated.processingLastToFirst then
-            Nothing
+            else
+                audios.updated.stereoPan |> Just
+        , processing =
+            if audios.old.processingLastToFirst == audios.updated.processingLastToFirst then
+                Nothing
 
-          else
-            audios.updated.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
-        ]
-            |> List.LocalExtra.justs
+            else
+                audios.updated.processingLastToFirst |> List.reverse |> Just
+        }
 
 
 {-| Determine which outgoing effects need to be executed based on the difference between old and updated interfaces
@@ -1251,22 +1253,20 @@ interfaceSingleEditToJson =
                             [ ( "url", audioEdit.url |> Json.Encode.string )
                             , ( "startTime", audioEdit.startTime |> Time.posixToMillis |> Json.Encode.int )
                             , ( "replacement"
-                              , Json.Encode.LocalExtra.variant
-                                    (case audioEdit.replacement of
-                                        ReplacementAudioSpeed new ->
-                                            { tag = "Speed", value = new |> audioParameterTimelineToJson }
-
-                                        ReplacementAudioVolume new ->
-                                            { tag = "Volume", value = new |> audioParameterTimelineToJson }
-
-                                        ReplacementAudioStereoPan new ->
-                                            { tag = "StereoPan", value = new |> audioParameterTimelineToJson }
-
-                                        ReplacementAudioProcessing new ->
-                                            { tag = "Processing"
-                                            , value = new |> Json.Encode.list audioProcessingToJson
-                                            }
-                                    )
+                              , Json.Encode.object
+                                    [ ( "speed"
+                                      , audioEdit.replacement.speed |> Json.Encode.LocalExtra.nullable audioParameterTimelineToJson
+                                      )
+                                    , ( "volume"
+                                      , audioEdit.replacement.volume |> Json.Encode.LocalExtra.nullable audioParameterTimelineToJson
+                                      )
+                                    , ( "stereoPan"
+                                      , audioEdit.replacement.stereoPan |> Json.Encode.LocalExtra.nullable audioParameterTimelineToJson
+                                      )
+                                    , ( "processing"
+                                      , audioEdit.replacement.processing |> Json.Encode.LocalExtra.nullable (Json.Encode.list audioProcessingToJson)
+                                      )
+                                    ]
                               )
                             ]
                     }
@@ -3187,11 +3187,13 @@ type InterfaceSingleEdit
 
 {-| What parts of an [`Audio`](#Audio) are replaced
 -}
-type AudioEdit
-    = ReplacementAudioVolume AudioParameterTimeline
-    | ReplacementAudioSpeed AudioParameterTimeline
-    | ReplacementAudioStereoPan AudioParameterTimeline
-    | ReplacementAudioProcessing (List AudioProcessing)
+type alias AudioEdit =
+    RecordWithoutConstructorFunction
+        { volume : Maybe AudioParameterTimeline
+        , speed : Maybe AudioParameterTimeline
+        , stereoPan : Maybe AudioParameterTimeline
+        , processing : Maybe (List AudioProcessing)
+        }
 
 
 {-| Some kind of sound we want to play. To create `Audio`, start with [`Web.Audio.fromSource`](Web-Audio#fromSource)

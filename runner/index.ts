@@ -200,7 +200,7 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                 sendToElm(Array.from(window.crypto.getRandomValues(new Uint32Array(config))))
             }
             case "WindowSizeRequest": return (_config: null) => {
-                sendToElm({ width: window.innerWidth, height: window.innerHeight })
+                sendToElm({ width: Math.trunc(window.innerWidth), height: Math.trunc(window.innerHeight) })
             }
             case "WindowPreferredLanguagesRequest": return (_config: null) => {
                 sendToElm(window.navigator.languages)
@@ -963,32 +963,43 @@ function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): Au
         })
 }
 
-function editAudio(id: string, config: { url: string, startTime: number, replacement: { tag: string, value: any } }) {
+type AudioEdit = {
+    speed: null | AudioParameterTimeline,
+    volume: null | AudioParameterTimeline,
+    stereoPan: null | AudioParameterTimeline,
+    processing: null | (AudioProcessingInfo[])
+}
+
+function editAudio(
+    id: string,
+    config: {
+        url: string,
+        startTime: number,
+        replacement: AudioEdit
+    }
+) {
     const audioPlayingToEdit = audioPlaying.get(id)
     if (audioPlayingToEdit !== undefined) {
-        switch (config.replacement.tag) {
-            case "Volume": {
-                audioParameterTimelineApplyTo(audioPlayingToEdit.gainNode.gain, config.replacement.value)
-                break
-            } case "Speed": {
-                audioParameterTimelineApplyTo(audioPlayingToEdit.sourceNode.playbackRate, config.replacement.value)
-                break
-            } case "StereoPan": {
-                audioParameterTimelineApplyTo(audioPlayingToEdit.stereoPanNode.pan, config.replacement.value)
-                break
-            } case "Processing": {
-                const audioContext = getOrInitializeAudioContext()
-                audioPlayingToEdit.stereoPanNode.disconnect()
-                audioPlayingToEdit.processingNodes.forEach(node => { node.disconnect() })
+        if (config.replacement.volume !== null) {
+            audioParameterTimelineApplyTo(audioPlayingToEdit.gainNode.gain, config.replacement.volume)
+        }
+        if (config.replacement.speed !== null) {
+            audioParameterTimelineApplyTo(audioPlayingToEdit.sourceNode.playbackRate, config.replacement.speed)
+        }
+        if (config.replacement.stereoPan !== null) {
+            audioParameterTimelineApplyTo(audioPlayingToEdit.stereoPanNode.pan, config.replacement.stereoPan)
+        }
+        if (config.replacement.processing !== null) {
+            const audioContext = getOrInitializeAudioContext()
+            audioPlayingToEdit.stereoPanNode.disconnect()
+            audioPlayingToEdit.processingNodes.forEach(node => { node.disconnect() })
 
-                audioPlayingToEdit.processingNodes = createProcessingNodes(config.replacement.value)
+            audioPlayingToEdit.processingNodes = createProcessingNodes(config.replacement.processing)
 
-                forEachConsecutive(
-                    [audioPlayingToEdit.stereoPanNode, ...audioPlayingToEdit.processingNodes, audioContext.destination],
-                    pair => { pair.current.connect(pair.next) }
-                )
-                break
-            }
+            forEachConsecutive(
+                [audioPlayingToEdit.stereoPanNode, ...audioPlayingToEdit.processingNodes, audioContext.destination],
+                pair => { pair.current.connect(pair.next) }
+            )
         }
     }
 }
