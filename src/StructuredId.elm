@@ -16,7 +16,7 @@ which makes it possible to use as a key in a `Dict`
 
 -}
 
-import Rope exposing (Rope)
+import Json.Encode
 
 
 type StructuredId
@@ -80,36 +80,15 @@ ofList elementMap =
 toString : StructuredId -> String
 toString =
     \structuredId ->
-        structuredId |> toListOfString |> listOfStringToString
+        structuredId |> toJson |> Json.Encode.encode 0
 
 
-toListOfString : StructuredId -> List String
-toListOfString =
-    \structuredId ->
-        structuredId |> toRopeOfString |> Rope.toList
-
-
-toRopeOfString : StructuredId -> Rope String
-toRopeOfString =
+toJson : StructuredId -> Json.Encode.Value
+toJson =
     \structuredId ->
         case structuredId of
             String string ->
-                String.cons ' ' string |> Rope.singleton
+                string |> Json.Encode.string
 
             List elements ->
-                Rope.append "]"
-                    (List.foldl
-                        (\el soFar ->
-                            Rope.appendTo soFar (toRopeOfString el)
-                        )
-                        (Rope.singleton "[")
-                        elements
-                    )
-
-
-listOfStringToString : List String -> String
-listOfStringToString =
-    \strings ->
-        strings
-            |> List.map (\part -> part |> String.replace "," ",,")
-            |> String.join " , "
+                elements |> Json.Encode.list toJson
