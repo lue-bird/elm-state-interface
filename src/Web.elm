@@ -794,25 +794,26 @@ type ProgramEvent appState
     | JsEventEnabledConstructionOfNewAppState appState
 
 
-{-| What [`InterfaceSingleEdit`](#InterfaceSingleEdit)s are needed to sync up
--}
-interfaceSingleEdits :
-    { old : InterfaceSingle future, updated : InterfaceSingle future }
-    -> List InterfaceSingleEdit
-interfaceSingleEdits =
+interfaceSingleEditsMap :
+    (InterfaceSingleEdit -> fromSingeEdit)
+    ->
+        ({ old : InterfaceSingle future, updated : InterfaceSingle future }
+         -> List fromSingeEdit
+        )
+interfaceSingleEditsMap fromSingeEdit =
     \interfaces ->
         case interfaces.old of
             DomNodeRender domElementPreviouslyRendered ->
                 case interfaces.updated of
                     DomNodeRender domElementToRender ->
                         { old = domElementPreviouslyRendered.node, updated = domElementToRender.node }
-                            |> domTextOrElementHeaderDiff
-                            |> List.map
+                            |> domTextOrElementHeaderDiffMap
                                 (\diff ->
                                     { path = domElementPreviouslyRendered.path
                                     , replacement = diff
                                     }
                                         |> EditDom
+                                        |> fromSingeEdit
                                 )
 
                     _ ->
@@ -822,11 +823,11 @@ interfaceSingleEdits =
                 case interfaces.updated of
                     AudioPlay toPlay ->
                         { old = previouslyPlayed, updated = toPlay }
-                            |> audioDiff
-                            |> List.map
+                            |> audioDiffMap
                                 (\diff ->
                                     { url = toPlay.url, startTime = toPlay.startTime, replacement = diff }
                                         |> EditAudio
+                                        |> fromSingeEdit
                                 )
 
                     _ ->
@@ -837,6 +838,7 @@ interfaceSingleEdits =
                     NotificationShow toShow ->
                         { id = toShow.id, message = toShow.message, details = toShow.details }
                             |> EditNotification
+                            |> fromSingeEdit
                             |> List.singleton
 
                     _ ->
@@ -975,72 +977,100 @@ interfaceSingleEdits =
                 []
 
 
-domTextOrElementHeaderDiff :
-    { old : DomTextOrElementHeader state, updated : DomTextOrElementHeader state }
-    -> List DomEdit
-domTextOrElementHeaderDiff =
+domTextOrElementHeaderDiffMap :
+    (DomEdit -> fromDomEdit)
+    ->
+        ({ old : DomTextOrElementHeader state, updated : DomTextOrElementHeader state }
+         -> List fromDomEdit
+        )
+domTextOrElementHeaderDiffMap fromDomEdit =
     \nodes ->
         case nodes.old of
             DomText oldText ->
                 case nodes.updated of
                     DomElementHeader updatedElement ->
-                        [ updatedElement |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
+                        updatedElement
+                            |> domElementHeaderFutureMap (\_ -> ())
+                            |> DomElementHeader
+                            |> ReplacementDomNode
+                            |> fromDomEdit
+                            |> List.singleton
 
                     DomText updatedText ->
                         if oldText == updatedText then
                             []
 
                         else
-                            [ updatedText |> DomText |> ReplacementDomNode ]
+                            updatedText
+                                |> DomText
+                                |> ReplacementDomNode
+                                |> fromDomEdit
+                                |> List.singleton
 
             DomElementHeader oldElement ->
                 case nodes.updated of
                     DomText updatedText ->
-                        [ updatedText |> DomText |> ReplacementDomNode ]
+                        updatedText
+                            |> DomText
+                            |> ReplacementDomNode
+                            |> fromDomEdit
+                            |> List.singleton
 
                     DomElementHeader updatedElement ->
-                        { old = oldElement, updated = updatedElement } |> domElementHeaderDiff
+                        { old = oldElement, updated = updatedElement }
+                            |> domElementHeaderDiffMap fromDomEdit
 
 
-domElementHeaderDiff : { old : DomElementHeader future, updated : DomElementHeader future } -> List DomEdit
-domElementHeaderDiff =
+domElementHeaderDiffMap :
+    (DomEdit -> fromDomEdit)
+    -> ({ old : DomElementHeader future, updated : DomElementHeader future } -> List fromDomEdit)
+domElementHeaderDiffMap fromDomEdit =
     \elements ->
         if elements.old.tag /= elements.updated.tag then
-            [ elements.updated |> domElementHeaderFutureMap (\_ -> ()) |> DomElementHeader |> ReplacementDomNode ]
+            elements.updated
+                |> domElementHeaderFutureMap (\_ -> ())
+                |> DomElementHeader
+                |> ReplacementDomNode
+                |> fromDomEdit
+                |> List.singleton
 
         else
             [ { old = elements.old.styles, updated = elements.updated.styles }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map ReplacementDomElementStyles
+                |> Maybe.map (\d -> d |> ReplacementDomElementStyles |> fromDomEdit)
             , { old = elements.old.attributes, updated = elements.updated.attributes }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map ReplacementDomElementAttributes
+                |> Maybe.map (\d -> d |> ReplacementDomElementAttributes |> fromDomEdit)
             , { old = elements.old.attributesNamespaced, updated = elements.updated.attributesNamespaced }
                 |> dictEditAndRemoveDiff
                     { remove = \( namespace, key ) -> { namespace = namespace, key = key }
                     , edit = \( namespace, key ) value -> { namespace = namespace, key = key, value = value }
                     }
-                |> Maybe.map ReplacementDomElementAttributesNamespaced
+                |> Maybe.map (\d -> d |> ReplacementDomElementAttributesNamespaced |> fromDomEdit)
             , { old = elements.old.stringProperties, updated = elements.updated.stringProperties }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map ReplacementDomElementStringProperties
+                |> Maybe.map (\d -> d |> ReplacementDomElementStringProperties |> fromDomEdit)
             , { old = elements.old.boolProperties, updated = elements.updated.boolProperties }
                 |> dictEditAndRemoveDiff
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map ReplacementDomElementBoolProperties
+                |> Maybe.map (\d -> d |> ReplacementDomElementBoolProperties |> fromDomEdit)
             , if elements.old.scrollToPosition == elements.updated.scrollToPosition then
                 Nothing
 
               else
-                ReplacementDomElementScrollToPosition elements.updated.scrollToPosition |> Just
+                ReplacementDomElementScrollToPosition elements.updated.scrollToPosition
+                    |> fromDomEdit
+                    |> Just
             , if elements.old.scrollToShow == elements.updated.scrollToShow then
                 Nothing
 
               else
-                ReplacementDomElementScrollToShow elements.updated.scrollToShow |> Just
+                ReplacementDomElementScrollToShow elements.updated.scrollToShow
+                    |> fromDomEdit
+                    |> Just
             , case elements.old.scrollPositionRequest of
                 Just _ ->
                     Nothing
@@ -1051,7 +1081,9 @@ domElementHeaderDiff =
                             Nothing
 
                         Just _ ->
-                            ReplacementDomElementScrollPositionRequest |> Just
+                            ReplacementDomElementScrollPositionRequest
+                                |> fromDomEdit
+                                |> Just
             , let
                 updatedElementEventListensId : Dict String DefaultActionHandling
                 updatedElementEventListensId =
@@ -1064,7 +1096,9 @@ domElementHeaderDiff =
                 Nothing
 
               else
-                ReplacementDomElementEventListens updatedElementEventListensId |> Just
+                ReplacementDomElementEventListens updatedElementEventListensId
+                    |> fromDomEdit
+                    |> Just
             ]
                 |> List.LocalExtra.justs
 
@@ -1109,31 +1143,46 @@ dictEditAndRemoveDiff asDiffSingle =
                 { remove = remove, edit = edit0 :: edit0Up } |> Just
 
 
-audioDiff : { old : Audio, updated : Audio } -> List AudioEdit
-audioDiff =
+audioDiffMap :
+    (AudioEdit -> fromAudioEdit)
+    -> ({ old : Audio, updated : Audio } -> List fromAudioEdit)
+audioDiffMap fromAudioEdit =
     \audios ->
         [ if audios.old.volume == audios.updated.volume then
             Nothing
 
           else
-            ReplacementAudioVolume audios.updated.volume |> Just
+            ReplacementAudioVolume audios.updated.volume |> fromAudioEdit |> Just
         , if audios.old.speed == audios.updated.speed then
             Nothing
 
           else
-            ReplacementAudioSpeed audios.updated.speed |> Just
+            ReplacementAudioSpeed audios.updated.speed |> fromAudioEdit |> Just
         , if audios.old.stereoPan == audios.updated.stereoPan then
             Nothing
 
           else
-            ReplacementAudioStereoPan audios.updated.stereoPan |> Just
+            ReplacementAudioStereoPan audios.updated.stereoPan |> fromAudioEdit |> Just
         , if audios.old.processingLastToFirst == audios.updated.processingLastToFirst then
             Nothing
 
           else
-            audios.updated.processingLastToFirst |> List.reverse |> ReplacementAudioProcessing |> Just
+            audios.updated.processingLastToFirst
+                |> List.reverse
+                |> ReplacementAudioProcessing
+                |> fromAudioEdit
+                |> Just
         ]
             |> List.LocalExtra.justs
+
+
+{-| What [`InterfaceSingleEdit`](#InterfaceSingleEdit)s are needed to sync up
+-}
+interfaceSingleEdits :
+    { old : InterfaceSingle future, updated : InterfaceSingle future }
+    -> List InterfaceSingleEdit
+interfaceSingleEdits =
+    \interfaces -> interfaces |> interfaceSingleEditsMap Basics.identity
 
 
 {-| Determine which outgoing effects need to be executed based on the difference between old and updated interfaces
@@ -1141,31 +1190,32 @@ audioDiff =
 To for example determine the initial effects, use
 
     { old = FastDict.empty, updated = initialInterface }
-        |> interfacesDiff
+        |> interfacesDiffMap identity
 
 -}
-interfacesDiff :
-    { old : FastDict.Dict String (InterfaceSingle future)
-    , updated : FastDict.Dict String (InterfaceSingle future)
-    }
-    -> List { id : String, diff : InterfaceSingleDiff future }
-interfacesDiff =
+interfacesDiffMap :
+    ({ id : String, diff : InterfaceSingleDiff future } -> combined)
+    ->
+        ({ old : FastDict.Dict String (InterfaceSingle future)
+         , updated : FastDict.Dict String (InterfaceSingle future)
+         }
+         -> List combined
+        )
+interfacesDiffMap idAndDiffCombine =
     \interfaces ->
         FastDict.merge
             (\id _ soFar ->
-                { id = id, diff = Remove } :: soFar
+                idAndDiffCombine { id = id, diff = Remove } :: soFar
             )
             (\id old updated soFar ->
                 ({ old = old, updated = updated }
-                    |> interfaceSingleEdits
-                    |> List.map (\edit -> { id = id, diff = edit |> Edit })
+                    |> interfaceSingleEditsMap
+                        (\edit -> idAndDiffCombine { id = id, diff = edit |> Edit })
                 )
                     ++ soFar
             )
             (\id onlyNew soFar ->
-                { id = id
-                , diff = onlyNew |> Add
-                }
+                idAndDiffCombine { id = id, diff = onlyNew |> Add }
                     :: soFar
             )
             interfaces.old
@@ -2140,8 +2190,8 @@ programInit appConfig =
         , appState = appConfig.initialState
         }
     , { old = FastDict.empty, updated = initialInterface }
-        |> interfacesDiff
-        |> List.map (\diff -> appConfig.ports.toJs (diff |> toJsToJson))
+        |> interfacesDiffMap
+            (\diff -> appConfig.ports.toJs (diff |> toJsToJson))
         |> Cmd.batch
         |> Cmd.map never
     )
@@ -3132,8 +3182,8 @@ programUpdate appConfig =
                     in
                     ( State { interface = updatedInterface, appState = updatedAppState }
                     , { old = oldState.interface, updated = updatedInterface }
-                        |> interfacesDiff
-                        |> List.map (\diff -> appConfig.ports.toJs (diff |> toJsToJson))
+                        |> interfacesDiffMap
+                            (\diff -> appConfig.ports.toJs (diff |> toJsToJson))
                         |> Cmd.batch
                         |> Cmd.map never
                     )

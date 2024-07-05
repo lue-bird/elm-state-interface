@@ -3,6 +3,7 @@
 #### (unreleased) 2.0.2
 
   - internal: improve performance quite a bit
+  - internal: change representation of dom interface
 
 #### (unreleased) js package 2.0.2
 
