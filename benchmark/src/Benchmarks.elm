@@ -5,6 +5,9 @@ import Benchmark.Alternative
 import Json.Encode
 import Rope exposing (Rope)
 import StructuredId exposing (StructuredId)
+import Web
+import Web.Dom
+import Web.Svg
 
 
 benchmarks : Benchmark.Benchmark
@@ -33,7 +36,13 @@ benchmarks =
             [ ( "Json.Encode.int |> encode 0", intJsonEncode0 )
             , ( "String.fromInt", String.fromInt )
             ]
+        , Benchmark.Alternative.rank "dom render"
+            (\domRender -> domRender exampleDom)
+            [ ( "nested recursion given path", domRenderUsingNestedRecursionWithPath )
+            , ( "nested recursion with subs map, final List.map", renderUsingNestedRecursionWithSubsMapAndFinalListMap )
+            ]
         ]
+
 
 intJsonEncode0 : Int -> String
 intJsonEncode0 =
@@ -164,6 +173,82 @@ toStringUsingToJson =
                 elements |> Json.Encode.list toStringUsingToJson
 
 
+domRenderUsingNestedRecursionWithPath : Web.Dom.Node future -> Web.Interface future
+domRenderUsingNestedRecursionWithPath =
+    \domNode ->
+        domNode |> nodeFlattenToRopeUsingNestedRecursionWithPath []
+
+
+nodeFlattenToRopeUsingNestedRecursionWithPath :
+    List Int
+    -> Web.Dom.Node future
+    -> Rope (Web.InterfaceSingle future)
+nodeFlattenToRopeUsingNestedRecursionWithPath path =
+    \node ->
+        case node of
+            Web.Dom.Text string ->
+                { path = path, node = Web.DomText string }
+                    |> Web.DomNodeRender
+                    |> Rope.singleton
+
+            Web.Dom.Element element_ ->
+                Rope.prepend
+                    ({ path = path, node = Web.DomElementHeader element_.header }
+                        |> Web.DomNodeRender
+                    )
+                    (List.foldl
+                        (\sub soFar ->
+                            { subIndex = soFar.subIndex + 1
+                            , rope =
+                                Rope.appendTo soFar.rope
+                                    (nodeFlattenToRopeUsingNestedRecursionWithPath (soFar.subIndex :: path) sub)
+                            }
+                        )
+                        { subIndex = 0, rope = Rope.empty }
+                        element_.subs
+                    ).rope
+
+
+renderUsingNestedRecursionWithSubsMapAndFinalListMap : Web.Dom.Node future -> Web.Interface future
+renderUsingNestedRecursionWithSubsMapAndFinalListMap =
+    \domNode ->
+        domNode
+            |> nodeFlattenUsingNestedRecursionWithSubsMapAndFinalListMap
+            |> List.map (\nodeAndPath -> nodeAndPath |> Web.DomNodeRender)
+            |> Rope.fromList
+
+
+nodeFlattenUsingNestedRecursionWithSubsMapAndFinalListMap : Web.Dom.Node future -> List { path : List Int, node : Web.DomTextOrElementHeader future }
+nodeFlattenUsingNestedRecursionWithSubsMapAndFinalListMap =
+    \node -> node |> nodeFlattenToRopeUsingNestedRecursionWithSubsMapAndFinalListMap |> Rope.toList
+
+
+nodeFlattenToRopeUsingNestedRecursionWithSubsMapAndFinalListMap : Web.Dom.Node future -> Rope { path : List Int, node : Web.DomTextOrElementHeader future }
+nodeFlattenToRopeUsingNestedRecursionWithSubsMapAndFinalListMap =
+    \node ->
+        case node of
+            Web.Dom.Text string ->
+                { path = [], node = Web.DomText string } |> Rope.singleton
+
+            Web.Dom.Element element_ ->
+                Rope.prepend
+                    { path = [], node = Web.DomElementHeader element_.header }
+                    (List.foldl
+                        (\sub soFar ->
+                            { subIndex = soFar.subIndex + 1
+                            , rope =
+                                Rope.appendTo
+                                    soFar.rope
+                                    (Rope.map (\layerPart -> { layerPart | path = soFar.subIndex :: layerPart.path })
+                                        (nodeFlattenToRopeUsingNestedRecursionWithSubsMapAndFinalListMap sub)
+                                    )
+                            }
+                        )
+                        { subIndex = 0, rope = Rope.empty }
+                        element_.subs
+                    ).rope
+
+
 
 --
 
@@ -187,10 +272,10 @@ exampleTree =
 exampleTreeAtDepth : Int -> Int -> ExampleTree
 exampleTreeAtDepth depth index =
     if depth >= 4 then
-        Leaf 34
+        Leaf (34 * index + depth)
 
     else if (index |> Basics.remainderBy 2) == 0 then
-        Leaf -200
+        Leaf (-200 // index - depth)
 
     else
         Branch (List.range 0 4 |> List.map (exampleTreeAtDepth (depth + 1)))
@@ -215,3 +300,33 @@ type ExampleTree
 exampleStructuredId : StructuredId
 exampleStructuredId =
     exampleTree |> exampleTreeToStructuredId
+
+
+exampleDom : Web.Dom.Node future_
+exampleDom =
+    exampleTree |> treeToDom
+
+
+treeToDom : ExampleTree -> Web.Dom.Node future_
+treeToDom =
+    \tree ->
+        case tree of
+            Leaf n ->
+                Web.Dom.text
+                    ((n |> String.fromInt)
+                        ++ (List.range 0 n |> List.map Char.fromCode |> String.fromList)
+                    )
+
+            Branch subs ->
+                Web.Svg.element "div"
+                    [ Web.Dom.style "fill" "blue"
+                    , Web.Dom.style "font-size" "3em"
+                    , Web.Dom.attribute "text-anchor" "middle"
+                    , Web.Dom.attribute "dominant-baseline" "middle"
+                    , Web.Dom.attribute "font-weight" "bolder"
+                    , Web.Dom.attribute "x" "50%"
+                    , Web.Dom.attribute "y" "8%"
+                    , Web.Dom.attribute "width" "50%"
+                    , Web.Dom.attribute "height" "50%"
+                    ]
+                    (subs |> List.map treeToDom)

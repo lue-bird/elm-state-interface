@@ -43,36 +43,32 @@ import Web
 render : Node future -> Web.Interface future
 render =
     \domNode ->
-        domNode
-            |> nodeFlatten
-            |> List.map (\nodeAndPath -> nodeAndPath |> Web.DomNodeRender)
-            |> Rope.fromList
+        domNode |> nodeFlattenToRope []
 
 
-nodeFlatten : Node future -> List { path : List Int, node : Web.DomTextOrElementHeader future }
-nodeFlatten =
-    \node -> node |> nodeFlattenToRope |> Rope.toList
-
-
-nodeFlattenToRope : Node future -> Rope { path : List Int, node : Web.DomTextOrElementHeader future }
-nodeFlattenToRope =
+nodeFlattenToRope :
+    List Int
+    -> Node future
+    -> Rope (Web.InterfaceSingle future)
+nodeFlattenToRope path =
     \node ->
         case node of
             Text string ->
-                { path = [], node = Web.DomText string } |> Rope.singleton
+                { path = path, node = Web.DomText string }
+                    |> Web.DomNodeRender
+                    |> Rope.singleton
 
             Element element_ ->
                 Rope.prepend
-                    { path = [], node = Web.DomElementHeader element_.header }
+                    ({ path = path, node = Web.DomElementHeader element_.header }
+                        |> Web.DomNodeRender
+                    )
                     (List.foldl
                         (\sub soFar ->
                             { subIndex = soFar.subIndex + 1
                             , rope =
-                                Rope.appendTo
-                                    soFar.rope
-                                    (Rope.map (\layerPart -> { layerPart | path = soFar.subIndex :: layerPart.path })
-                                        (nodeFlattenToRope sub)
-                                    )
+                                Rope.appendTo soFar.rope
+                                    (nodeFlattenToRope (soFar.subIndex :: path) sub)
                             }
                         )
                         { subIndex = 0, rope = Rope.empty }
@@ -119,7 +115,9 @@ elementFutureMap futureChange =
         }
 
 
-domElementHeaderFutureMap : (future -> mappedFuture) -> (Web.DomElementHeader future -> Web.DomElementHeader mappedFuture)
+domElementHeaderFutureMap :
+    (future -> mappedFuture)
+    -> (Web.DomElementHeader future -> Web.DomElementHeader mappedFuture)
 domElementHeaderFutureMap futureChange =
     \domElementToMap ->
         { namespace = domElementToMap.namespace
@@ -152,7 +150,12 @@ text =
     Text
 
 
-elementWithMaybeNamespace : Maybe String -> String -> List (Modifier future) -> List (Node future) -> Node future
+elementWithMaybeNamespace :
+    Maybe String
+    -> String
+    -> List (Modifier future)
+    -> List (Node future)
+    -> Node future
 elementWithMaybeNamespace maybeNamespace tag modifiers subs =
     { header =
         modifiers
@@ -199,13 +202,15 @@ elementWithMaybeNamespace maybeNamespace tag modifiers subs =
                                 Just namespace ->
                                     { soFar
                                         | attributesNamespaced =
-                                            soFar.attributesNamespaced |> Dict.insert ( namespace, keyValue.key ) keyValue.value
+                                            soFar.attributesNamespaced
+                                                |> Dict.insert ( namespace, keyValue.key ) keyValue.value
                                     }
 
                                 Nothing ->
                                     { soFar
                                         | attributes =
-                                            soFar.attributes |> Dict.insert keyValue.key keyValue.value
+                                            soFar.attributes
+                                                |> Dict.insert keyValue.key keyValue.value
                                     }
                 )
                 { namespace = maybeNamespace
@@ -248,7 +253,12 @@ For example, [`Web.Svg`](Web-Svg) defines its elements using
         Web.Dom.elementNamespaced "http://www.w3.org/2000/svg" tag modifiers subs
 
 -}
-elementNamespaced : String -> String -> List (Modifier future) -> List (Node future) -> Node future
+elementNamespaced :
+    String
+    -> String
+    -> List (Modifier future)
+    -> List (Node future)
+    -> Node future
 elementNamespaced namespace tag modifiers subs =
     elementWithMaybeNamespace (namespace |> Just) tag modifiers subs
 
@@ -398,7 +408,10 @@ use [`listenToPreventingDefaultAction`](#listenToPreventingDefaultAction)
 -}
 listenTo : String -> Modifier Json.Decode.Value
 listenTo eventName =
-    { eventName = eventName, on = identity, defaultActionHandling = Web.DefaultActionExecute }
+    { eventName = eventName
+    , on = identity
+    , defaultActionHandling = Web.DefaultActionExecute
+    }
         |> Listen
         |> Rope.singleton
 
@@ -416,7 +429,10 @@ prevents the form from changing the page’s location:
 -}
 listenToPreventingDefaultAction : String -> Modifier Json.Decode.Value
 listenToPreventingDefaultAction eventName =
-    { eventName = eventName, on = identity, defaultActionHandling = Web.DefaultActionPrevent }
+    { eventName = eventName
+    , on = identity
+    , defaultActionHandling = Web.DefaultActionPrevent
+    }
         |> Listen
         |> Rope.singleton
 
@@ -426,13 +442,17 @@ listenToPreventingDefaultAction eventName =
     Web.Dom.listen "click" |> Web.Dom.modifierFutureMap (\_ -> ButtonClicked)
 
 -}
-modifierFutureMap : (future -> mappedFuture) -> (Modifier future -> Modifier mappedFuture)
+modifierFutureMap :
+    (future -> mappedFuture)
+    -> (Modifier future -> Modifier mappedFuture)
 modifierFutureMap futureChange =
     \modifier ->
         modifier |> Rope.map (\modifierSingle -> modifierSingle |> modifierSingleMap futureChange)
 
 
-modifierSingleMap : (future -> mappedFuture) -> (ModifierSingle future -> ModifierSingle mappedFuture)
+modifierSingleMap :
+    (future -> mappedFuture)
+    -> (ModifierSingle future -> ModifierSingle mappedFuture)
 modifierSingleMap futureChange =
     \modifier ->
         case modifier of
