@@ -123,15 +123,20 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
                     warn("tried to play audio from source that isn't loaded. Did you use Web.Audio.sourceLoad?")
                 }
             }
-            case "DomNodeRender": return (config: { path: number[], node: any }) => {
-                const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, config.path)
+            case "DomNodeRender": return (config: { pathReverse: number[], node: any }) => {
+                const oldDomNodeToEdit = domElementOrDummyInElementAt(domElementOrDummyAtIndex(appConfig.domElement, 0), config.pathReverse)
                 const newDomNode = createDomNode(id, config.node, oldDomNodeToEdit.childNodes, sendToElm)
                 oldDomNodeToEdit.parentElement?.replaceChild(newDomNode, oldDomNodeToEdit)
                 abortSignal.addEventListener("abort", _event => {
                     domListenAbortControllers.delete(id)
                     // it is possible that the "newDomNode" has been replaced
                     // by e.g.a text where there was an Element previously
-                    const toRemove = domInElementAt(appConfig.domElement, 0, config.path)
+                    const appConfigDomELementChildElementOnDelete = domElementAtIndex(appConfig.domElement, 0)
+                    const toRemove =
+                        appConfigDomELementChildElementOnDelete === null ?
+                            null
+                            :
+                            domInElementAt(appConfigDomELementChildElementOnDelete, config.pathReverse)
                     if (toRemove !== null) {
                         while (toRemove.nextSibling !== null) {
                             toRemove.nextSibling.remove()
@@ -392,60 +397,68 @@ export function programStart(appConfig: { ports: ElmPorts, domElement: Element }
         }
     }
 
-    function domInElementAt(parent: Element, indexInParent: number, subPath: number[]): ChildNode | null {
-        const currentDom = parent.childNodes.item(indexInParent)
-        return (subPath.length === 0) ?
-            currentDom
-            : (currentDom !== null && (currentDom instanceof Element)) ?
-                domInElementAt(currentDom, subPath.at(0) ?? 0, subPath.toSpliced(0, 1))
-                : null
-    }
-    function domElementOrDummyInElementAt(parent: Element, indexInParent: number, subPath: number[]): ChildNode {
-        if (subPath.length === 0) {
-            return domElementSubAtIndexOrDummy(parent, indexInParent)
+    function domElementAtIndex(parent: Element, index: number) {
+        const childNode = parent.childNodes.item(index)
+        if (parent === null || (!(childNode instanceof Element))) {
+            return null
         } else {
-            return domElementOrDummyInElementAt(
-                domElementSubAtIndexOrDummy(parent, indexInParent),
-                subPath.at(0) ?? 0,
-                subPath.toSpliced(0, 1)
-            )
+            return childNode
         }
     }
-    function domElementSubAtIndexOrDummy(parent: Element, indexInParent: number): Element {
-        const currentDom = parent.childNodes.item(indexInParent)
-        if ((parent.childNodes.length >= indexInParent + 1) && (currentDom !== null)) {
-            if (currentDom instanceof Element) {
-                return currentDom
-            } else {
-                const newDummy = document.createElement("div")
-                parent.replaceChild(newDummy, currentDom)
-                return newDummy
-            }
-        } else {
-            while (parent.childNodes.length <= indexInParent - 1) {
+
+    function domElementOrDummyAtIndex(parent: Element, index: number): Element {
+        const childNode = parent.childNodes.item(index)
+        if (childNode === null) {
+            while (parent.childNodes.length <= index - 1) {
                 parent.appendChild(document.createElement("div"))
             }
             const newDummy = document.createElement("div")
             parent.appendChild(newDummy)
             return newDummy
+        } else if (!(childNode instanceof Element)) {
+            const newDummyReplacement = document.createElement("div")
+            parent.replaceChild(newDummyReplacement, childNode)
+            return newDummyReplacement
+        } else {
+            return childNode
         }
+    }
+
+    function domInElementAt(overallParent: Element, pathReverse: number[]): ChildNode | null {
+        let lastVisitedDom = overallParent
+        for (let i = pathReverse.length - 1; i >= 0; i--) {
+            const currentDom = domElementAtIndex(lastVisitedDom, pathReverse[i] ?? 0)
+            if (currentDom === null) {
+                return null
+            } else {
+                lastVisitedDom = currentDom
+            }
+        }
+        return lastVisitedDom
+    }
+    function domElementOrDummyInElementAt(overallParent: Element, pathReverse: number[]): ChildNode {
+        let lastVisitedDom = overallParent
+        for (let i = pathReverse.length - 1; i >= 0; i--) {
+            lastVisitedDom = domElementOrDummyAtIndex(lastVisitedDom, pathReverse[i] ?? 0)
+        }
+        return lastVisitedDom
     }
 
     function editDom(
         id: string,
-        path: number[],
+        pathReverse: number[],
         replacement: { tag: "Node" | "Styles" | "Attributes" | "AttributesNamespaced" | "StringProperties" | "BoolProperties" | "ScrollToPosition" | "ScrollToShow" | "ScrollPositionRequest" | "EventListens", value: any },
         sendToElm: (v: any) => void
     ) {
         switch (replacement.tag) {
             case "Node": {
-                const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, path)
+                const oldDomNodeToEdit = domElementOrDummyInElementAt(domElementOrDummyAtIndex(appConfig.domElement, 0), pathReverse)
                 const newDomNode = createDomNode(id, replacement.value, oldDomNodeToEdit.childNodes, sendToElm)
                 oldDomNodeToEdit.parentElement?.replaceChild(newDomNode, oldDomNodeToEdit)
                 break
             }
             case "Styles": case "Attributes": case "AttributesNamespaced": case "StringProperties": case "BoolProperties": case "ScrollToPosition": case "ScrollToShow": case "ScrollPositionRequest": case "EventListens": {
-                const oldDomNodeToEdit = domElementOrDummyInElementAt(appConfig.domElement, 0, path)
+                const oldDomNodeToEdit = domElementOrDummyInElementAt(domElementOrDummyAtIndex(appConfig.domElement, 0), pathReverse)
                 if (oldDomNodeToEdit instanceof Element) {
                     editDomModifiers(
                         id,

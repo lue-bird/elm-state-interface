@@ -38,42 +38,78 @@ import Rope exposing (Rope)
 import Web
 
 
+nodeFlattenToList :
+    List (Web.InterfaceSingle future)
+    -> { pathReverse : List Int, node : Node future }
+    -> List { pathReverse : List Int, node : Node future }
+    -> List (Web.InterfaceSingle future)
+nodeFlattenToList interfacesSoFar current nodesRemaining =
+    case current.node of
+        Text string ->
+            flattenRemainingNodesToList
+                (({ pathReverse = current.pathReverse, node = Web.DomText string }
+                    |> Web.DomNodeRender
+                 )
+                    :: interfacesSoFar
+                )
+                nodesRemaining
+
+        Element element_ ->
+            let
+                updatedInterfaces : List (Web.InterfaceSingle future)
+                updatedInterfaces =
+                    ({ pathReverse = current.pathReverse, node = Web.DomElementHeader element_.header }
+                        |> Web.DomNodeRender
+                    )
+                        :: interfacesSoFar
+            in
+            case element_.subs of
+                [] ->
+                    flattenRemainingNodesToList updatedInterfaces nodesRemaining
+
+                sub0 :: sub1Up ->
+                    let
+                        updatedRemaining : { index : Int, mapped : List { pathReverse : List Int, node : Node future } }
+                        updatedRemaining =
+                            sub1Up
+                                |> List.foldl
+                                    (\sub soFar ->
+                                        { index = soFar.index + 1
+                                        , mapped =
+                                            { pathReverse = soFar.index :: current.pathReverse
+                                            , node = sub
+                                            }
+                                                :: soFar.mapped
+                                        }
+                                    )
+                                    { index = 1, mapped = nodesRemaining }
+                    in
+                    nodeFlattenToList
+                        updatedInterfaces
+                        { pathReverse = 0 :: current.pathReverse, node = sub0 }
+                        updatedRemaining.mapped
+
+
 {-| An [`Interface`](Web#Interface) for displaying a given [`Web.Dom.Node`](Web-Dom#Node)
 -}
 render : Node future -> Web.Interface future
 render =
     \domNode ->
-        domNode |> nodeFlattenToRope []
+        nodeFlattenToList [] { pathReverse = [], node = domNode } []
+            |> Rope.fromList
 
 
-nodeFlattenToRope :
-    List Int
-    -> Node future
-    -> Rope (Web.InterfaceSingle future)
-nodeFlattenToRope path =
-    \node ->
-        case node of
-            Text string ->
-                { path = path, node = Web.DomText string }
-                    |> Web.DomNodeRender
-                    |> Rope.singleton
+flattenRemainingNodesToList :
+    List (Web.InterfaceSingle future)
+    -> List { pathReverse : List Int, node : Node future }
+    -> List (Web.InterfaceSingle future)
+flattenRemainingNodesToList updatedInterfaces nodesRemaining =
+    case nodesRemaining of
+        [] ->
+            updatedInterfaces
 
-            Element element_ ->
-                Rope.prepend
-                    ({ path = path, node = Web.DomElementHeader element_.header }
-                        |> Web.DomNodeRender
-                    )
-                    (List.foldl
-                        (\sub soFar ->
-                            { subIndex = soFar.subIndex + 1
-                            , rope =
-                                Rope.appendTo soFar.rope
-                                    (nodeFlattenToRope (soFar.subIndex :: path) sub)
-                            }
-                        )
-                        { subIndex = 0, rope = Rope.empty }
-                        element_.subs
-                    ).rope
+        next :: remainingWithoutNext ->
+            nodeFlattenToList updatedInterfaces next remainingWithoutNext
 
 
 {-| Wire events from this [`Web.Dom.Node`](Web-Dom#Node) to a specific event, for example
