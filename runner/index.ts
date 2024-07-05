@@ -976,43 +976,41 @@ function createProcessingNodes(processingFirstToLast: AudioProcessingInfo[]): Au
         })
 }
 
-type AudioEdit = {
-    speed: null | AudioParameterTimeline,
-    volume: null | AudioParameterTimeline,
-    stereoPan: null | AudioParameterTimeline,
-    processing: null | (AudioProcessingInfo[])
-}
+type AudioEdit =
+    | { tag: "Volume", value: AudioParameterTimeline }
+    | { tag: "Speed", value: AudioParameterTimeline }
+    | { tag: "StereoPan", value: AudioParameterTimeline }
+    | { tag: "Processing", value: AudioProcessingInfo[] };
+
 
 function editAudio(
     id: string,
     config: {
-        url: string,
-        startTime: number,
-        replacement: AudioEdit
-    }
-) {
+        url: string, startTime: number, replacement: AudioEdit
+    }) {
     const audioPlayingToEdit = audioPlaying.get(id)
     if (audioPlayingToEdit !== undefined) {
-        if (config.replacement.volume !== null) {
-            audioParameterTimelineApplyTo(audioPlayingToEdit.gainNode.gain, config.replacement.volume)
-        }
-        if (config.replacement.speed !== null) {
-            audioParameterTimelineApplyTo(audioPlayingToEdit.sourceNode.playbackRate, config.replacement.speed)
-        }
-        if (config.replacement.stereoPan !== null) {
-            audioParameterTimelineApplyTo(audioPlayingToEdit.stereoPanNode.pan, config.replacement.stereoPan)
-        }
-        if (config.replacement.processing !== null) {
-            const audioContext = getOrInitializeAudioContext()
-            audioPlayingToEdit.stereoPanNode.disconnect()
-            audioPlayingToEdit.processingNodes.forEach(node => { node.disconnect() })
+        switch (config.replacement.tag) {
+            case "Volume": {
+                audioParameterTimelineApplyTo(audioPlayingToEdit.gainNode.gain, config.replacement.value)
+                break
+            } case "Speed": {
+                audioParameterTimelineApplyTo(audioPlayingToEdit.sourceNode.playbackRate, config.replacement.value)
+                break
+            } case "StereoPan": {
+                audioParameterTimelineApplyTo(audioPlayingToEdit.stereoPanNode.pan, config.replacement.value)
+                break
+            } case "Processing": {
+                const audioContext = getOrInitializeAudioContext()
+                audioPlayingToEdit.stereoPanNode.disconnect()
+                audioPlayingToEdit.processingNodes.forEach(node => { node.disconnect() })
 
-            audioPlayingToEdit.processingNodes = createProcessingNodes(config.replacement.processing)
-
-            forEachConsecutive(
-                [audioPlayingToEdit.stereoPanNode, ...audioPlayingToEdit.processingNodes, audioContext.destination],
-                pair => { pair.current.connect(pair.next) }
-            )
+                forEachConsecutive(
+                    [audioPlayingToEdit.stereoPanNode, ...audioPlayingToEdit.processingNodes, audioContext.destination],
+                    pair => { pair.current.connect(pair.next) }
+                )
+                break
+            }
         }
     }
 }
