@@ -597,7 +597,7 @@ function createDomNode(id: string, node: { tag: "Text" | "Element", value: any }
             if (node.value.scrollToShow !== null) {
                 node.value.scrollIntoView({ inline: node.value.scrollToShow.x, block: node.value.scrollToShow.y })
             }
-            if (node.value.scrollPositionRequest !== null) {
+            if (node.value.scrollPositionRequest === true) {
                 domElementAddScrollPositionRequest(createdDomElement, sendToElm)
             }
             domElementAddEventListens(id, createdDomElement, node.value.eventListens, sendToElm)
