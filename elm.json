@@ -3,7 +3,7 @@
     "name": "lue-bird/elm-state-interface",
     "summary": "define an app in a simple, safe and declarative way",
     "license": "MIT",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "exposed-modules": [
         "Web",
         "Web.Http",
