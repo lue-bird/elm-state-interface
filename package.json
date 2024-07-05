@@ -1,6 +1,6 @@
 {
     "name": "@lue-bird/elm-state-interface",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "description": "define an app in a simple, safe and declarative way",
     "author": "lue-bird",
     "license": "MIT",
