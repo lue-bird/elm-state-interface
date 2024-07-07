@@ -1036,27 +1036,26 @@ domElementHeaderDiffMap fromDomEdit =
 
         else
             [ { old = elements.old.styles, updated = elements.updated.styles }
-                |> dictEditAndRemoveDiff
+                |> dictEditAndRemoveDiffMap
+                    (\d -> d |> ReplacementDomElementStyles |> fromDomEdit)
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map (\d -> d |> ReplacementDomElementStyles |> fromDomEdit)
             , { old = elements.old.attributes, updated = elements.updated.attributes }
-                |> dictEditAndRemoveDiff
+                |> dictEditAndRemoveDiffMap
+                    (\d -> d |> ReplacementDomElementAttributes |> fromDomEdit)
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map (\d -> d |> ReplacementDomElementAttributes |> fromDomEdit)
             , { old = elements.old.attributesNamespaced, updated = elements.updated.attributesNamespaced }
-                |> dictEditAndRemoveDiff
+                |> dictEditAndRemoveDiffMap
+                    (\d -> d |> ReplacementDomElementAttributesNamespaced |> fromDomEdit)
                     { remove = \( namespace, key ) -> { namespace = namespace, key = key }
                     , edit = \( namespace, key ) value -> { namespace = namespace, key = key, value = value }
                     }
-                |> Maybe.map (\d -> d |> ReplacementDomElementAttributesNamespaced |> fromDomEdit)
             , { old = elements.old.stringProperties, updated = elements.updated.stringProperties }
-                |> dictEditAndRemoveDiff
+                |> dictEditAndRemoveDiffMap
+                    (\d -> d |> ReplacementDomElementStringProperties |> fromDomEdit)
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map (\d -> d |> ReplacementDomElementStringProperties |> fromDomEdit)
             , { old = elements.old.boolProperties, updated = elements.updated.boolProperties }
-                |> dictEditAndRemoveDiff
+                |> dictEditAndRemoveDiffMap (\d -> d |> ReplacementDomElementBoolProperties |> fromDomEdit)
                     { remove = identity, edit = \key value -> { key = key, value = value } }
-                |> Maybe.map (\d -> d |> ReplacementDomElementBoolProperties |> fromDomEdit)
             , if elements.old.scrollToPosition == elements.updated.scrollToPosition then
                 Nothing
 
@@ -1103,13 +1102,14 @@ domElementHeaderDiffMap fromDomEdit =
                 |> List.LocalExtra.justs
 
 
-dictEditAndRemoveDiff :
-    { remove : comparableKey -> removeSingle, edit : comparableKey -> value -> editSingle }
+dictEditAndRemoveDiffMap :
+    ({ remove : List removeSingle, edit : List editSingle } -> fromRemoveAndEdit)
+    -> { remove : comparableKey -> removeSingle, edit : comparableKey -> value -> editSingle }
     ->
         ({ old : Dict comparableKey value, updated : Dict comparableKey value }
-         -> Maybe { remove : List removeSingle, edit : List editSingle }
+         -> Maybe fromRemoveAndEdit
         )
-dictEditAndRemoveDiff asDiffSingle =
+dictEditAndRemoveDiffMap fromRemoveAndEdit asDiffSingle =
     \dicts ->
         let
             diff : { remove : List removeSingle, edit : List editSingle }
@@ -1137,10 +1137,10 @@ dictEditAndRemoveDiff asDiffSingle =
                 Nothing
 
             ( remove0 :: remove1Up, edit ) ->
-                { remove = remove0 :: remove1Up, edit = edit } |> Just
+                { remove = remove0 :: remove1Up, edit = edit } |> fromRemoveAndEdit |> Just
 
             ( remove, edit0 :: edit0Up ) ->
-                { remove = remove, edit = edit0 :: edit0Up } |> Just
+                { remove = remove, edit = edit0 :: edit0Up } |> fromRemoveAndEdit |> Just
 
 
 audioDiffMap :
