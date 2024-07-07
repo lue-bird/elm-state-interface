@@ -1,5 +1,5 @@
 module StructuredId exposing
-    ( StructuredId(..), toString
+    ( StructuredId, toString
     , ofUnit, ofInt, ofString
     , ofParts, ofVariant, ofMaybe, ofList
     )
@@ -19,20 +19,25 @@ which makes it possible to use as a key in a `Dict`
 import Json.Encode
 
 
-type StructuredId
-    = String String
-    | List (List StructuredId)
+type alias StructuredId =
+    -- type StructuredId
+    --     = String String
+    --     | List (List StructuredId)
+    --
+    -- directly using the most efficient toString-able representation
+    -- saves a toJson step but more importantly saves a List.map step in ofList
+    Json.Encode.Value
 
 
 ofUnit : StructuredId
 ofUnit =
-    List []
+    Json.Encode.null
 
 
 ofString : String -> StructuredId
 ofString =
     \string ->
-        String string
+        Json.Encode.string string
 
 
 ofInt : Int -> StructuredId
@@ -43,7 +48,7 @@ ofInt =
 ofParts : List StructuredId -> StructuredId
 ofParts =
     \fieldValueStructureIds ->
-        fieldValueStructureIds |> List
+        fieldValueStructureIds |> Json.Encode.list identity
 
 
 {-|
@@ -72,9 +77,9 @@ ofMaybe valueToStructuredId =
 
 
 ofList : (element -> StructuredId) -> (List element -> StructuredId)
-ofList elementMap =
+ofList elementToStructuredId =
     \structuredIds ->
-        structuredIds |> List.map elementMap |> List
+        structuredIds |> Json.Encode.list elementToStructuredId
 
 
 toString : StructuredId -> String
@@ -86,9 +91,4 @@ toString =
 toJson : StructuredId -> Json.Encode.Value
 toJson =
     \structuredId ->
-        case structuredId of
-            String string ->
-                string |> Json.Encode.string
-
-            List elements ->
-                elements |> Json.Encode.list toJson
+        structuredId
