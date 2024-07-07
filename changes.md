@@ -1,5 +1,9 @@
 # change log
 
+#### 2.0.3
+
+  - internal: minor-ish performance improvements
+
 #### js package 2.0.3
 
   - fix issue with new internal dom interface representation
