@@ -13,7 +13,42 @@ import Web.Svg
 benchmarks : Benchmark.Benchmark
 benchmarks =
     Benchmark.describe "StructuredId"
-        [ Benchmark.Alternative.rank "List String -> String"
+        [ Benchmark.Alternative.rank "List justs any order"
+            (\justs -> justs exampleListOfJustStrings)
+            [ ( "List.filterMap", listJustsUsingListFilterMap )
+            , ( "foldl", listJustsToAnyOrderUsingFoldl )
+            ]
+        , Benchmark.Alternative.rank "String order"
+            (\stringOrder ->
+                let
+                    a =
+                        (List.range 100 200 |> List.map Char.fromCode |> String.fromList) ++ (Char.fromCode 123 |> String.fromChar)
+
+                    b =
+                        (List.range 100 200 |> List.map Char.fromCode |> String.fromList) ++ (Char.fromCode 100 |> String.fromChar)
+                in
+                stringOrder a b
+            )
+            [ ( "Basics.compare", Basics.compare )
+            , ( "Basics.compare with ++ \"\"", basicsCompareWithAppendEmpty )
+            , ( "< and > with ++ \"\"", basicsLessOrGreaterWithAppendEmpty )
+            , ( "Basics.compare by List Char", basicsCompareByListChar )
+            , ( "Basics.compare by List Char < or >", orderByListCharLessOrGreater )
+            , ( "Basics.compare by List Char code < or >", orderByListCharCodeLessOrGreater )
+            ]
+        , Benchmark.Alternative.rank "Int -> String"
+            (\toListOfString -> toListOfString 13243)
+            [ ( "String.fromInt", String.fromInt )
+            , ( "Json.Encode.int |> Json.Encode.encode 0", intJsonEncode0 )
+            , ( "String.fromInt |> Json.Encode.string |> Json.Encode.encode 0", stringFromIntJsonEncode0 )
+            ]
+        , Benchmark.Alternative.rank "Float -> String"
+            (\floatToString -> floatToString -1234.567)
+            [ ( "String.fromFloat", String.fromFloat )
+            , ( "Json.Encode.float |> Json.Encode.encode 0", floatJsonEncode0 )
+            , ( "String.fromFloat |> Json.Encode.string |> Json.Encode.encode 0", stringFromFloatJsonEncode0 )
+            ]
+        , Benchmark.Alternative.rank "List String -> String"
             (\listOfStringToString -> listOfStringToString exampleListOfStrings)
             [ ( "map |> join", listOfStringToStringUsingMapJoin )
             , ( "foldr appending right", listOfStringToStringUsingFoldrAppendingRight )
@@ -31,11 +66,6 @@ benchmarks =
             [ ( "rope", toStringUsingRope )
             , ( "json encode all the way", toStringUsingJsonEncodeAllTheWay )
             ]
-        , Benchmark.Alternative.rank "Int -> String"
-            (\toListOfString -> toListOfString 13243)
-            [ ( "Json.Encode.int |> encode 0", intJsonEncode0 )
-            , ( "String.fromInt", String.fromInt )
-            ]
         , Benchmark.Alternative.rank "dom render"
             (\domRender -> domRender exampleDom)
             [ ( "nested recursion given path", domRenderUsingNestedRecursionWithPath )
@@ -51,10 +81,142 @@ benchmarks =
         ]
 
 
+listJustsUsingListFilterMap : List (Maybe value) -> List value
+listJustsUsingListFilterMap =
+    \list -> list |> List.filterMap identity
+
+
+listJustsToAnyOrderUsingFoldl : List (Maybe value) -> List value
+listJustsToAnyOrderUsingFoldl =
+    \list ->
+        list
+            |> List.foldl
+                (\maybe soFar ->
+                    case maybe of
+                        Nothing ->
+                            soFar
+
+                        Just value ->
+                            value :: soFar
+                )
+                []
+
+
+basicsCompareWithAppendEmpty : String -> String -> Order
+basicsCompareWithAppendEmpty a b =
+    Basics.compare (a ++ "") (b ++ "")
+
+
+basicsLessOrGreaterWithAppendEmpty : String -> String -> Order
+basicsLessOrGreaterWithAppendEmpty a b =
+    if (a ++ "") < (b ++ "") then
+        LT
+
+    else if (a ++ "") > (b ++ "") then
+        GT
+
+    else
+        EQ
+
+
+basicsCompareByListChar : String -> String -> Order
+basicsCompareByListChar a b =
+    Basics.compare (a |> String.toList) (b |> String.toList)
+
+
+orderByListCharLessOrGreater : String -> String -> Order
+orderByListCharLessOrGreater a b =
+    listCharOrderLessOrGreater (a |> String.toList) (b |> String.toList)
+
+
+listCharOrderLessOrGreater : List Char -> List Char -> Order
+listCharOrderLessOrGreater a b =
+    case a of
+        [] ->
+            case b of
+                [] ->
+                    EQ
+
+                _ :: _ ->
+                    LT
+
+        aHead :: aTail ->
+            case b of
+                [] ->
+                    GT
+
+                bHead :: bTail ->
+                    if aHead < bHead then
+                        LT
+
+                    else if aHead > bHead then
+                        GT
+
+                    else
+                        listCharOrderLessOrGreater aTail bTail
+
+
+orderByListCharCodeLessOrGreater : String -> String -> Order
+orderByListCharCodeLessOrGreater a b =
+    listCharOrderLessOrGreater (a |> String.toList) (b |> String.toList)
+
+
+listCharCodeOrderLessOrGreater : List Char -> List Char -> Order
+listCharCodeOrderLessOrGreater a b =
+    case a of
+        [] ->
+            case b of
+                [] ->
+                    EQ
+
+                _ :: _ ->
+                    LT
+
+        aHead :: aTail ->
+            case b of
+                [] ->
+                    GT
+
+                bHead :: bTail ->
+                    let
+                        aHeadCode =
+                            aHead |> Char.toCode
+
+                        bHeadCode =
+                            bHead |> Char.toCode
+                    in
+                    if aHeadCode + 0 < bHeadCode + 0 then
+                        LT
+
+                    else if aHeadCode + 0 > bHeadCode + 0 then
+                        GT
+
+                    else
+                        listCharOrderLessOrGreater aTail bTail
+
+
 intJsonEncode0 : Int -> String
 intJsonEncode0 =
     \int ->
         int |> Json.Encode.int |> Json.Encode.encode 0
+
+
+stringFromIntJsonEncode0 : Int -> String
+stringFromIntJsonEncode0 =
+    \int ->
+        int |> String.fromInt |> Json.Encode.string |> Json.Encode.encode 0
+
+
+floatJsonEncode0 : Float -> String
+floatJsonEncode0 =
+    \float ->
+        float |> Json.Encode.float |> Json.Encode.encode 0
+
+
+stringFromFloatJsonEncode0 : Float -> String
+stringFromFloatJsonEncode0 =
+    \float ->
+        float |> String.fromFloat |> Json.Encode.string |> Json.Encode.encode 0
 
 
 listOfStringToStringUsingMapJoin : List String -> String
@@ -145,14 +307,19 @@ toStringUsingRope =
         structuredId |> toRopeOfString |> Rope.toList |> listOfStringToStringUsingJsonEncode0
 
 
+type StructuredId
+    = StructuredIdString String
+    | StructuredIdList (List StructuredId)
+
+
 toRopeOfString : StructuredId -> Rope String
 toRopeOfString =
     \structuredId ->
         case structuredId of
-            StructuredId.String string ->
+            StructuredIdString string ->
                 String.cons ' ' string |> Rope.singleton
 
-            StructuredId.List elements ->
+            StructuredIdList elements ->
                 Rope.append "]"
                     (List.foldl
                         (\el soFar ->
@@ -173,10 +340,10 @@ toStringUsingToJson : StructuredId -> Json.Encode.Value
 toStringUsingToJson =
     \structuredId ->
         case structuredId of
-            StructuredId.String string ->
+            StructuredIdString string ->
                 string |> Json.Encode.string
 
-            StructuredId.List elements ->
+            StructuredIdList elements ->
                 elements |> Json.Encode.list toStringUsingToJson
 
 
@@ -418,6 +585,13 @@ listMapIndexedNotGuaranteeingOrder indexAndElementCombine =
 --
 
 
+exampleListOfJustStrings : List (Maybe String)
+exampleListOfJustStrings =
+    exampleListOfStrings
+        |> List.map Just
+        |> List.intersperse Nothing
+
+
 exampleListOfStrings : List String
 exampleListOfStrings =
     List.range 5 100
@@ -451,10 +625,10 @@ exampleTreeToStructuredId =
     \tree ->
         case tree of
             Leaf int ->
-                int |> StructuredId.ofInt
+                int |> String.fromInt |> StructuredIdString
 
             Branch forest ->
-                forest |> StructuredId.ofList exampleTreeToStructuredId
+                forest |> List.map exampleTreeToStructuredId |> StructuredIdList
 
 
 type ExampleTree

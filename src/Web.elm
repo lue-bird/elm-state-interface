@@ -1099,7 +1099,7 @@ domElementHeaderDiffMap fromDomEdit =
                     |> fromDomEdit
                     |> Just
             ]
-                |> List.LocalExtra.justs
+                |> List.LocalExtra.justsToAnyOrder
 
 
 dictEditAndRemoveDiffMap :
@@ -1173,7 +1173,7 @@ audioDiffMap fromAudioEdit =
                 |> fromAudioEdit
                 |> Just
         ]
-            |> List.LocalExtra.justs
+            |> List.LocalExtra.justsToAnyOrder
 
 
 {-| What [`InterfaceSingleEdit`](#InterfaceSingleEdit)s are needed to sync up
@@ -2312,7 +2312,7 @@ interfaceSingleFutureJsonDecoder =
 
                     DomElementHeader domElement ->
                         Json.Decode.oneOf
-                            ([ Json.Decode.LocalExtra.variant "EventListen"
+                            (Json.Decode.LocalExtra.variant "EventListen"
                                 (Json.Decode.map2 (\eventListen event -> eventListen.on event)
                                     (Json.Decode.field "name"
                                         (Json.Decode.string
@@ -2329,18 +2329,18 @@ interfaceSingleFutureJsonDecoder =
                                     )
                                     (Json.Decode.field "event" Json.Decode.value)
                                 )
-                                |> Just
-                             , case domElement.scrollPositionRequest of
-                                Nothing ->
-                                    Nothing
+                                |> List.singleton
+                                |> (case domElement.scrollPositionRequest of
+                                        Nothing ->
+                                            identity
 
-                                Just request ->
-                                    Json.Decode.LocalExtra.variant "ScrollPositionRequest"
-                                        domElementScrollPositionJsonDecoder
-                                        |> Json.Decode.map request
-                                        |> Just
-                             ]
-                                |> List.LocalExtra.justs
+                                        Just request ->
+                                            (::)
+                                                (Json.Decode.LocalExtra.variant "ScrollPositionRequest"
+                                                    domElementScrollPositionJsonDecoder
+                                                    |> Json.Decode.map request
+                                                )
+                                   )
                             )
                             |> Just
 
