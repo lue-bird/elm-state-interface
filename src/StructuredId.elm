@@ -37,12 +37,12 @@ ofUnit =
 ofString : String -> StructuredId
 ofString =
     \string ->
-        Json.Encode.string string
+        string |> Json.Encode.string
 
 
 ofInt : Int -> StructuredId
 ofInt =
-    \int -> int |> String.fromInt |> ofString
+    \int -> int |> Json.Encode.int
 
 
 ofParts : List StructuredId -> StructuredId

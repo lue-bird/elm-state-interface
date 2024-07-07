@@ -2,6 +2,7 @@ module Benchmarks exposing (benchmarks)
 
 import Benchmark
 import Benchmark.Alternative
+import Dict
 import Json.Encode
 import Rope exposing (Rope)
 import StructuredId exposing (StructuredId)
@@ -37,16 +38,22 @@ benchmarks =
             , ( "Basics.compare by List Char code < or >", orderByListCharCodeLessOrGreater )
             ]
         , Benchmark.Alternative.rank "Int -> String"
-            (\toListOfString -> toListOfString 13243)
+            (\toListOfString -> List.map toListOfString exampleListOfInts)
             [ ( "String.fromInt", String.fromInt )
             , ( "Json.Encode.int |> Json.Encode.encode 0", intJsonEncode0 )
             , ( "String.fromInt |> Json.Encode.string |> Json.Encode.encode 0", stringFromIntJsonEncode0 )
             ]
         , Benchmark.Alternative.rank "Float -> String"
-            (\floatToString -> floatToString -1234.567)
+            (\floatToString -> List.map floatToString exampleListOfFloats)
             [ ( "String.fromFloat", String.fromFloat )
             , ( "Json.Encode.float |> Json.Encode.encode 0", floatJsonEncode0 )
             , ( "String.fromFloat |> Json.Encode.string |> Json.Encode.encode 0", stringFromFloatJsonEncode0 )
+            ]
+        , Benchmark.Alternative.rank "tagged -> String"
+            (\taggedToString -> List.map (\tag -> taggedToString { tag = tag, value = Json.Encode.null }) exampleListOfStrings)
+            [ ( "Json.Encode.list Basics.identity [ Json.Encode.string  ,  ]", taggedToJsonStringUsingList )
+            , ( "Json.Encode.object [ (  ,  ) ]", taggedToJsonStringUsingObject )
+            , ( "Json.Encode.dict Basics.identity Basics.identity (Dict.singleton     )", taggedToJsonStringUsingDict )
             ]
         , Benchmark.Alternative.rank "List String -> String"
             (\listOfStringToString -> listOfStringToString exampleListOfStrings)
@@ -79,6 +86,29 @@ benchmarks =
             , ( "map2 with range (used by List.indexedMap)", List.indexedMap )
             ]
         ]
+
+
+taggedToJsonStringUsingList : { tag : String, value : Json.Encode.Value } -> String
+taggedToJsonStringUsingList =
+    \tagged ->
+        Json.Encode.list Basics.identity [ tagged.tag |> Json.Encode.string, tagged.value ]
+            |> Json.Encode.encode 0
+
+
+taggedToJsonStringUsingObject : { tag : String, value : Json.Encode.Value } -> String
+taggedToJsonStringUsingObject =
+    \tagged ->
+        Json.Encode.object [ ( tagged.tag, tagged.value ) ]
+            |> Json.Encode.encode 0
+
+
+taggedToJsonStringUsingDict : { tag : String, value : Json.Encode.Value } -> String
+taggedToJsonStringUsingDict =
+    \tagged ->
+        Json.Encode.dict Basics.identity
+            Basics.identity
+            (Dict.singleton tagged.tag tagged.value)
+            |> Json.Encode.encode 0
 
 
 listJustsUsingListFilterMap : List (Maybe value) -> List value
@@ -583,6 +613,16 @@ listMapIndexedNotGuaranteeingOrder indexAndElementCombine =
 
 
 --
+
+
+exampleListOfInts : List Int
+exampleListOfInts =
+    [ -200, 1, 13243 ]
+
+
+exampleListOfFloats : List Float
+exampleListOfFloats =
+    [ -1234.567, 3294359, 0.5, 200 ]
 
 
 exampleListOfJustStrings : List (Maybe String)
