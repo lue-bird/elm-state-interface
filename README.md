@@ -481,7 +481,7 @@ import * as Web from "@lue-bird/elm-state-interface";
 
 const elmApp = Main.init();
 Web.programStart({
-    elmPorts : elmApp.ports,
+    ports : elmApp.ports,
     domElement : document.getElementById("your-app-element-id")
 });
 ```
