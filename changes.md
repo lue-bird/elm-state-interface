@@ -1,5 +1,10 @@
 # change log
 
+#### 2.0.4
+
+  - correct readme js setup example.
+    Thanks [Krasnikau Andrei](https://github.com/krasnikov-andrew) for [suggesting a fix](https://github.com/lue-bird/elm-state-interface/pull/2)!
+
 #### 2.0.3
 
   - internal: minor-ish performance improvements
